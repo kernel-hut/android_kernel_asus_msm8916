@@ -7763,6 +7763,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 	mb();
 
 	init_completion(&gadget_init);
+	motg->id_state = USB_ID_FLOAT;
 	ret = msm_otg_mhl_register_callback(motg, msm_otg_mhl_notify_online);
 	if (ret)
 		dev_dbg(&pdev->dev, "MHL can not be supported\n");
