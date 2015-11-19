@@ -9,11 +9,11 @@
 #include <linux/device.h>
 #include <linux/mutex.h>
 #include <linux/pm_wakeup.h>
-//[+++]Debug for active wakelock before entering suspend
-#include <linux/switch.h>
-#include <linux/workqueue.h>
-#include <linux/module.h>
-//[---]Debug for active wakelock before entering suspend
+
+#ifdef CONFIG_POWERSUSPEND
+#include <linux/powersuspend.h>
+#endif
+
 #include "power.h"
 
 static suspend_state_t autosleep_state;
@@ -127,13 +127,16 @@ int pm_autosleep_set_state(suspend_state_t state)
 
 		//[---]Debug for active wakelock before entering suspend
 		queue_up_suspend_work();
+#ifdef CONFIG_POWERSUSPEND
+		// Yank555.lu : add hook to handle powersuspend tasks (sleep)
+		set_power_suspend_state_autosleep_hook(POWER_SUSPEND_ACTIVE);
+#endif
 	} else {
 		pm_wakep_autosleep_enabled(false);
-		//[+++]Debug for active wakelock before entering suspend
-		//Add a timer to trigger wakelock debug
-        pr_info("[PM]unattended_timer: del_timer (late_resume)\n");
-        del_timer(&unattended_timer);
-		//[---]Debug for active wakelock before entering suspend
+#ifdef CONFIG_POWERSUSPEND
+		// Yank555.lu : add hook to handle powersuspend tasks (wakeup)
+		set_power_suspend_state_autosleep_hook(POWER_SUSPEND_INACTIVE);
+#endif
 	}
 
 	mutex_unlock(&autosleep_lock);
@@ -201,3 +204,4 @@ int __init pm_autosleep_init(void)
 	wakeup_source_unregister(autosleep_ws);
 	return -ENOMEM;
 }
+
