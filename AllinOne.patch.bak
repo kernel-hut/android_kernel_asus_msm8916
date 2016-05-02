@@ -1,0 +1,342 @@
+diff --git a/drivers/gpu/msm/a4xx_reg.h b/drivers/gpu/msm/a4xx_reg.h
+index ad5190d..a4881e6 100644
+--- a/drivers/gpu/msm/a4xx_reg.h
++++ b/drivers/gpu/msm/a4xx_reg.h
+@@ -98,6 +98,7 @@ enum a4xx_rb_perfctr_rb_sel {
+ #define A4XX_RBBM_AHB_CTL0			0x23
+ #define A4XX_RBBM_AHB_CTL1			0x24
+ #define A4XX_RBBM_AHB_CMD			0x25
++#define A4XX_RBBM_GPR0_CTL		0x29
+ #define A4XX_RBBM_WAIT_IDLE_CLOCKS_CTL		0x2b
+ #define A4XX_RBBM_INTERFACE_HANG_INT_CTL	0x2f
+ #define A4XX_RBBM_INT_CLEAR_CMD			0x36
+diff --git a/drivers/gpu/msm/adreno.c b/drivers/gpu/msm/adreno.c
+index f05064b..3a4f21e 100644
+--- a/drivers/gpu/msm/adreno.c
++++ b/drivers/gpu/msm/adreno.c
+@@ -963,6 +963,20 @@ static int adreno_init(struct kgsl_device *device)
+ 	int i;
+ 	int ret;
+ 
++	/*
++	 * If the microcode read fails then either the usermodehelper wasn't
++	 * available or there was a corruption problem - in either case fail the
++	 * open and force the user to try again
++	 */
++
++	ret = adreno_ringbuffer_read_pm4_ucode(device);
++	if (ret)
++		return ret;
++
++	ret = adreno_ringbuffer_read_pfp_ucode(device);
++	if (ret)
++		return ret;
++
+ 	kgsl_pwrctrl_change_state(device, KGSL_STATE_INIT);
+ 	/*
+ 	 * initialization only needs to be done once initially until
+@@ -979,9 +993,6 @@ static int adreno_init(struct kgsl_device *device)
+ 	/* Initialize coresight for the target */
+ 	adreno_coresight_init(adreno_dev);
+ 
+-	adreno_ringbuffer_read_pm4_ucode(device);
+-	adreno_ringbuffer_read_pfp_ucode(device);
+-
+ 	kgsl_pwrctrl_change_state(device, KGSL_STATE_INIT);
+ 	/*
+ 	 * Check if firmware supports the sync lock PM4 packets needed
+diff --git a/drivers/gpu/msm/adreno_a4xx.c b/drivers/gpu/msm/adreno_a4xx.c
+index 82d0e56..93c6522 100644
+--- a/drivers/gpu/msm/adreno_a4xx.c
++++ b/drivers/gpu/msm/adreno_a4xx.c
+@@ -559,6 +559,10 @@ static void a4xx_enable_hwcg(struct kgsl_device *device)
+ 	else
+ 		kgsl_regwrite(device, A4XX_RBBM_CLOCK_CTL, 0xAAAAAAAA);
+ 	kgsl_regwrite(device, A4XX_RBBM_CLOCK_CTL2, 0);
++
++	/* Disable dynamic gmem clock gating for A405 */
++	if (adreno_is_a405(adreno_dev))
++		kgsl_regwrite(device, A4XX_RBBM_GPR0_CTL, 0x000000C0);
+ }
+ 
+ /**
+diff --git a/drivers/gpu/msm/adreno_ringbuffer.c b/drivers/gpu/msm/adreno_ringbuffer.c
+index d6d85f3..4f1166f 100644
+--- a/drivers/gpu/msm/adreno_ringbuffer.c
++++ b/drivers/gpu/msm/adreno_ringbuffer.c
+@@ -235,15 +235,16 @@ static int _load_firmware(struct kgsl_device *device, const char *fwfile,
+ 	return (*data != NULL) ? 0 : -ENOMEM;
+ }
+ 
+-void adreno_ringbuffer_read_pm4_ucode(struct kgsl_device *device)
++int adreno_ringbuffer_read_pm4_ucode(struct kgsl_device *device)
+ {
+ 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
++	int ret;
+ 
+ 	if (adreno_dev->pm4_fw == NULL) {
+ 		int len;
+ 		void *ptr;
+ 
+-		int ret = _load_firmware(device,
++		ret = _load_firmware(device,
+ 			adreno_dev->gpucore->pm4fw_name, &ptr, &len);
+ 
+ 		if (ret)
+@@ -254,6 +255,7 @@ void adreno_ringbuffer_read_pm4_ucode(struct kgsl_device *device)
+ 			KGSL_DRV_ERR(device, "Bad pm4 microcode size: %d\n",
+ 				len);
+ 			kfree(ptr);
++			ret = -ENOMEM;
+ 			goto err;
+ 		}
+ 
+@@ -262,11 +264,12 @@ void adreno_ringbuffer_read_pm4_ucode(struct kgsl_device *device)
+ 		adreno_dev->pm4_fw_version = adreno_dev->pm4_fw[1];
+ 	}
+ 
+-	return;
++	return 0;
+ 
+ err:
+-	KGSL_DRV_FATAL(device, "Failed to read pm4 microcode %s\n",
++	KGSL_DRV_CRIT(device, "Failed to read pm4 microcode %s\n",
+ 		adreno_dev->gpucore->pm4fw_name);
++	return ret;
+ }
+ 
+ /**
+@@ -292,15 +295,16 @@ static inline int adreno_ringbuffer_load_pm4_ucode(struct kgsl_device *device,
+ 	return 0;
+ }
+ 
+-void adreno_ringbuffer_read_pfp_ucode(struct kgsl_device *device)
++int adreno_ringbuffer_read_pfp_ucode(struct kgsl_device *device)
+ {
+ 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
++	int ret;
+ 
+ 	if (adreno_dev->pfp_fw == NULL) {
+ 		int len;
+ 		void *ptr;
+ 
+-		int ret = _load_firmware(device,
++		ret = _load_firmware(device,
+ 			adreno_dev->gpucore->pfpfw_name, &ptr, &len);
+ 		if (ret)
+ 			goto err;
+@@ -310,6 +314,7 @@ void adreno_ringbuffer_read_pfp_ucode(struct kgsl_device *device)
+ 			KGSL_DRV_ERR(device, "Bad PFP microcode size: %d\n",
+ 				len);
+ 			kfree(ptr);
++			ret = -ENOMEM;
+ 			goto err;
+ 		}
+ 
+@@ -318,7 +323,7 @@ void adreno_ringbuffer_read_pfp_ucode(struct kgsl_device *device)
+ 		adreno_dev->pfp_fw_version = adreno_dev->pfp_fw[5];
+ 	}
+ 
+-	return;
++	return 0;
+ 
+ err:
+ 	KGSL_DRV_FATAL(device, "Failed to read pfp microcode %s\n",
+diff --git a/drivers/gpu/msm/adreno_ringbuffer.h b/drivers/gpu/msm/adreno_ringbuffer.h
+index 3e667d8c5..55e6619 100644
+--- a/drivers/gpu/msm/adreno_ringbuffer.h
++++ b/drivers/gpu/msm/adreno_ringbuffer.h
+@@ -1,4 +1,4 @@
+-/* Copyright (c) 2002,2007-2014, The Linux Foundation. All rights reserved.
++/* Copyright (c) 2002,2007-2015, The Linux Foundation. All rights reserved.
+  *
+  * This program is free software; you can redistribute it and/or modify
+  * it under the terms of the GNU General Public License version 2 and
+@@ -179,9 +179,9 @@ void kgsl_cp_intrcallback(struct kgsl_device *device);
+ unsigned int *adreno_ringbuffer_allocspace(struct adreno_ringbuffer *rb,
+ 						unsigned int numcmds);
+ 
+-void adreno_ringbuffer_read_pfp_ucode(struct kgsl_device *device);
++int adreno_ringbuffer_read_pfp_ucode(struct kgsl_device *device);
+ 
+-void adreno_ringbuffer_read_pm4_ucode(struct kgsl_device *device);
++int adreno_ringbuffer_read_pm4_ucode(struct kgsl_device *device);
+ 
+ void adreno_ringbuffer_mmu_disable_clk_on_ts(struct kgsl_device *device,
+ 			struct adreno_ringbuffer *rb, unsigned int ts,
+diff --git a/drivers/gpu/msm/kgsl_pwrctrl.c b/drivers/gpu/msm/kgsl_pwrctrl.c
+index b6c68de..0d286ba 100644
+--- a/drivers/gpu/msm/kgsl_pwrctrl.c
++++ b/drivers/gpu/msm/kgsl_pwrctrl.c
+@@ -1547,6 +1547,8 @@ EXPORT_SYMBOL(kgsl_pre_hwaccess);
+  */
+ static int _init(struct kgsl_device *device)
+ {
++	/* Suspend the pwrscale if it is currently enabled. */
++	kgsl_pwrscale_sleep(device);
+ 	kgsl_pwrctrl_set_state(device, KGSL_STATE_INIT);
+ 	return 0;
+ }
+@@ -1593,6 +1595,7 @@ static int _wake(struct kgsl_device *device)
+ 		kgsl_pwrctrl_request_state(device, KGSL_STATE_NONE);
+ 		break;
+ 	case KGSL_STATE_INIT:
++		kgsl_pwrscale_wake(device);
+ 		kgsl_pwrctrl_set_state(device, KGSL_STATE_ACTIVE);
+ 		kgsl_pwrctrl_request_state(device, KGSL_STATE_NONE);
+ 		break;
+diff --git a/drivers/gpu/msm/kgsl_sharedmem.c b/drivers/gpu/msm/kgsl_sharedmem.c
+index 0e95c6b..534e63d 100644
+--- a/drivers/gpu/msm/kgsl_sharedmem.c
++++ b/drivers/gpu/msm/kgsl_sharedmem.c
+@@ -87,30 +87,6 @@ static int kgsl_cma_unlock_secure(struct kgsl_device *device,
+ 			struct kgsl_memdesc *memdesc);
+ 
+ /**
+- * Given a kobj, find the process structure attached to it
+- */
+-
+-static struct kgsl_process_private *
+-_get_priv_from_kobj(struct kobject *kobj)
+-{
+-	struct kgsl_process_private *private;
+-	unsigned int name;
+-
+-	if (!kobj)
+-		return NULL;
+-
+-	if (kstrtou32(kobj->name, 0, &name))
+-		return NULL;
+-
+-	list_for_each_entry(private, &kgsl_driver.process_list, list) {
+-		if (private->pid == name)
+-			return private;
+-	}
+-
+-	return NULL;
+-}
+-
+-/**
+  * Show the current amount of memory allocated for the given memtype
+  */
+ 
+@@ -143,15 +119,22 @@ static ssize_t mem_entry_sysfs_show(struct kobject *kobj,
+ 	struct kgsl_process_private *priv;
+ 	ssize_t ret;
+ 
+-	mutex_lock(&kgsl_driver.process_mutex);
+-	priv = _get_priv_from_kobj(kobj);
++	/*
++	 * 1. sysfs_remove_file waits for reads to complete before the node
++	 *    is deleted.
++	 * 2. kgsl_process_init_sysfs takes a refcount to the process_private,
++	 *    which is put at the end of kgsl_process_uninit_sysfs.
++	 * These two conditions imply that priv will not be freed until this
++	 * function completes, and no further locking is needed.
++	 */
++	priv = kobj ? container_of(kobj, struct kgsl_process_private, kobj) :
++			NULL;
+ 
+ 	if (priv && pattr->show)
+ 		ret = pattr->show(priv, pattr->memtype, buf);
+ 	else
+ 		ret = -EIO;
+ 
+-	mutex_unlock(&kgsl_driver.process_mutex);
+ 	return ret;
+ }
+ 
+@@ -189,6 +172,8 @@ kgsl_process_uninit_sysfs(struct kgsl_process_private *private)
+ 	}
+ 
+ 	kobject_put(&private->kobj);
++	/* Put the refcount we got in kgsl_process_init_sysfs */
++	kgsl_process_private_put(private);
+ }
+ 
+ /**
+@@ -227,6 +212,11 @@ kgsl_process_init_sysfs(struct kgsl_device *device,
+ 		ret = sysfs_create_file(&private->kobj,
+ 			&mem_stats[i].max_attr.attr);
+ 	}
++
++	/* Keep private valid until the sysfs enries are removed. */
++	if (!ret)
++		kgsl_process_private_get(private);
++
+ 	return ret;
+ }
+ 
+@@ -515,6 +505,27 @@ static struct kgsl_memdesc_ops kgsl_cma_ops = {
+ 	.vmfault = kgsl_contiguous_vmfault,
+ };
+ 
++#ifdef CONFIG_ARM64
++/*
++ * For security reasons, ARMv8 doesn't allow invalidate only on read-only
++ * mapping. It would be performance prohibitive to read the permissions on
++ * the buffer before the operation. Every use case that we have found does not
++ * assume that an invalidate operation is invalidate only, so we feel
++ * comfortable turning invalidates into flushes for these targets
++ */
++static inline unsigned int _fixup_cache_range_op(unsigned int op)
++{
++	if (op == KGSL_CACHE_OP_INV)
++		return KGSL_CACHE_OP_FLUSH;
++	return op;
++}
++#else
++static inline unsigned int _fixup_cache_range_op(unsigned int op)
++{
++	return op;
++}
++#endif
++
+ int kgsl_cache_range_op(struct kgsl_memdesc *memdesc, size_t offset,
+ 			size_t size, unsigned int op)
+ {
+@@ -545,7 +556,7 @@ int kgsl_cache_range_op(struct kgsl_memdesc *memdesc, size_t offset,
+ 	 * are not aligned to the cacheline size correctly.
+ 	 */
+ 
+-	switch (op) {
++	switch (_fixup_cache_range_op(op)) {
+ 	case KGSL_CACHE_OP_FLUSH:
+ 		dmac_flush_range(addr, addr + size);
+ 		break;
+diff --git a/drivers/gpu/msm/kgsl_sync.c b/drivers/gpu/msm/kgsl_sync.c
+index 7ae2917..7a45de0 100644
+--- a/drivers/gpu/msm/kgsl_sync.c
++++ b/drivers/gpu/msm/kgsl_sync.c
+@@ -170,9 +170,12 @@ int kgsl_add_fence_event(struct kgsl_device *device,
+ 	if (context == NULL)
+ 		goto unlock;
+ 
++	if (test_bit(KGSL_CONTEXT_PRIV_INVALID, &context->priv))
++		goto unlock;
++
+ 	pt = kgsl_sync_pt_create(context->timeline, context, timestamp);
+ 	if (pt == NULL) {
+-		KGSL_DRV_ERR(device, "kgsl_sync_pt_create failed\n");
++		KGSL_DRV_CRIT_RATELIMIT(device, "kgsl_sync_pt_create failed\n");
+ 		ret = -ENOMEM;
+ 		goto unlock;
+ 	}
+@@ -186,14 +189,15 @@ int kgsl_add_fence_event(struct kgsl_device *device,
+ 	if (fence == NULL) {
+ 		/* only destroy pt when not added to fence */
+ 		kgsl_sync_pt_destroy(pt);
+-		KGSL_DRV_ERR(device, "sync_fence_create failed\n");
++		KGSL_DRV_CRIT_RATELIMIT(device, "sync_fence_create failed\n");
+ 		ret = -ENOMEM;
+ 		goto unlock;
+ 	}
+ 
+ 	priv.fence_fd = get_unused_fd_flags(0);
+ 	if (priv.fence_fd < 0) {
+-		KGSL_DRV_ERR(device, "Unable to get a file descriptor: %d\n",
++		KGSL_DRV_CRIT_RATELIMIT(device,
++			"Unable to get a file descriptor: %d\n",
+ 			priv.fence_fd);
+ 		ret = priv.fence_fd;
+ 		goto unlock;

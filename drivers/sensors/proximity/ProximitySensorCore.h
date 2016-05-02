@@ -1,0 +1,6 @@
+#ifndef __PROXIMITYSENSORCORE_H__
+#define __PROXIMITYSENSORCORE_H__
+
+
+#endif //__PROXIMITYSENSORCORE_H__
+

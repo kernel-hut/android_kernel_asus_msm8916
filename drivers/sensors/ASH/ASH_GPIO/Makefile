@@ -1,0 +1,13 @@
+obj-y += IRsensor_GPIO.o
+obj-y += HALLsensor_GPIO.o
+
+INTEL = n
+ifeq ($(INTEL),y)
+	LOCAL_CFALG = -DGPIO_INTEL
+else
+	LOCAL_CFALG = -DGPIO_QCOM
+endif
+
+ccflags-y += $(LOCAL_CFALG)
+
+

@@ -1,0 +1,26 @@
+
+menuconfig ASH
+	bool "Enable Asus Sensor Hub Support"
+	help
+	  This is the driver for Asus Sensor Hub.
+	  We support all sensors on the device.
+
+if ASH
+config ASHDEBUG
+	bool "Enable Asus Sensor Hub Debug"
+	help
+	  This config is for Printing ASH debug log.
+	  
+config ASHTEST
+	bool "Enable Asus Sensor Hub Test Driver"
+	help
+	  This is the Test Driver for Asu Sensor Hub.
+	  You can add any code to test the ASH.
+
+config IRSENSOR
+	bool "Enable P/L Sensor Driver Support"
+	depends on I2C && ASH
+	help
+	  This driver is used for exercising P/L sensor.
+endif
+
