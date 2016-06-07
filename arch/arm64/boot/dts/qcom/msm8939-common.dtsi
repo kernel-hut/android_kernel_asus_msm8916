@@ -1881,3 +1881,4 @@
 	};
 };
 
+#include "cyanogenmod-asus-common.dtsi"
