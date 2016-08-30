@@ -1,4 +1,10 @@
-obj-y += hall_sensor.o
+ #+++ SZ_BSP gauss_li "for porting"
+ifeq ($(ASUS_BUILD_PROJECT), ZC550KL)
+	obj-y += hall_sensor_zc550kl.o
+else
+	obj-y += hall_sensor.o
+endif
+ #--- SZ_BSP gauss_li "for porting"
 
 DEBUG = n
 

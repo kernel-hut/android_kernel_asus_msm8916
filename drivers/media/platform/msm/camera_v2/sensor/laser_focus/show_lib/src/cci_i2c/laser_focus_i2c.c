@@ -15,9 +15,6 @@
 *	@param i2c_write_data the data which will be written
 *
 */
-
-extern void swap_data(uint16_t* register_data);
-
 int CCI_I2C_WrByte(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr, uint16_t i2c_write_data)
 {
 	int status;
@@ -41,9 +38,7 @@ int CCI_I2C_WrByte(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr,
 	LOG_Handler(LOG_REG, "%s: wirte register(0x%x) : 0x%x \n", __func__, register_addr, i2c_write_data);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
-#if I2C_DEVICE
-	status = 0;
-#endif
+	
 	return status;
 }
 
@@ -54,16 +49,14 @@ int CCI_I2C_WrByte(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr,
 *	@param i2c_write_data the data which will be written
 *
 */
-int CCI_I2C_WrWord(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr, uint16_t write_data)
+int CCI_I2C_WrWord(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr, uint16_t i2c_write_data)
 {
 	int status;
-	uint16_t i2c_write_data = write_data;
 	/* Setting i2c client */
 	struct msm_camera_i2c_client *sensor_i2c_client;
 
 	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
 	
-	swap_data(&i2c_write_data);
 	sensor_i2c_client = dev_t->i2c_client;
 	if (!sensor_i2c_client) {
 		LOG_Handler(LOG_ERR, "%s: failed: %p \n", __func__, sensor_i2c_client);
@@ -79,9 +72,7 @@ int CCI_I2C_WrWord(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr,
 	LOG_Handler(LOG_REG, "%s: wirte register(0x%x) : 0x%x \n", __func__, register_addr, i2c_write_data);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
-#if I2C_DEVICE
-	status = 0;
-#endif
+	
 	return status;
 }
 
@@ -117,9 +108,7 @@ int CCI_I2C_WrByteSeq(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_ad
 	//LOG_Handler(LOG_REG, "%s: write register(0x%x) : 0x%x \n", __func__, register_addr, i2c_write_data);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
-#if I2C_DEVICE
-	status = 0;
-#endif
+
 	return status;
 }
 
@@ -155,9 +144,7 @@ int CCI_I2C_RdByte(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr,
        LOG_Handler(LOG_REG, "%s: read register(0x%x) : 0x%x \n", __func__, register_addr, *i2c_read_data);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
-#if I2C_DEVICE
-	status = 0;
-#endif	
+	
        return status;
 }
 
@@ -188,14 +175,10 @@ int CCI_I2C_RdWord(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr,
 		LOG_Handler(LOG_ERR, "%s: read register(0x%x) failed\n", __func__, register_addr);
 		return status;
 	}
-
-	swap_data(i2c_read_data);
 	LOG_Handler(LOG_REG, "%s: read register(0x%x) : 0x%x \n", __func__, register_addr, *i2c_read_data);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
-#if I2C_DEVICE
-	status = 0;
-#endif
+
 	return status;
 }
 
@@ -237,9 +220,7 @@ int CCI_I2C_RdDWord(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_addr
 	LOG_Handler(LOG_REG, "%s: read register(0x%x) : 0x%x \n", __func__, register_addr, *i2c_read_data);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
-#if I2C_DEVICE
-	status = 0;
-#endif
+
 	return status;
 }
 
@@ -275,8 +256,6 @@ int CCI_I2C_RdByteSeq(struct msm_laser_focus_ctrl_t *dev_t, uint32_t register_ad
 	LOG_Handler(LOG_REG, "%s: read register(0x%x) : 0x%x \n", __func__, register_addr, i2c_read_data);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
-#if I2C_DEVICE
-	status = 0;
-#endif
+
 	return status;
 }

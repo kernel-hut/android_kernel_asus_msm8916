@@ -33,7 +33,11 @@ struct csiphy_reg_parms_t {
 	uint32_t mipi_csiphy_lnck_cfg1_addr;
 	uint32_t mipi_csiphy_lnck_cfg2_addr;
 	uint32_t mipi_csiphy_lnck_cfg3_addr;
+#ifdef CONFIG_8939_CSIPHY
+	uint32_t mipi_csiphy_glbl_pwg_cfg0_addr;
+#else
 	uint32_t mipi_csiphy_lnck_cfg4_addr;
+#endif
 	uint32_t mipi_csiphy_lnn_test_imp;
 	uint32_t mipi_csiphy_lnn_misc1_addr;
 	uint32_t mipi_csiphy_glbl_reset_addr;
@@ -84,6 +88,7 @@ struct csiphy_device {
 	uint32_t is_3_1_20nm_hw;
 	uint32_t csiphy_clk_index;
 	uint32_t csiphy_max_clk;
+	uint32_t csiphy_sof_freeze;
 };
 
 #define VIDIOC_MSM_CSIPHY_RELEASE \

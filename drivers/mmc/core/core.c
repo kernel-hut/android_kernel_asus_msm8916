@@ -1731,10 +1731,12 @@ static void __mmc_set_clock(struct mmc_host *host, unsigned int hz)
 	if (hz > host->f_max)
 		hz = host->f_max;
 
-	//ASUS_BSP Deeo : dump SD clock value +++
+	//ASUS_BSP Deeo : dump mmc clock value +++
+	//if (!strcmp(mmc_hostname(host), "mmc0"))
+	//	printk("[eMMC] mmc_set_clock %d\n", hz);
 	if (!strcmp(mmc_hostname(host), "mmc1"))
 		printk("[SD] mmc_set_clock %d\n", hz);
-	//ASUS_BSP Deeo : dump SD clock value ---
+	//ASUS_BSP Deeo : dump mmc clock value ---
 
 	host->ios.clock = hz;
 	mmc_set_ios(host);
@@ -2442,7 +2444,7 @@ void mmc_detect_change(struct mmc_host *host, unsigned long delay)
 	spin_unlock_irqrestore(&host->lock, flags);
 #endif
 	host->detect_change = 1;
-
+	host->rescan_disable = 0;
 	mmc_schedule_delayed_work(&host->detect, delay);
 }
 
@@ -3181,6 +3183,7 @@ static void mmc_clk_scale_work(struct work_struct *work)
 {
 	struct mmc_host *host = container_of(work, struct mmc_host,
 					      clk_scaling.work.work);
+
 	if (!host->card || !host->bus_ops ||
 			!host->bus_ops->change_bus_speed ||
 			!host->clk_scaling.enable || !host->ios.clock)
@@ -3376,6 +3379,8 @@ out:
 void mmc_disable_clk_scaling(struct mmc_host *host)
 {
 	cancel_delayed_work_sync(&host->clk_scaling.work);
+	if (host->ops->notify_load)
+		host->ops->notify_load(host, MMC_LOAD_LOW);
 	host->clk_scaling.enable = false;
 }
 EXPORT_SYMBOL_GPL(mmc_disable_clk_scaling);
@@ -3407,8 +3412,8 @@ void mmc_init_clk_scaling(struct mmc_host *host)
 	INIT_DELAYED_WORK(&host->clk_scaling.work, mmc_clk_scale_work);
 	host->clk_scaling.curr_freq = mmc_get_max_frequency(host);
 	if (host->ops->notify_load)
-		host->ops->notify_load(host, MMC_LOAD_HIGH);
-	host->clk_scaling.state = MMC_LOAD_HIGH;
+		host->ops->notify_load(host, MMC_LOAD_INIT);
+	host->clk_scaling.state = MMC_LOAD_INIT;
 	mmc_reset_clk_scale_stats(host);
 	host->clk_scaling.enable = true;
 	host->clk_scaling.initialized = true;
@@ -3425,6 +3430,8 @@ EXPORT_SYMBOL_GPL(mmc_init_clk_scaling);
 void mmc_exit_clk_scaling(struct mmc_host *host)
 {
 	cancel_delayed_work_sync(&host->clk_scaling.work);
+	if (host->ops->notify_load)
+		host->ops->notify_load(host, MMC_LOAD_LOW);
 	memset(&host->clk_scaling, 0, sizeof(host->clk_scaling));
 }
 EXPORT_SYMBOL_GPL(mmc_exit_clk_scaling);
@@ -3613,12 +3620,14 @@ void mmc_rescan(struct work_struct *work)
 
 void mmc_start_host(struct mmc_host *host)
 {
+	mmc_claim_host(host);
 	host->f_init = max(freqs[0], host->f_min);
 	host->rescan_disable = 0;
 	if (host->caps2 & MMC_CAP2_NO_PRESCAN_POWERUP)
 		mmc_power_off(host);
 	else
 		mmc_power_up(host);
+	mmc_release_host(host);
 	mmc_detect_change(host, 0);
 }
 
@@ -3748,7 +3757,7 @@ EXPORT_SYMBOL(mmc_card_sleep);
 int mmc_card_can_sleep(struct mmc_host *host)
 {
 	struct mmc_card *card = host->card;
-
+//ASUS_BSP Lei_Guo +++ config CMD5
 	if(MMC_CONFIG_SETTING_SLEEP){
 		if (card && mmc_card_mmc(card) && card->ext_csd.rev >= 3)
 			return 1;
@@ -3779,9 +3788,11 @@ int mmc_flush_cache(struct mmc_card *card)
 			pr_err("%s: cache flush timeout\n",
 					mmc_hostname(card->host));
 			rc = mmc_interrupt_hpi(card);
-			if (rc)
+			if (rc) {
 				pr_err("%s: mmc_interrupt_hpi() failed (%d)\n",
 						mmc_hostname(host), rc);
+				err = -ENODEV;
+			}
 		} else if (err) {
 			pr_err("%s: cache flush error %d\n",
 					mmc_hostname(card->host), err);
@@ -3913,8 +3924,11 @@ int mmc_suspend_host(struct mmc_host *host)
 	}
 	mmc_bus_put(host);
 
-	if (!err && !mmc_card_keep_power(host))
+	if (!err && !mmc_card_keep_power(host)) {
+		mmc_claim_host(host);
 		mmc_power_off(host);
+		mmc_release_host(host);
+	}
 
 	trace_mmc_suspend_host(mmc_hostname(host), err,
 			ktime_to_us(ktime_sub(ktime_get(), start)));
@@ -3946,7 +3960,9 @@ int mmc_resume_host(struct mmc_host *host)
 
 	if (host->bus_ops && !host->bus_dead) {
 		if (!mmc_card_keep_power(host)) {
+			mmc_claim_host(host);
 			mmc_power_up(host);
+			mmc_release_host(host);
 			mmc_select_voltage(host, host->ocr);
 			/*
 			 * Tell runtime PM core we just powered up the card,

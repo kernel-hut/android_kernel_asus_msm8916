@@ -64,11 +64,7 @@ static void *emergency_dload_mode_addr;
 static bool scm_dload_supported;
 
 static int dload_set(const char *val, struct kernel_param *kp);
-//#ifdef ASUS_SHIP_BUILD
-//static int download_mode = 0;
-//#else
 static int download_mode = 1;
-//#endif
 module_param_call(download_mode, dload_set, param_get_int,
 			&download_mode, 0644);
 extern struct _asus_global asus_global;
@@ -221,6 +217,7 @@ static void halt_spmi_pmic_arbiter(void)
 static void msm_restart_prepare(const char *cmd)
 {
 	ulong *printk_buffer_slot2_addr;
+//	bool need_warm_reset = false;
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 
@@ -232,6 +229,28 @@ static void msm_restart_prepare(const char *cmd)
 	set_dload_mode(download_mode &&
 			(in_panic || restart_mode == RESTART_DLOAD));
 #endif
+
+//	if (qpnp_pon_check_hard_reset_stored()) {
+//		/* Set warm reset as true when device is in dload mode
+//		 *  or device doesn't boot up into recovery, bootloader or rtc.
+//		 */
+//		if (get_dload_mode() ||
+//			((cmd != NULL && cmd[0] != '\0') &&
+//			strcmp(cmd, "recovery") &&
+//			strcmp(cmd, "bootloader") &&
+//			strcmp(cmd, "rtc")))
+//			need_warm_reset = true;
+//	} else {
+//		need_warm_reset = (get_dload_mode() ||
+//				(cmd != NULL && cmd[0] != '\0') || in_panic);
+//	}
+
+//	/* Hard reset the PMIC unless memory contents must be maintained. */
+//	if (need_warm_reset) {
+//		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
+//	} else {
+//		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
+//	}
 
 	/* Hard reset the PMIC unless memory contents must be maintained. */
 	if (get_dload_mode() || (cmd != NULL && cmd[0] != '\0') || in_panic)
@@ -246,7 +265,7 @@ static void msm_restart_prepare(const char *cmd)
 	}
 
 	if (cmd != NULL) {
-		if (!strncmp(cmd, "bootloader", 10) || !strncmp(cmd, "oem-23", 6)) {
+		if (!strncmp(cmd, "bootloader", 10)) {
 			__raw_writel(0x77665500, restart_reason);
 		} else if (!strncmp(cmd, "recovery", 8)) {
 			__raw_writel(0x77665502, restart_reason);
@@ -443,10 +462,10 @@ static int msm_restart_probe(struct platform_device *pdev)
 	if (scm_is_call_available(SCM_SVC_PWR, SCM_IO_DISABLE_PMIC_ARBITER) > 0)
 		scm_pmic_arbiter_disable_supported = true;
 
-	set_dload_mode(download_mode);
-
 	if (scm_is_call_available(SCM_SVC_PWR, SCM_IO_DEASSERT_PS_HOLD) > 0)
 		scm_deassert_ps_hold_supported = true;
+
+	set_dload_mode(download_mode);
 
 	return 0;
 

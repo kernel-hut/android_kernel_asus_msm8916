@@ -653,6 +653,7 @@ config ARCH_MSM
 	select GENERIC_ALLOCATOR
 	select HAVE_CLK
 	select HAVE_CLK_PREPARE
+	select ARCH_HAS_OPP
 	select NEED_MACH_MEMORY_H
 	select NEED_MACH_IO_H
 	select NEED_MACH_GPIO_H
@@ -2331,6 +2332,13 @@ config NEON
 	help
 	  Say Y to include support code for NEON, the ARMv7 Advanced SIMD
 	  Extension.
+
+config KERNEL_MODE_NEON
+	bool "Support for NEON in kernel mode"
+	default n
+	depends on NEON
+	help
+	  Say Y to include support for NEON in kernel mode.
 
 endmenu
 

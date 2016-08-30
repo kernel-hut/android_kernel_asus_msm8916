@@ -856,24 +856,6 @@ temp_show(struct device *dev, struct device_attribute *attr, char *buf)
 	return sprintf(buf, "%ld\n", temperature);
 }
 
-/* +++ BSP Shawn_Huang For ATD parser format */
-static ssize_t
-mtemp_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct thermal_zone_device *tz = to_thermal_zone(dev);
-	long mtemperature;
-	int ret;
-
-	ret = thermal_zone_get_temp(tz, &mtemperature);
-	mtemperature = mtemperature  * 1000;
-
-	if (ret)
-		return ret;
-
-	return sprintf(buf, "%ld\n", mtemperature);
-}
-/* --- BSP Shawn_Huang For ATD parser format */
-
 static ssize_t
 mode_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
@@ -1203,7 +1185,6 @@ static DEVICE_ATTR(emul_temp, S_IWUSR, NULL, emul_temp_store);
 
 static DEVICE_ATTR(type, 0444, type_show, NULL);
 static DEVICE_ATTR(temp, 0444, temp_show, NULL);
-static DEVICE_ATTR(mtemp, 0444, mtemp_show, NULL);	/* --- BSP Shawn_Huang For ATD parser format */
 static DEVICE_ATTR(mode, 0644, mode_show, mode_store);
 static DEVICE_ATTR(passive, S_IRUGO | S_IWUSR, passive_show, passive_store);
 static DEVICE_ATTR(policy, S_IRUGO | S_IWUSR, policy_show, policy_store);
@@ -2110,12 +2091,6 @@ struct thermal_zone_device *thermal_zone_device_register(const char *type,
 	if (result)
 		goto unregister;
 
-	/* +++ BSP Shawn_Huang For ATD parser format */
-	result = device_create_file(&tz->device, &dev_attr_mtemp);
-	if (result)
-		goto unregister;
-	/* --- BSP Shawn_Huang For ATD parser format */
-	
 	if (ops->get_mode) {
 		result = device_create_file(&tz->device, &dev_attr_mode);
 		if (result)

@@ -52,10 +52,6 @@ struct kxtj9_platform_data {
 	#define KXTJ9_G_4G		(1 << 3)
 	#define KXTJ9_G_8G		(1 << 4)
 	u8 g_range;
-	//+++ ASUS_BSP Alian_Shen
-	#define ENABLE_WUFE     (1 << 1)
-	u8 clt_reg1;
-	//--- ASUS_BSP Alian_Shen
 
 	int (*init)(void);
 	void (*exit)(void);

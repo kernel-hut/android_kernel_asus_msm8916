@@ -344,7 +344,6 @@ static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
 {
 	suspend_state_t state;
 	int error;
-
 	printk("[Kernel] state_store: %s\n", buf);
 
 	error = pm_autosleep_lock();
@@ -357,9 +356,6 @@ static ssize_t state_store(struct kobject *kobj, struct kobj_attribute *attr,
 	}
 
 	state = decode_state(buf, n);
-	//[+++]Add log for power state change
-	//ASUSEvtlog("[PM] state_store: mem\n");
-	//[---]Add log for power state change
 	if (state < PM_SUSPEND_MAX) {
 		printk("[PM] going to pm_suspend: %d\n", state);
 		
@@ -515,7 +511,6 @@ static ssize_t autosleep_store(struct kobject *kobj,
 {
 	suspend_state_t state = decode_state(buf, n);
 	int error;
-
 	printk("[Kernel] autosleep_store: %s\n", buf);
 
 	if (state == PM_SUSPEND_ON

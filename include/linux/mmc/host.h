@@ -87,6 +87,7 @@ struct mmc_ios {
 /* states to represent load on the host */
 enum mmc_load {
 	MMC_LOAD_HIGH,
+	MMC_LOAD_INIT,
 	MMC_LOAD_LOW,
 };
 
@@ -435,15 +436,8 @@ struct mmc_host {
 	} perf;
 	bool perf_enable;
 #endif
-	unsigned int cd_delay;  //ASUS_BSP +++ Gavin_Chang "card detect config"
-	unsigned int sd_status; //ASUS_BSP +++ Gavin_Chang "sd status for ATD"
-//ASUS_BSP +++ Gavin_Chang "mmc suspend stress test"
-#ifdef CONFIG_MMC_SUSPENDTEST
-	bool suspendtest;
-	unsigned int suspendcnt;
-	unsigned int suspend_datasz;
-#endif
-//ASUS_BSP --- Gavin_Chang "mmc suspend stress test"
+       unsigned int cd_delay;  //ASUS_BSP +++ Allen_Zhuang "card detect config"
+       unsigned int sd_status; //ASUS_BSP +++ Allen_Zhuang "sd status for ATD"
 	struct {
 		unsigned long	busy_time_us;
 		unsigned long	window_time;

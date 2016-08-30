@@ -67,8 +67,6 @@ struct qpnp_vib {
 	struct mutex lock;
 };
 
-
-
 static int qpnp_vib_read_u8(struct qpnp_vib *vib, u8 *data, u16 reg)
 {
 	int rc;
@@ -230,11 +228,15 @@ static int qpnp_vib_set(struct qpnp_vib *vib, int on)
 			printk("[vibrator] Turn on vibrator, timer= %d ms\n",g_vib_stop_val);
 		}	
 	#endif	
+	 //+++ SZ_BSP gauss_li fix zc550 vibrator too weak 
+    #ifdef ASUS_ZC550KL_PROJECT
 	   if (g_vib_stop_val < 30)
 		{
-			printk("[vibrator]  before timer = %d ms\n",g_vib_stop_val);
-			g_vib_stop_val = 30;
-		}	
+			 printk("[vibrator]  before timer = %d ms\n",g_vib_stop_val);
+			 g_vib_stop_val = 30;
+		 }
+     #endif	
+	 //--- SZ_BSP gauss_li fix zc550 vibrator too weak 
 		printk("[vibrator] Turn on vibrator, timer= %d ms\n",g_vib_stop_val);
 		hrtimer_start(&vib->vib_timer,
 			      ktime_set(g_vib_stop_val / 1000, (g_vib_stop_val % 1000) * 1000000),
@@ -425,8 +427,6 @@ static int qpnp_vibrator_probe(struct spmi_device *spmi)
 	vib = devm_kzalloc(&spmi->dev, sizeof(*vib), GFP_KERNEL);
 	if (!vib)
 		return -ENOMEM;
-
-
 
 	vib->spmi = spmi;
 

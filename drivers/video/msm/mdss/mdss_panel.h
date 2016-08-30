@@ -1,4 +1,4 @@
-/* Copyright (c) 2008-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2008-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -17,13 +17,21 @@
 #include <linux/platform_device.h>
 #include <linux/stringify.h>
 #include <linux/types.h>
+#include <linux/debugfs.h>
 
 /* panel id type */
 struct panel_id {
 	u16 id;
 	u16 type;
 };
-
+#ifndef ASUS_ZC550KL_PROJECT
+//ASUS_BSP: Louis ++
+struct panel_list {
+	char name[16];
+	uint32_t lcd_id;
+};
+//ASUS_BSP: Louis --
+#endif
 #define DEFAULT_FRAME_RATE	60
 #define DEFAULT_ROTATOR_FRAME_RATE 120
 #define MDSS_DSI_RST_SEQ_LEN	10
@@ -89,7 +97,8 @@ enum {
 enum {
 	MDSS_PANEL_POWER_OFF = 0,
 	MDSS_PANEL_POWER_ON,
-	MDSS_PANEL_POWER_DOZE,
+	MDSS_PANEL_POWER_LP1,
+	MDSS_PANEL_POWER_LP2,
 };
 
 enum {
@@ -102,6 +111,13 @@ enum {
 	MODE_GPIO_NOT_VALID = 0,
 	MODE_GPIO_HIGH,
 	MODE_GPIO_LOW,
+};
+enum dsi_lane_ids {
+	DSI_LANE_0,
+	DSI_LANE_1,
+	DSI_LANE_2,
+	DSI_LANE_3,
+	DSI_LANE_MAX,
 };
 
 struct mdss_rect {
@@ -141,6 +157,7 @@ struct mdss_intf_recovery {
  * @MDSS_EVENT_UNBLANK:		Sent before first frame update from MDP is
  *				sent to panel.
  * @MDSS_EVENT_PANEL_ON:	After first frame update from MDP.
+ * @MDSS_EVENT_POST_PANEL_ON	send 2nd phase panel on commands to panel
  * @MDSS_EVENT_BLANK:		MDP has no contents to display only blank screen
  *				is shown in panel. Sent before panel off.
  * @MDSS_EVENT_PANEL_OFF:	MDP has suspended frame updates, panel should be
@@ -178,14 +195,16 @@ struct mdss_intf_recovery {
  *				- 1: update to command mode
  * @MDSS_EVENT_REGISTER_RECOVERY_HANDLER: Event to recover the interface in
  *					case there was any errors detected.
- * @MDSS_EVENT_INTF_RESTORE: Event to restore the interface in case there
- *				was any errors detected during normal operation.
+ * @ MDSS_EVENT_DSI_PANEL_STATUS:Event to check the panel status
+ *				<= 0: panel check fail
+ *				>  0: panel check success
  */
 enum mdss_intf_events {
 	MDSS_EVENT_RESET = 1,
 	MDSS_EVENT_LINK_READY,
 	MDSS_EVENT_UNBLANK,
 	MDSS_EVENT_PANEL_ON,
+	MDSS_EVENT_POST_PANEL_ON,
 	MDSS_EVENT_BLANK,
 	MDSS_EVENT_PANEL_OFF,
 	MDSS_EVENT_CLOSE,
@@ -202,7 +221,7 @@ enum mdss_intf_events {
 	MDSS_EVENT_DSI_STREAM_SIZE,
 	MDSS_EVENT_DSI_DYNAMIC_SWITCH,
 	MDSS_EVENT_REGISTER_RECOVERY_HANDLER,
-	MDSS_EVENT_INTF_RESTORE,
+	MDSS_EVENT_DSI_PANEL_STATUS,
 };
 
 struct lcd_panel_info {
@@ -281,13 +300,17 @@ struct mipi_panel_info {
 	/* The packet-size should not bet changed */
 	char no_max_pkt_size;
 	/* Clock required during LP commands */
-	char force_clk_lane_hs;
+	bool force_clk_lane_hs;
+
+	bool always_on;
 
 	char vsync_enable;
 	char hw_vsync_mode;
 
 	char lp11_init;
 	u32  init_delay;
+	u32  post_init_delay;
+	u32  phy_lane_clamp_mask;	/*DSI physical lane clamp mask*/
 };
 
 struct edp_panel_info {
@@ -363,6 +386,7 @@ struct mdss_panel_info {
 	u32 clk_rate;
 	u32 clk_min;
 	u32 clk_max;
+	u32 mdp_transfer_time_us;
 	u32 frame_count;
 	u32 is_3d_panel;
 	u32 out_format;
@@ -393,6 +417,7 @@ struct mdss_panel_info {
 	u32 max_fps;
 
 	u32 cont_splash_enabled;
+	bool esd_rdy;
 	u32 partial_update_enabled;
 	u32 dcs_cmd_by_left;
 	u32 partial_update_roi_merge;
@@ -416,6 +441,9 @@ struct mdss_panel_info {
 	struct mipi_panel_info mipi;
 	struct lvds_panel_info lvds;
 	struct edp_panel_info edp;
+
+	/* debugfs structure for the panel */
+	struct mdss_panel_debugfs_info *debugfs_info;
 };
 
 struct mdss_panel_data {
@@ -438,6 +466,16 @@ struct mdss_panel_data {
 	int (*event_handler) (struct mdss_panel_data *pdata, int e, void *arg);
 
 	struct mdss_panel_data *next;
+};
+
+struct mdss_panel_debugfs_info {
+	struct dentry *root;
+	u32 xres;
+	u32 yres;
+	struct lcd_panel_info lcdc;
+	u32 override_flag;
+	char frame_rate;
+	struct mdss_panel_debugfs_info *next;
 };
 
 /**
@@ -532,33 +570,6 @@ static inline int mdss_panel_get_htotal(struct mdss_panel_info *pinfo, bool
 		pinfo->lcdc.h_pulse_width;
 }
 
-/**
- * mdss_mdp_max_fetch_lines: - Number of fetch lines in vertical front porch
- * @pinfo:	Pointer to panel info containing all panel information
- *
- * Returns the number of fetch lines in vertical front porch at which mdp
- * can start fetching the next frame.
- *
- * In some cases, vertical front porch is too high. In such cases limit
- * the mdp fetch lines  as the last 12 lines of vertical front porch.
- */
-static inline int mdss_mdp_max_fetch_lines(struct mdss_panel_info *pinfo)
-{
-	int fetch_lines;
-	int v_total, vfp_start;
-
-	v_total = mdss_panel_get_vtotal(pinfo);
-	vfp_start = (pinfo->lcdc.v_back_porch + pinfo->lcdc.v_pulse_width +
-			pinfo->yres);
-
-	fetch_lines = v_total - vfp_start;
-
-	if (fetch_lines > MDSS_MDP_MAX_FETCH)
-		fetch_lines = MDSS_MDP_MAX_FETCH;
-
-	return fetch_lines;
-}
-
 int mdss_register_panel(struct platform_device *pdev,
 	struct mdss_panel_data *pdata);
 
@@ -603,13 +614,26 @@ static inline bool mdss_panel_is_power_on(int panel_power_state)
  * @panel_power_state: enum identifying the power state to be checked
  *
  * This function returns true if the panel is in an intermediate low power
- * state where it is still on but not fully interactive. It may still accept
- * commands and display updates but would be operating in a low power mode.
+ * state where it is still on but not fully interactive. It may or may not
+ * accept any commands and display updates.
  */
 static inline bool mdss_panel_is_power_on_lp(int panel_power_state)
 {
 	return !mdss_panel_is_power_off(panel_power_state) &&
 		!mdss_panel_is_power_on_interactive(panel_power_state);
+}
+
+/**
+ * mdss_panel_is_panel_power_on_ulp: - checks if panel is in ultra low power mode
+ * @pdata: pointer to the panel struct associated to the panel
+ * @panel_power_state: enum identifying the power state to be checked
+ *
+ * This function returns true if the panel is in a ultra low power
+ * state where it is still on but cannot recieve any display updates.
+ */
+static inline bool mdss_panel_is_power_on_ulp(int panel_power_state)
+{
+	return panel_power_state == MDSS_PANEL_POWER_LP2;
 }
 
 /**
@@ -644,4 +668,16 @@ int mdss_panel_get_boot_cfg(void);
  * returns true if mdss is ready, else returns false.
  */
 bool mdss_is_ready(void);
+#ifdef CONFIG_FB_MSM_MDSS
+int mdss_panel_debugfs_init(struct mdss_panel_info *panel_info);
+void mdss_panel_debugfs_cleanup(struct mdss_panel_info *panel_info);
+void mdss_panel_debugfsinfo_to_panelinfo(struct mdss_panel_info *panel_info);
+#else
+static inline int mdss_panel_debugfs_init(
+			struct mdss_panel_info *panel_info) { return 0; };
+static inline void mdss_panel_debugfs_cleanup(
+			struct mdss_panel_info *panel_info) { };
+static inline void mdss_panel_debugfsinfo_to_panelinfo(
+			struct mdss_panel_info *panel_info) { };
+#endif
 #endif /* MDSS_PANEL_H */

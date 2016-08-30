@@ -1117,9 +1117,9 @@ static int mmc_sd_init_card(struct mmc_host *host, u32 ocr,
 	}
 
 	host->card = card;
-//ASUS_BSP Gavin_Chang +++ Add sd_status for ATD when power on
+//ASUS_BSP Allen_Zhuang +++ Add sd_status for ATD when power on
 	host->sd_status = 1;
-//ASUS_BSP Gavin_Chang --- Add sd_status for ATD when power on
+//ASUS_BSP Allen_Zhuang --- Add sd_status for ATD when power on
 	return 0;
 
 free_card:

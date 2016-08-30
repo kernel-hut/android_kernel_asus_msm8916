@@ -151,25 +151,25 @@ struct pinconf_generic_dt_params {
 
 static struct pinconf_generic_dt_params dt_params[] = {
 	{ "bias-disable", PIN_CONFIG_BIAS_DISABLE, 0 },
-	{ "bias-high-impedance", PIN_CONFIG_BIAS_HIGH_IMPEDANCE, 0 },
-	{ "bias-bus-hold", PIN_CONFIG_BIAS_BUS_HOLD, 0 },
+	{ "bias-high-impedance", PIN_CONFIG_BIAS_HIGH_IMPEDANCE, 0 },      // other project
+	{ "bias-bus-hold", PIN_CONFIG_BIAS_BUS_HOLD, 0 },                  // no used
 	{ "bias-pull-up", PIN_CONFIG_BIAS_PULL_UP, 1 },
 	{ "bias-pull-down", PIN_CONFIG_BIAS_PULL_DOWN, 1 },
-	{ "bias-pull-pin-default", PIN_CONFIG_BIAS_PULL_PIN_DEFAULT, 1 },
-	{ "drive-push-pull", PIN_CONFIG_DRIVE_PUSH_PULL, 0 },
-	{ "drive-open-drain", PIN_CONFIG_DRIVE_OPEN_DRAIN, 0 },
-	{ "drive-open-source", PIN_CONFIG_DRIVE_OPEN_SOURCE, 0 },
+	{ "bias-pull-pin-default", PIN_CONFIG_BIAS_PULL_PIN_DEFAULT, 1 },  // no used
+	{ "drive-push-pull", PIN_CONFIG_DRIVE_PUSH_PULL, 0 },              // other project
+	{ "drive-open-drain", PIN_CONFIG_DRIVE_OPEN_DRAIN, 0 },            // other project
+	{ "drive-open-source", PIN_CONFIG_DRIVE_OPEN_SOURCE, 0 },          // other project
 	{ "drive-strength", PIN_CONFIG_DRIVE_STRENGTH, 0 },
 	{ "input-enable", PIN_CONFIG_INPUT_ENABLE, 1 },
 	{ "input-disable", PIN_CONFIG_INPUT_ENABLE, 0 },
-	{ "input-schmitt-enable", PIN_CONFIG_INPUT_SCHMITT_ENABLE, 1 },
-	{ "input-schmitt-disable", PIN_CONFIG_INPUT_SCHMITT_ENABLE, 0 },
-	{ "input-debounce", PIN_CONFIG_INPUT_DEBOUNCE, 0 },
-	{ "low-power-enable", PIN_CONFIG_LOW_POWER_MODE, 1 },
-	{ "low-power-disable", PIN_CONFIG_LOW_POWER_MODE, 0 },
+	{ "input-schmitt-enable", PIN_CONFIG_INPUT_SCHMITT_ENABLE, 1 },    // other project
+	{ "input-schmitt-disable", PIN_CONFIG_INPUT_SCHMITT_ENABLE, 0 },   // other project
+	{ "input-debounce", PIN_CONFIG_INPUT_DEBOUNCE, 0 },                // no used
+	{ "low-power-enable", PIN_CONFIG_LOW_POWER_MODE, 1 },              // no used
+	{ "low-power-disable", PIN_CONFIG_LOW_POWER_MODE, 0 },             // no used
 	{ "output-low", PIN_CONFIG_OUTPUT, 0, },
 	{ "output-high", PIN_CONFIG_OUTPUT, 1, },
-	{ "slew-rate", PIN_CONFIG_SLEW_RATE, 0},
+	{ "slew-rate", PIN_CONFIG_SLEW_RATE, 0},                           // other project
 };
 
 /**

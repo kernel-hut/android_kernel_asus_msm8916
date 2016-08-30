@@ -1308,6 +1308,14 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 					SENSOR_GPIO_MAX);
 				goto power_up_failed;
 			}
+
+			//ASUS_BSP +++ Deka "support laser sensor 2nd source"
+                    	if(g_ASUS_laserID==0 && power_setting->seq_val == CAM_VAF){
+                            printk("Deka power up g_ASUS_laserID = %d",g_ASUS_laserID);
+                            break;
+                        }
+           		//ASUS_BSP --- Deka "support laser sensor 2nd source"
+
 			if (power_setting->seq_val < ctrl->num_vreg)
 				msm_camera_config_single_vreg(ctrl->dev,
 				&ctrl->cam_vreg[power_setting->seq_val],

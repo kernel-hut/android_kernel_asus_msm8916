@@ -51,12 +51,12 @@ unsigned int selinux_checkreqprot = CONFIG_SECURITY_SELINUX_CHECKREQPROT_VALUE;
 
 #define DProcRDFile "/proc/rd"
 #define DAsusSetEnforce "asussetenforce"
-static bool ckeck_rd(void)
+static int ckeck_rd(void)
 {
 	int bRet = false;
 	char buf[20] = "";
 	struct file *pFile = NULL;
-	int nLen = 0;
+	int nLen = -1;
 	mm_segment_t old_fs;
 
 	pFile = filp_open(DProcRDFile, O_RDONLY, 0);
@@ -121,7 +121,6 @@ static int task_has_security(struct task_struct *tsk,
 	rcu_read_unlock();
 	if (!tsec)
 		return -EACCES;
-
 	return avc_has_perm(sid, SECINITSID_SECURITY,
 			    SECCLASS_SECURITY, perms, NULL);
 }

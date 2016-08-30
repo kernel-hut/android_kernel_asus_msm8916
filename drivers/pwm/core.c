@@ -111,10 +111,10 @@ static struct pwm_chip *pwmchip_find_by_name(const char *name)
 static int pwm_device_request(struct pwm_device *pwm, const char *label)
 {
 	int err;
-
-	if (test_bit(PWMF_REQUESTED, &pwm->flags))
-		return -EBUSY;
-
+//ASUS BSP Austin_T +++
+//	if (test_bit(PWMF_REQUESTED, &pwm->flags)) 
+//		return -EBUSY;
+//ASUS BSP Austin_T --- 
 	if (!try_module_get(pwm->chip->ops->owner))
 		return -ENODEV;
 

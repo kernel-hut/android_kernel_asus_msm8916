@@ -166,9 +166,30 @@
 #define TLMMV4_QDSD_PULL_OFFSET			0x3
 #define TLMMV4_QDSD_CONFIG_WIDTH		0x5
 #define TLMMV4_QDSD_DRV_MASK			0x7
-//[+++][Power]Add for wakeup debug
+
+/*ASUS_BSP Deeo: add for debug mask +++ */
+/* Debug levels */
+#define NO_DEBUG       0
+#define DEBUG_POWER     1
+#define DEBUG_INFO  2
+#define DEBUG_VERBOSE 5
+#define DEBUG_RAW      8
+#define DEBUG_TRACE   10
+
+static int debug = DEBUG_INFO;
+
+module_param(debug, int, 0644);
+MODULE_PARM_DESC(debug, "Activate debugging output");
+
+
+#define pinctrl_debug(level, ...) do { if (debug >= (level)) pr_info(__VA_ARGS__); } while (0)
+
+static struct msm_pintype_info *d_pinfo;
+/*ASUS_BSP Deeo: add for debug mask --- */
+
+//ASUS_BSP [+++][Power] jeff_gu Add for wakeup debug
 int gpio_irq_cnt, gpio_resume_irq[8];
-//[---][Power]Add for wakeup debug
+//ASUS_BSP [---][Power] jeff_gu Add for wakeup debug
 struct msm_sdc_regs {
 	unsigned long pull_mask;
 	unsigned long pull_shft;
@@ -271,6 +292,7 @@ static int msm_tlmm_sdc_cfg(uint pin_no, unsigned long *config,
 	cfg_reg = reg_base + offset;
 	id = pinconf_to_config_param(*config);
 	val = readl_relaxed(cfg_reg);
+	pinctrl_debug(DEBUG_RAW,"[Pinctrl] [SDC][%d] reg_base:0x%llx offset:0x%x\n", pin_no, (u64)reg_base, offset);
 	/* Get mask and shft values for this config type */
 	switch (id) {
 	case PIN_CONFIG_BIAS_DISABLE:
@@ -325,6 +347,8 @@ static int msm_tlmm_sdc_cfg(uint pin_no, unsigned long *config,
 		writel_relaxed(val, cfg_reg);
 	} else
 		*config = pinconf_to_config_packed(id, data);
+
+	pinctrl_debug(DEBUG_VERBOSE,"[Pinctrl] [SDC][%d] ID:%u Data:%u Val:0x%04x shft:%u (%d)\n", pin_no, id, data, val, shft, write);
 	return 0;
 }
 
@@ -338,6 +362,7 @@ static int msm_tlmm_qdsd_cfg(uint pin_no, unsigned long *config,
 	cfg_reg = pinfo->reg_base;
 	id = pinconf_to_config_param(*config);
 	val = readl_relaxed(cfg_reg);
+	pinctrl_debug(DEBUG_RAW,"[Pinctrl] [QDSD][%d] cfg_reg  :0x%llx \n", pin_no, (u64)cfg_reg);
 	/* Get mask and shft values for this config type */
 	switch (id) {
 	case PIN_CONFIG_BIAS_DISABLE:
@@ -392,6 +417,8 @@ static int msm_tlmm_qdsd_cfg(uint pin_no, unsigned long *config,
 	} else {
 		*config = pinconf_to_config_packed(id, data);
 	}
+
+	pinctrl_debug(DEBUG_VERBOSE,"[Pinctrl] [QDSD][%d] ID:%u Data:%u Val:0x%04x shft:%u (%d)\n", pin_no, id, data, val, shft, write);
 	return 0;
 }
 
@@ -456,6 +483,7 @@ static int msm_tlmm_gp_cfg(uint pin_no, unsigned long *config,
 		if (write) {
 			data = pinconf_to_config_argument(*config);
 			inout_val = dir_to_inout_val(data);
+			pinctrl_debug(DEBUG_VERBOSE,"[Pinctrl] GPIO_IN_OUT:0x%04x, data:%u, inout_val:%u\n", readl_relaxed(inout_reg), data, inout_val);
 			writel_relaxed(inout_val, inout_reg);
 			data = mask;
 		} else {
@@ -469,6 +497,7 @@ static int msm_tlmm_gp_cfg(uint pin_no, unsigned long *config,
 		inout_reg = TLMM_GP_INOUT(pinfo, pin_no);
 		if (write) {
 			/* GPIO_IN (b0) of TLMM_GPIO_IN_OUT is read-only */
+			pinctrl_debug(DEBUG_VERBOSE,"[Pinctrl] GPIO_IN_OUT:0x%04x\n", readl_relaxed(inout_reg));
 			data = 0;
 		} else {
 			inout_val = readl_relaxed(inout_reg);
@@ -486,6 +515,8 @@ static int msm_tlmm_gp_cfg(uint pin_no, unsigned long *config,
 		writel_relaxed(val, cfg_reg);
 	} else
 		*config = pinconf_to_config_packed(id, data);
+
+	pinctrl_debug(DEBUG_VERBOSE,"[Pinctrl] [GPIO][%d] ID:%u Data:%u Val:0x%04x shft:%u (%d)\n", pin_no, id, data, val, shft, write);
 	return 0;
 }
 
@@ -611,6 +642,8 @@ static int msm_tlmm_ebi_cfg(uint pin_no, unsigned long *config,
 		writel_relaxed(val, cfg_reg);
 	} else
 		*config = pinconf_to_config_packed(id, data);
+
+	pinctrl_debug(DEBUG_VERBOSE,"[Pinctrl] [EBI][%d] ID:%u Data:%u Val:0x%04x shft:%u (%d)\n", pin_no, id, data, val, shft, write);
 	return 0;
 }
 
@@ -618,6 +651,10 @@ static void msm_tlmm_set_reg_base(void __iomem *tlmm_base,
 				  struct msm_pintype_info *pinfo)
 {
 	pinfo->reg_base = tlmm_base + pinfo->pintype_data->reg_base_offset;
+	printk("[Pinctrl] [%4s] reg_base 0x%llx\n", pinfo->name, (u64)pinfo->reg_base);
+
+	if (!strcmp(pinfo->name, "gp"))
+		d_pinfo = pinfo;
 }
 
 static void msm_tlmm_gp_fn(uint pin_no, u32 func, bool enable,
@@ -625,11 +662,16 @@ static void msm_tlmm_gp_fn(uint pin_no, u32 func, bool enable,
 {
 	unsigned int val;
 	void __iomem *cfg_reg = TLMM_GP_CFG(pinfo, pin_no);
+	void __iomem *inout_reg = TLMM_GP_INOUT(pinfo, pin_no);
 	val = readl_relaxed(cfg_reg);
 	val &= ~(TLMM_GP_FUNC_MASK << TLMM_GP_FUNC_SHFT);
 	if (enable)
 		val |= (func << TLMM_GP_FUNC_SHFT);
 	writel_relaxed(val, cfg_reg);
+	pinctrl_debug(DEBUG_VERBOSE,"[Pinctrl] [GPIO][%d] func:0x%x cfg_val:0x%04x (%d)\n", pin_no, func, val, enable);
+
+	val = readl_relaxed(inout_reg);
+	pinctrl_debug(DEBUG_VERBOSE,"[Pinctrl] [GPIO][%d] inout_val:0x%04x\n", pin_no, val);
 }
 
 /* GPIO CHIP */
@@ -784,9 +826,9 @@ static irqreturn_t msm_tlmm_gp_handle_irq(int irq, struct msm_tlmm_irq_chip *ic)
 				dev_dbg(ic->dev, "invalid virq\n");
 				return IRQ_NONE;
 			}
-
 			generic_handle_irq(virq);
 		}
+
 	}
 	chained_irq_exit(chip, desc);
 	return IRQ_HANDLED;
@@ -957,11 +999,11 @@ static void msm_tlmm_gp_irq_resume(void)
 	unsigned long i,j,k;
 	struct msm_tlmm_irq_chip *ic = &msm_tlmm_gp_irq;
 	int num_irqs = ic->num_irqs;
-	//[+++]Add GPIO wakeup information
+//ASUS_BSP [+++] jeff_gu Add GPIO wakeup information
 	for(j = 0; j < 8; j++)
 		gpio_resume_irq[j] = 0;
 	gpio_irq_cnt=0;
-	//[---]Add GPIO wakeup information
+//ASUS_BSP [---] jeff_gu Add GPIO wakeup information
 
 	spin_lock_irqsave(&ic->irq_lock, irq_flags);
 	for_each_set_bit(i, ic->wake_irqs, num_irqs)
@@ -970,7 +1012,7 @@ static void msm_tlmm_gp_irq_resume(void)
 	for_each_set_bit(i, ic->enabled_irqs, num_irqs)
 		msm_tlmm_set_intr_cfg_enable(ic, i, 1);
 	mb();
-	//[+++]Add GPIO wakeup information
+//ASUS_BSP [+++] jeff_gu Add GPIO wakeup information
 	for_each_set_bit(k, ic->enabled_irqs, ic->num_irqs)
 	{
 		if (msm_tlmm_get_intr_status(ic, k)) {
@@ -982,7 +1024,7 @@ static void msm_tlmm_gp_irq_resume(void)
 	}
 	if(gpio_irq_cnt >= 8)
 		gpio_irq_cnt = 7;
-	//[---]Add GPIO wakeup information
+//ASUS_BSP [---] jeff_gu Add GPIO wakeup information
 	spin_unlock_irqrestore(&ic->irq_lock, irq_flags);
 }
 
@@ -1201,6 +1243,7 @@ static int msm_tlmm_probe(struct platform_device *pdev)
 	}
 	tlmm_desc->base = devm_ioremap(&pdev->dev, res->start,
 							resource_size(res));
+	printk("[Pinctrl] tlmm_desc->base 0x%llx\n", (u64)tlmm_desc->base);
 	if (IS_ERR(tlmm_desc->base))
 		return PTR_ERR(tlmm_desc->base);
 	tlmm_desc->irq = -EINVAL;
@@ -1247,3 +1290,153 @@ static void __exit msm_tlmm_drv_unregister(void)
 module_exit(msm_tlmm_drv_unregister);
 
 MODULE_LICENSE("GPL v2");
+
+//ASUS BSP Deeo : dump all gpio regiser function +++
+void pincrtl_gp_dump(void)
+{
+	unsigned int cfg_val, inout_val;
+	unsigned int pin_no = 0;
+
+	printk("[Pinctrl] ========== Start dump [%s][%d]  ==========\n", d_pinfo->name, d_pinfo->num_pins);
+	for (pin_no = 0 ; pin_no < d_pinfo->num_pins; pin_no++) {
+		void __iomem *cfg_reg = TLMM_GP_CFG(d_pinfo, pin_no);
+		void __iomem *inout_reg = TLMM_GP_INOUT(d_pinfo, pin_no);
+		cfg_val = readl_relaxed(cfg_reg);
+		inout_val = readl_relaxed(inout_reg);
+		printk(" [GP][%03d] cfg_val  :0x%04x , inout_val:0x%04x\n", pin_no, cfg_val, inout_val);
+	}
+	printk("[Pinctrl] =========================================\n");
+}
+EXPORT_SYMBOL_GPL(pincrtl_gp_dump);
+
+static bool dump_all_gpio = true;
+static u8 part=0;
+static int get_pinctrl_all_gp_dump(char *buffer, const struct kernel_param *kp)
+{
+	int count = 0;
+	u8 index = 0, max_num = 61;
+	unsigned int cfg_val, inout_val;
+	unsigned int pin_no = 0;
+
+	count = sprintf(buffer, "========== Start dump GPIO part %d==========\n", (part%2)+1);
+	count += sprintf(buffer + count, "Total GPIO pins : %d\n", d_pinfo->num_pins);
+	if (part%2){
+		index = 61;
+		max_num = d_pinfo->num_pins;
+	}
+
+	for (pin_no = index; pin_no < max_num; pin_no++) {
+		void __iomem *cfg_reg = TLMM_GP_CFG(d_pinfo, pin_no);
+		void __iomem *inout_reg = TLMM_GP_INOUT(d_pinfo, pin_no);
+		cfg_val = readl_relaxed(cfg_reg);
+		inout_val = readl_relaxed(inout_reg);
+		count += sprintf(buffer + count, "[GP][%03d] cfg_val  :0x%04x , inout_val:0x%04x\n", pin_no, cfg_val, inout_val);
+	}
+
+	part++;
+	return count;
+}
+static struct kernel_param_ops dump_all_gp_ops = {
+	.get = get_pinctrl_all_gp_dump,
+};
+module_param_cb(dump_all_gpio, &dump_all_gp_ops, &dump_all_gpio, 0644);
+MODULE_PARM_DESC(dump_all_gpio, "Dump GPIO register.");
+
+static bool gpio = true;
+static unsigned int gpio_index = 0;
+static int set_pinctrl_gp_dump(const char *val, const struct kernel_param *kp)
+{
+	int ret = 0;
+
+	ret = kstrtouint(val, 10, &gpio_index);
+	if (ret < 0)
+		return -EINVAL;
+
+	return 0;
+}
+static int get_pinctrl_gp_dump(char *buffer, const struct kernel_param *kp)
+{
+	int count = 0;
+	u8 bias, func, drv_ma, direct, value;
+	unsigned int cfg_val, inout_val;
+	void __iomem *cfg_reg = TLMM_GP_CFG(d_pinfo, gpio_index);
+	void __iomem *inout_reg = TLMM_GP_INOUT(d_pinfo, gpio_index);
+
+	if(gpio_index > (d_pinfo->num_pins-1)) {
+		count = sprintf(buffer, "[GP][%03d] is not exist!!! Total pins are 0 ~ %d", gpio_index, (d_pinfo->num_pins-1));
+		return count;
+	}
+
+	cfg_val = readl_relaxed(cfg_reg);
+	inout_val = readl_relaxed(inout_reg);
+	count = sprintf(buffer, "[GP][%03d] cfg_val  :0x%04x , inout_val:0x%04x\n", gpio_index, cfg_val, inout_val);
+
+	bias = cfg_val & 0x3;
+	func = (cfg_val & 0x3C) >> 2;
+	drv_ma = (cfg_val & 0x1c0) >> 6;
+	direct = (cfg_val & 0x200) >> 9;
+	value = inout_val & 0x1;
+
+	printk("[Pinctrl] [GP][%03d] bias 0x%x func 0x%x drv_ma 0x%x direct 0x%x value 0x%x\n", gpio_index, bias, func, drv_ma, direct, value);
+
+	count += sprintf(buffer+count, "          ");
+	count += sprintf(buffer+count, "%s_",direct?"OUTPUT":"INPUT" );
+	count += sprintf(buffer+count, "%s, ",value?"H":"L" );
+	count += sprintf(buffer+count, "BIAS_");
+	switch(bias){
+		case 0:
+			count += sprintf(buffer+count, "NO_PULL, ");
+		break;
+		case 1:
+			count += sprintf(buffer+count, "PULL_DOWN, ");
+		break;
+		case 2:
+			count += sprintf(buffer+count, "KEEPER, ");
+		break;
+		case 3:
+			count += sprintf(buffer+count, "PULL_UP, ");
+		break;
+		default:
+			count += sprintf(buffer+count, "UNKNOW, ");
+		break;
+	}
+
+	count += sprintf(buffer+count, "DRV_");
+	switch(drv_ma){
+		case 0:
+			count += sprintf(buffer+count, "2_MA, ");
+		break;
+		case 1:
+			count += sprintf(buffer+count, "4_MA, ");
+		break;
+		case 2:
+			count += sprintf(buffer+count, "6_MA, ");
+		break;
+		case 3:
+			count += sprintf(buffer+count, "8_MA, ");
+		break;
+		case 4:
+			count += sprintf(buffer+count, "10_MA, ");
+		break;
+		case 5:
+			count += sprintf(buffer+count, "12_MA, ");
+		break;
+		case 6:
+			count += sprintf(buffer+count, "14_MA, ");
+		break;
+		case 7:
+			count += sprintf(buffer+count, "16_MA, ");
+		break;
+		default:
+			count += sprintf(buffer+count, "UNKNOW, ");
+	}
+	count += sprintf(buffer+count, "FUN_%d\n", func);
+	return count;
+}
+static struct kernel_param_ops dump_gp_ops = {
+	.set = set_pinctrl_gp_dump,
+	.get = get_pinctrl_gp_dump,
+};
+module_param_cb(gpio, &dump_gp_ops, &gpio, 0644);
+MODULE_PARM_DESC(gpio, "Dump GPIO register.");
+//ASUS BSP Deeo : dump all gpio regiser function ---

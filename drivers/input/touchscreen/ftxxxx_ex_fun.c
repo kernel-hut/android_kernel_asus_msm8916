@@ -29,14 +29,32 @@
 #include <linux/vmalloc.h>
 
 static unsigned char TM_FW[] = {
-#include "FT_Upgrade_App.i"
+#include "ASUS_ZE500KL_TM_app.i"
+};
+static unsigned char GIS_AUO_FW[] = {
+#include "ASUS_ZE500KL_GIS_AUO_app.i"
+};
+static unsigned char GIS_BOE_FW[] = {
+#include "ASUS_ZE500KL_GIS_BOE_app.i"
+};
+static unsigned char TOT_AUO_FW[] = {
+#include "ASUS_ZE500KL_TOT_AUO_app.i"
+};
+static unsigned char TOT_BOE_FW[] = {
+#include "ASUS_ZE500KL_TOT_BOE_app.i"
 };
 
-/*ASUS_BSP Freeman : setting priority +++ */
+/*ASUS_BSP Jacob : setting priority +++ */
+#ifdef ASUS_FACTORY_BUILD
+#define Focal_RW_ATTR (S_IRUGO | S_IWUGO)
+#define Focal_WO_ATTR (S_IWUGO)
+#define Focal_RO_ATTR (S_IRUGO)
+#else
 #define Focal_RW_ATTR (S_IRUGO|S_IWUSR)
 #define Focal_WO_ATTR (S_IWUSR | S_IWGRP)
 #define Focal_RO_ATTR (S_IRUGO)
-/*ASUS_BSP Freeman : setting priority --- */
+#endif
+/*ASUS_BSP Jacob : setting priority --- */
 #define FTS_SELF_TEST
 extern int focal_init_success;
 extern struct ftxxxx_ts_data *ftxxxx_ts;
@@ -44,6 +62,7 @@ extern u8 B_VenderID;
 extern u8 F_VenderID;
 extern char B_projectcode[8];
 extern u8 F_projectcode;
+extern bool FOCAL_IRQ_DISABLE;
 extern u8 FTS_gesture_register_d2;
 extern u8 FTS_gesture_register_d5;
 extern u8 FTS_gesture_register_d6;
@@ -109,10 +128,10 @@ int HidI2c_To_StdI2c(struct i2c_client *client)
 	FTS_DBG("[Touch] %s : Change to STDI2cValue,REG1 = 0x%x,REG2 = 0x%x,REG3 = 0x%x, iRet=%d\n", __func__, reg_val[0], reg_val[1], reg_val[2], iRet);
 
 	if (reg_val[0] == 0xEB && reg_val[1] == 0xAA && reg_val[2] == 0x08) {
-		printk("[FT5X46][Touch] %s : HidI2c_To_StdI2c successful. \n", __func__);
+		printk("[Focal][Touch] %s : HidI2c_To_StdI2c successful. \n", __func__);
 		iRet = 1;
 	} else {
-		printk("[FT5X46][TOUCH_ERR] %s : HidI2c_To_StdI2c error. \n", __func__);
+		printk("[Focal][TOUCH_ERR] %s : HidI2c_To_StdI2c error. \n", __func__);
 		iRet = 0;
 	}
 
@@ -206,7 +225,7 @@ int fts_ctpm_fw_upgrade_with_i_file(struct i2c_client *client, u8 *fw_buf)
 	* if illegal, then stop upgrade and return.
 	*/
 	if (fw_size < 8 || fw_size > 54*1024) {
-		printk("[FT5X46][TOUCH_ERR] %s : FW length error \n", __func__);
+		printk("[Focal][TOUCH_ERR] %s : FW length error \n", __func__);
 		return -EIO;
 	}
 
@@ -215,7 +234,7 @@ int fts_ctpm_fw_upgrade_with_i_file(struct i2c_client *client, u8 *fw_buf)
 	/*call the upgrade function*/
 	i_ret = fts_ctpm_fw_upgrade(client, pbt_buf, fw_size);
 	if (i_ret != 0) {
-		dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : upgrade failed. err=%d.\n", __func__, i_ret);
+		dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : upgrade failed. err=%d.\n", __func__, i_ret);
 	} else {
 #ifdef AUTO_CLB
 		fts_ctpm_auto_clb(client);  /*start auto CLB*/
@@ -226,7 +245,7 @@ int fts_ctpm_fw_upgrade_with_i_file(struct i2c_client *client, u8 *fw_buf)
 
 u8 fts_ctpm_get_i_file_ver(u8 *fw_buf)
 {
-	printk("[FT5X46][Touch] %s : Update FW size = %d \n", __func__, fw_size);
+	printk("[Focal][Touch] %s : Update FW size = %d \n", __func__, fw_size);
 	if (fw_size > 2) {
 		return fw_buf[fw_size - 2];
 	} else {
@@ -242,24 +261,24 @@ int fts_ctpm_auto_upgrade(struct i2c_client *client, u8 *fw_buf)
 
 	ftxxxx_read_reg(client, FTXXXX_REG_FW_VER, &uc_tp_fm_ver);
 	uc_host_fm_ver = fts_ctpm_get_i_file_ver(fw_buf);
-	printk("[FT5X46][Touch] %s : uc_tp_fm_ver = 0x%x, uc_host_fm_ver = 0x%x \n", __func__, uc_tp_fm_ver, uc_host_fm_ver);
+	printk("[Focal][Touch] %s : uc_tp_fm_ver = 0x%x, uc_host_fm_ver = 0x%x \n", __func__, uc_tp_fm_ver, uc_host_fm_ver);
 	
 	if (uc_tp_fm_ver == FTXXXX_REG_FW_VER ||	/*the firmware in touch panel maybe corrupted*/
 		uc_tp_fm_ver != uc_host_fm_ver /*the firmware in host flash is new, need upgrade*/
 		) {
 //		msleep(100);
-//		dev_dbg(&client->dev, "[FT5X46][Touch] %s : uc_tp_fm_ver = 0x%x, uc_host_fm_ver = 0x%x \n", __func__, uc_tp_fm_ver, uc_host_fm_ver);
+//		dev_dbg(&client->dev, "[Focal][Touch] %s : uc_tp_fm_ver = 0x%x, uc_host_fm_ver = 0x%x \n", __func__, uc_tp_fm_ver, uc_host_fm_ver);
 		i_ret = fts_ctpm_fw_upgrade_with_i_file(client, fw_buf);
 		if (i_ret == 0) {
 			msleep(300);
 			uc_host_fm_ver = fts_ctpm_get_i_file_ver(fw_buf);
-			printk("[FT5X46][Touch] %s : upgrade to new version 0x%x \n", __func__, uc_host_fm_ver);
+			printk("[Focal][Touch] %s : upgrade to new version 0x%x \n", __func__, uc_host_fm_ver);
 		} else {
-			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : upgrade failed ret=%d. \n", __func__, i_ret);
+			dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : upgrade failed ret=%d. \n", __func__, i_ret);
 			return -EIO;
 		}
 	} else {
-		printk("[FT5X46][Touch] %s : FW is new, no need update !\n", __func__);
+		printk("[Focal][Touch] %s : FW is new, no need update !\n", __func__);
 		fw_update_complete = 1;
 	}
 	return 0;
@@ -271,6 +290,34 @@ int fts_ctpm_auto_upgrade(struct i2c_client *client, u8 *fw_buf)
 static void fts_get_upgrade_info(struct Upgrade_Info *upgrade_info)
 {
 	switch (DEVICE_IC_TYPE) {
+	/*case IC_ftxxxx:
+		upgrade_info->delay_55 = ftxxxx_UPGRADE_55_DELAY;
+		upgrade_info->delay_aa = ftxxxx_UPGRADE_AA_DELAY;
+		upgrade_info->upgrade_id_1 = ftxxxx_UPGRADE_ID_1;
+		upgrade_info->upgrade_id_2 = ftxxxx_UPGRADE_ID_2;
+		upgrade_info->delay_readid = ftxxxx_UPGRADE_READID_DELAY;
+		break;
+	case IC_FT5606:
+		upgrade_info->delay_55 = FT5606_UPGRADE_55_DELAY;
+		upgrade_info->delay_aa = FT5606_UPGRADE_AA_DELAY;
+		upgrade_info->upgrade_id_1 = FT5606_UPGRADE_ID_1;
+		upgrade_info->upgrade_id_2 = FT5606_UPGRADE_ID_2;
+		upgrade_info->delay_readid = FT5606_UPGRADE_READID_DELAY;
+		break;
+	case IC_FT5316:
+		upgrade_info->delay_55 = FT5316_UPGRADE_55_DELAY;
+		upgrade_info->delay_aa = FT5316_UPGRADE_AA_DELAY;
+		upgrade_info->upgrade_id_1 = FT5316_UPGRADE_ID_1;
+		upgrade_info->upgrade_id_2 = FT5316_UPGRADE_ID_2;
+		upgrade_info->delay_readid = FT5316_UPGRADE_READID_DELAY;
+		break;
+	case IC_FT5X36:
+		upgrade_info->delay_55 = FT5X36_UPGRADE_55_DELAY;
+		upgrade_info->delay_aa = FT5X36_UPGRADE_AA_DELAY;
+		upgrade_info->upgrade_id_1 = FT5X36_UPGRADE_ID_1;
+		upgrade_info->upgrade_id_2 = FT5X36_UPGRADE_ID_2;
+		upgrade_info->delay_readid = FT5X36_UPGRADE_READID_DELAY;
+		break;*/
 	case IC_FT5X46:
 		upgrade_info->delay_55 = FT5X46_UPGRADE_55_DELAY;
 		upgrade_info->delay_aa = FT5X46_UPGRADE_AA_DELAY;
@@ -312,7 +359,7 @@ int ftxxxxEnterUpgradeMode(struct i2c_client *client, int iAddMs, bool bIsSoft)
 			 * i_ret = ftxxxx_write_reg(client, auc_i2c_write_buf[0], auc_i2c_write_buf[1]);
 			 *
 			 * if(i_ret < 0)
-			 * FTS_DBG("[Touch] failed writing  0x66 to register 0xbc or oxfc! \n");
+			 * FTS_DBG("[FTS] failed writing  0x66 to register 0xbc or oxfc! \n");
 			 * msleep(50);
 			*/
 			/*********Step 2:Enter upgrade mode *****/
@@ -333,7 +380,7 @@ int ftxxxxEnterUpgradeMode(struct i2c_client *client, int iAddMs, bool bIsSoft)
 				FTS_DBG("[Touch] %s : Step 3: READ OK CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
 				break;
 			} else {
-				dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : Step 3: CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
+				dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : Step 3: CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
 				continue;
 			}
 		}
@@ -364,7 +411,7 @@ int ftxxxxEnterUpgradeMode(struct i2c_client *client, int iAddMs, bool bIsSoft)
 				FTS_DBG("[Touch] %s : Step 3: READ OK CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
 				break;
 			} else {
-				dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : Step 3: CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
+				dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : Step 3: CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
 				continue;
 			}
 		}
@@ -421,7 +468,7 @@ int fts_ctpm_fw_upgrade(struct i2c_client *client, u8 *pbt_buf, u32 dw_lenth)
 			FTS_DBG("[Touch] %s : Step 3: READ OK CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
 			break;
 		} else {
-			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s :  Step 3: CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
+			dev_err(&client->dev, "[Focal][TOUCH_ERR] %s :  Step 3: CTPM ID,ID1 = 0x%x,ID2 = 0x%x \n", __func__, reg_val[0], reg_val[1]);
 			continue;
 		}
 	}
@@ -480,7 +527,7 @@ int fts_ctpm_fw_upgrade(struct i2c_client *client, u8 *pbt_buf, u32 dw_lenth)
 			bt_ecc_check ^= pbt_buf[j * FTS_PACKET_LENGTH + i];
 			bt_ecc ^= packet_buf[6 + i];
 		}
-//		printk("[FT5X46][Touch] %s :  bt_ecc = %x \n", __func__, bt_ecc);
+//		printk("[Focal][Touch] %s :  bt_ecc = %x \n", __func__, bt_ecc);
 		if (bt_ecc != bt_ecc_check)
 			FTS_DBG("[TOUCH_ERR] %s :  Host checksum error bt_ecc_check = %x \n", __func__, bt_ecc_check);
 		ftxxxx_i2c_Write(client, packet_buf, FTS_PACKET_LENGTH + 6);
@@ -492,7 +539,7 @@ int fts_ctpm_fw_upgrade(struct i2c_client *client, u8 *pbt_buf, u32 dw_lenth)
 			if ((j + 0x1000) == (((reg_val[0]) << 8) | reg_val[1])) {
 				break;
 			}
-//			printk("[FT5X46][Touch] %s :  reg_val[0] = %x reg_val[1] = %x \n", __func__, reg_val[0], reg_val[1]);
+//			printk("[Focal][Touch] %s :  reg_val[0] = %x reg_val[1] = %x \n", __func__, reg_val[0], reg_val[1]);
 			msleep(1);
 		}
 	}
@@ -510,18 +557,18 @@ int fts_ctpm_fw_upgrade(struct i2c_client *client, u8 *pbt_buf, u32 dw_lenth)
 			bt_ecc ^= packet_buf[6 + i];
 		}
 		ftxxxx_i2c_Write(client, packet_buf, temp + 6);
-		printk("[FT5X46][Touch] %s :  bt_ecc = %x \n", __func__, bt_ecc);
+		printk("[Focal][Touch] %s :  bt_ecc = %x \n", __func__, bt_ecc);
 		if (bt_ecc != bt_ecc_check)
-			printk("[FT5X46][%s] Host checksum error bt_ecc_check = %x \n", __func__, bt_ecc_check);
+			printk("[FTS][%s] Host checksum error bt_ecc_check = %x \n", __func__, bt_ecc_check);
 		for (i = 0; i < 30; i++) {
 			auc_i2c_write_buf[0] = 0x6a;
 			reg_val[0] = reg_val[1] = 0x00;
 			ftxxxx_i2c_Read(client, auc_i2c_write_buf, 1, reg_val, 2);
-			printk("[FT5X46][Touch] %s :  reg_val[0] = %x reg_val[1] = %x \n", __func__, reg_val[0], reg_val[1]);
+			printk("[Focal][Touch] %s :  reg_val[0] = %x reg_val[1] = %x \n", __func__, reg_val[0], reg_val[1]);
 			if ((j + 0x1000) == (((reg_val[0]) << 8) | reg_val[1])) {
 				break;
 			}
-			printk("[FT5X46][Touch] %s :  reg_val[0] = %x reg_val[1] = %x \n", __func__, reg_val[0], reg_val[1]);
+			printk("[Focal][Touch] %s :  reg_val[0] = %x reg_val[1] = %x \n", __func__, reg_val[0], reg_val[1]);
 			msleep(1);
 		}
 	}
@@ -546,9 +593,9 @@ int fts_ctpm_fw_upgrade(struct i2c_client *client, u8 *pbt_buf, u32 dw_lenth)
 		auc_i2c_write_buf[0] = 0x6a;
 		reg_val[0] = reg_val[1] = 0x00;
 		ftxxxx_i2c_Read(client, auc_i2c_write_buf, 1, reg_val, 2);
-		dev_err(&client->dev, "[FT5X46][Touch] %s :  --reg_val[0]=%02x reg_val[0]=%02x\n", __func__, reg_val[0], reg_val[1]);
+		dev_err(&client->dev, "[Focal][Touch] %s :  --reg_val[0]=%02x reg_val[0]=%02x\n", __func__, reg_val[0], reg_val[1]);
 		if (0xF0 == reg_val[0] && 0x55 == reg_val[1]) {
-			dev_err(&client->dev, "[FT5X46][Touch] %s :  --reg_val[0]=%02x reg_val[0]=%02x\n", __func__, reg_val[0], reg_val[1]);
+			dev_err(&client->dev, "[Focal][Touch] %s :  --reg_val[0]=%02x reg_val[0]=%02x\n", __func__, reg_val[0], reg_val[1]);
 			break;
 		}
 		msleep(1);
@@ -556,10 +603,10 @@ int fts_ctpm_fw_upgrade(struct i2c_client *client, u8 *pbt_buf, u32 dw_lenth)
 	auc_i2c_write_buf[0] = 0x66;
 	ftxxxx_i2c_Read(client, auc_i2c_write_buf, 1, reg_val, 1);
 	if (reg_val[0] != bt_ecc) {
-		dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : --ecc error! FW=%02x bt_ecc=%02x\n", __func__, reg_val[0], bt_ecc);
+		dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : --ecc error! FW=%02x bt_ecc=%02x\n", __func__, reg_val[0], bt_ecc);
 		return -EIO;
 	}
-	printk("[FT5X46][Touch] %s : checksum %X %X \n", __func__, reg_val[0], bt_ecc);
+	printk("[Focal][Touch] %s : checksum %X %X \n", __func__, reg_val[0], bt_ecc);
 	/*********Step 7: reset the new FW***********************/
 	FTS_DBG("[Touch] %s : Step 7: reset the new FW \n", __func__);
 	auc_i2c_write_buf[0] = 0x07;
@@ -656,8 +703,8 @@ int fts_ctpm_fw_upgrade_with_app_file(struct i2c_client *client, char *firmware_
 	int i_ret;
 	int fwsize = ftxxxx_GetFirmwareSize(firmware_name);
 	fw_update_complete = 0;
-	printk("[FT5X46][%s] firmware name = %s \n", __func__, firmware_name);
-	printk("[FT5X46][%s] firmware size = %d \n", __func__, fwsize);
+	printk("[FTS][%s] firmware name = %s \n", __func__, firmware_name);
+	printk("[FTS][%s] firmware size = %d \n", __func__, fwsize);
 	if (fwsize <= 0) {
 		dev_err(&client->dev, "%s ERROR:Get firmware size failed\n", __FUNCTION__);
 		return -EIO;
@@ -676,7 +723,7 @@ int fts_ctpm_fw_upgrade_with_app_file(struct i2c_client *client, char *firmware_
 	/*call the upgrade function*/
 	i_ret =  fts_ctpm_fw_upgrade(client, pbt_buf, fwsize);
 	if (i_ret != 0) {
-		dev_err(&client->dev, "%s() - ERROR:[FT5X46] upgrade failed i_ret = %d.\n", __FUNCTION__, i_ret);
+		dev_err(&client->dev, "%s() - ERROR:[FTS] upgrade failed i_ret = %d.\n", __FUNCTION__, i_ret);
 	} else {
 #ifdef AUTO_CLB
 		fts_ctpm_auto_clb(client);  /*start auto CLB*/
@@ -698,7 +745,7 @@ static ssize_t ftxxxx_tpfwver_show(struct device *dev, struct device_attribute *
 	if (fwver == 255)
 		num_read_chars = snprintf(buf, PAGE_SIZE, "fail\n");
 	else
-		num_read_chars = snprintf(buf, PAGE_SIZE, "%x\n", fwver);
+		num_read_chars = snprintf(buf, PAGE_SIZE, "%d\n", fwver);
 	mutex_unlock(&ftxxxx_ts->g_device_mutex);
 	wake_unlock(&ftxxxx_ts->wake_lock);
 	return num_read_chars;
@@ -811,13 +858,13 @@ static ssize_t switch_dclick_mode_store(struct device *dev, struct device_attrib
 
 		ftxxxx_ts->dclick_mode_eable = 0;
 
-		printk("[FT5X46][Touch] dclick_mode_disable ! \n");
+		printk("[Focal][Touch] dclick_mode_disable ! \n");
 
 	} else if (tmp == 1) {
 
 		ftxxxx_ts->dclick_mode_eable = 1;
 
-		printk("[FT5X46][Touch] dclick_mode_enable ! \n");
+		printk("[Focal][Touch] dclick_mode_enable ! \n");
 	}
 
 	return count;
@@ -841,11 +888,11 @@ static ssize_t switch_gesture_mode_store(struct device *dev, struct device_attri
 	sprintf(gesture_buf, "%s", buf);
 	gesture_buf[count-1] = '\0';
 
-	printk("[FT5X46][Touch] gesture_mode_store %s ! \n", gesture_buf);
+	printk("[Focal][Touch] gesture_mode_store %s ! \n", gesture_buf);
 
 	if (gesture_buf[0] == cmpchar) {
 		ftxxxx_ts->gesture_mode_eable = true;
-		printk("[FT5X46][Touch] gesture_mode enable ! \n");
+		printk("[Focal][Touch] gesture_mode enable ! \n");
 	} else
 		ftxxxx_ts->gesture_mode_eable = false;
 
@@ -889,7 +936,7 @@ static ssize_t switch_gesture_mode_store(struct device *dev, struct device_attri
 		else
 			FTS_gesture_register_d2 &= 0xfd;
 
-		printk("[FT5X46][Touch] gesture_mode_enable type = %x ! \n", ftxxxx_ts->gesture_mode_type);
+		printk("[Focal][Touch] gesture_mode_enable type = %x ! \n", ftxxxx_ts->gesture_mode_type);
 
 	} else {
 
@@ -903,7 +950,7 @@ static ssize_t switch_gesture_mode_store(struct device *dev, struct device_attri
 
 		FTS_gesture_register_d7 = 0;
 
-		printk("[FT5X46][Touch] gesture_mode_disable ! \n");
+		printk("[Focal][Touch] gesture_mode_disable ! \n");
 		}
 
 	return count;
@@ -923,6 +970,34 @@ static ssize_t switch_gesture_mode_show(struct device *dev, struct device_attrib
 
 }
 
+
+
+static ssize_t irq_disable_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int tmp = 0;
+
+	tmp = buf[0] - 48;
+
+	if (tmp == 0) {
+
+		FOCAL_IRQ_DISABLE = false;
+
+	} else if (tmp == 1) {
+
+		FOCAL_IRQ_DISABLE = true;
+
+	}
+
+	return count;
+
+}
+
+static ssize_t irq_disable_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+
+	return sprintf(buf, "%d \n", FOCAL_IRQ_DISABLE);
+}
+
 static ssize_t enable_proximity_check_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	int tmp = 0;
@@ -932,11 +1007,11 @@ static ssize_t enable_proximity_check_store(struct device *dev, struct device_at
 	if (tmp == 0) {
 
 		EnableProximityCheck = false;
-		printk("[FT5X46][Touch] DisableProximityCheck ! \n");
+		printk("[Focal][Touch] DisableProximityCheck ! \n");
 	} else if (tmp == 1) {
 
 		EnableProximityCheck = true;
-		printk("[FT5X46][Touch] EnableProximityCheck ! \n");
+		printk("[Focal][Touch] EnableProximityCheck ! \n");
 	}
 
 	return count;
@@ -964,6 +1039,12 @@ static ssize_t ftxxxx_init_show(struct device *dev, struct device_attribute *att
 static ssize_t asus_get_tpid(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	return sprintf(buf, "%x\n", ftxxxx_read_tp_id());
+}
+
+static ssize_t asus_get_hwid_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+//	return sprintf(buf, "%d\n", focal_get_HW_ID());
+	return sprintf(buf, "not support  in Android M branch ! \n");
 }
 
 static ssize_t asus_itr_status_show(struct device *dev, struct device_attribute *attr, char *buf)
@@ -999,29 +1080,12 @@ static ssize_t fw_info_show(struct device *dev, struct device_attribute *attr, c
 	if (err < 0)
 		B_VenderID = 0xFF;
 
-	printk("[FT5X46][Touch] FW vendor ID = %x , FW project code = %x , Bootloader PRJ code = %s , Bootloader Vendor ID = %x \n", F_VenderID, F_projectcode, B_projectcode, B_VenderID);
+	printk("[Focal][Touch] FW vendor ID = %x , FW project code = %x , Bootloader PRJ code = %s , Bootloader Vendor ID = %x\n", F_VenderID, F_projectcode, B_projectcode, B_VenderID);
 
 	return sprintf(buf, "%x-%x-%x-%s\n", F_VenderID, F_projectcode, B_VenderID, B_projectcode);
 }
 
-//ASUS_BSP Freeman: add node for show FW vendor ID ++++
-static ssize_t vd_version_show(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	int err = 0;
-	unsigned char uc_reg_addr;
-
-	uc_reg_addr = FTXXXX_REG_VENDOR_ID;
-	err = ftxxxx_i2c_Read(ftxxxx_ts->client, &uc_reg_addr, 1, &F_VenderID, 1);
-	if (err < 0)
-		F_VenderID = 0xFF;
-
-	//printk("[FT5X46][Touch] FW vendor ID = %x , FW project code = %x , Bootloader PRJ code = %s , Bootloader Vendor ID = %s \n", F_VenderID, F_projectcode, B_projectcode, B_VenderID);
-
-	return sprintf(buf, "%x\n", F_VenderID);
-}
-//ASUS_BSP Freeman: add node for show FW vendor ID ----
-
-//ASUS_BSP Freeman: add for get tp raw data +++
+/* +++ASUS jacob add for get tp raw data +++*/
 void GetRX_TXNum(void)
 {
 	unsigned char rx_regvalue = 0x00;
@@ -1038,7 +1102,7 @@ void GetRX_TXNum(void)
 		g_TXNum = 25;
 		g_RXNum = 25;
 	}
-	printk("[FT5X46][Touch] %s : channel num tx = %d rx = %d ! \n", __func__, g_TXNum, g_RXNum);
+	printk("[Focal][Touch] %s : channel num tx = %d rx = %d ! \n", __func__, g_TXNum, g_RXNum);
 	return;
 }
 
@@ -1048,9 +1112,9 @@ int asus_StartScan(void)
 	unsigned char regvalue = 0x00;
 
 	err = ftxxxx_read_reg(G_Client, 0x00, &regvalue);
-	printk("[FT5X46][Touch] %s : StartScan !!\n", __func__);
+	printk("[Focal][Touch] %s : StartScan !!\n", __func__);
 	if (err < 0) {
-		printk("[FT5X46][TOUCH_ERR] %s : Enter StartScan Err , Regvalue = %d \n", __func__, regvalue);
+		printk("[Focal][TOUCH_ERR] %s : Enter StartScan Err , Regvalue = %d \n", __func__, regvalue);
 		return err;
 	} else {
 		regvalue |= 0x80;
@@ -1095,11 +1159,11 @@ void asus_GetRawData(int RawData[TX_NUM_MAX][RX_NUM_MAX])
 			I2C_wBuffer[0] = (unsigned char)(0x36);
 			msleep(10);
 			ReCode = FTS_I2c_Write(I2C_wBuffer, 1);
-			printk("[FT5X46][Touch] %s : Record value = %d \n", __func__, ReCode);
+			printk("[Focal][Touch] %s : Record value = %d \n", __func__, ReCode);
 			ByteNum = g_RXNum*g_TXNum * 2;
 			if (ReCode >= 0) {
 				len = ByteNum;
-				printk("[FT5X46][Touch] %s : Get Rawdata len = %d \n", __func__, len);
+				printk("[Focal][Touch] %s : Get Rawdata len = %d \n", __func__, len);
 				memset(rrawdata, 0x00, sizeof(unsigned char)*ByteNum);
 				msleep(10);
 				ReCode = FTS_I2c_Read(NULL, 0, rrawdata, len);
@@ -1115,11 +1179,11 @@ void asus_GetRawData(int RawData[TX_NUM_MAX][RX_NUM_MAX])
 */
 						RawData[i/g_RXNum][i%g_RXNum] = (short)((unsigned short)(rrawdata[i << 1]) << 8) \
 							+ (unsigned short)rrawdata[(i << 1) + 1];
-						//printk("Get Rawdata data = %d \n", RawData[i/g_RXNum][i%g_TXNum]);
+/*						printk("Get Rawdata data = %d \n", RawData[i/g_RXNum][i%g_TXNum]);*/
 					}
 
 				} else {
-					printk("[FT5X46][TOUCH_ERR] %s : Get Rawdata failure \n", __func__);
+					printk("[Focal][TOUCH_ERR] %s : Get Rawdata failure \n", __func__);
 				}
 			}
 
@@ -1158,7 +1222,7 @@ static ssize_t asus_dump_tp_raw_data_show(struct device *dev, struct device_attr
 			GetRX_TXNum();
 			switch (g_asus_tp_raw_data_flag) {
 			case 1:
-				printk("[FT5X46][Touch] %s : dump Frequency Low FIR ON raw data \n", __func__);
+				printk("[Focal][Touch] %s : dump Frequency Low FIR ON raw data \n", __func__);
 				ftxxxx_write_reg(G_Client, 0x0a, 0x80);
 				ftxxxx_write_reg(G_Client, 0xFB, 0x01);
 				msleep(10);
@@ -1167,7 +1231,7 @@ static ssize_t asus_dump_tp_raw_data_show(struct device *dev, struct device_attr
 					msleep(10);
 					err = asus_StartScan();
 				}
-				printk("[FT5X46][Touch] %s : dump Frequency Low FIR ON raw data result = %d !\n", __func__, err);
+				printk("[Focal][Touch] %s : dump Frequency Low FIR ON raw data result = %d !\n", __func__, err);
 				asus_GetRawData(TPrawdata);
 				/*Print RawData Start*/
 				count += sprintf(buf + count, "[ASUS] dump Frequency Low FIR ON raw data result ! \n");
@@ -1182,7 +1246,7 @@ static ssize_t asus_dump_tp_raw_data_show(struct device *dev, struct device_attr
 				break;
 
 			case 2:
-				printk("[FT5X46][Touch] %s : dump Frequency Low FIR OFF raw data \n", __func__);
+				printk("[Focal][Touch] %s : dump Frequency Low FIR OFF raw data \n", __func__);
 				ftxxxx_write_reg(G_Client, 0x0a, 0x80);
 				ftxxxx_write_reg(G_Client, 0xFB, 0x00);
 				msleep(10);
@@ -1191,7 +1255,7 @@ static ssize_t asus_dump_tp_raw_data_show(struct device *dev, struct device_attr
 					msleep(10);
 					err = asus_StartScan();
 				}
-				printk("[FT5X46][Touch] %s : dump Frequency Low FIR OFF raw data result = %d !\n", __func__, err);
+				printk("[Focal][Touch] %s : dump Frequency Low FIR OFF raw data result = %d !\n", __func__, err);
 				asus_GetRawData(TPrawdata);
 				/*Print RawData Start*/
 				count += sprintf(buf + count, "[ASUS] dump Frequency Low FIR OFF raw data result ! \n");
@@ -1206,7 +1270,7 @@ static ssize_t asus_dump_tp_raw_data_show(struct device *dev, struct device_attr
 				break;
 
 			case 3:
-				printk("[FT5X46][Touch] %s : dump Frequency High FIR ON raw data \n", __func__);
+				printk("[Focal][Touch] %s : dump Frequency High FIR ON raw data \n", __func__);
 				ftxxxx_write_reg(G_Client, 0x0a, 0x81);
 				ftxxxx_write_reg(G_Client, 0xFB, 0x01);
 				msleep(10);
@@ -1215,7 +1279,7 @@ static ssize_t asus_dump_tp_raw_data_show(struct device *dev, struct device_attr
 					msleep(10);
 					err = asus_StartScan();
 				}
-				printk("[FT5X46][Touch] %s : dump Frequency High FIR ON raw data result = %d !\n", __func__, err);
+				printk("[Focal][Touch] %s : dump Frequency High FIR ON raw data result = %d !\n", __func__, err);
 				asus_GetRawData(TPrawdata);
 				/*Print RawData Start*/
 				count += sprintf(buf + count, "[ASUS] dump Frequency High FIR ON raw data result ! \n");
@@ -1229,7 +1293,7 @@ static ssize_t asus_dump_tp_raw_data_show(struct device *dev, struct device_attr
 				/*Print RawData End*/
 				break;
 			case 4:
-				printk("[FT5X46][Touch] %s : dump Frequency High FIR OFF raw data \n", __func__);
+				printk("[Focal][Touch] %s : dump Frequency High FIR OFF raw data \n", __func__);
 				ftxxxx_write_reg(G_Client, 0x0a, 0x81);
 				ftxxxx_write_reg(G_Client, 0xFB, 0x00);
 				msleep(10);
@@ -1238,7 +1302,7 @@ static ssize_t asus_dump_tp_raw_data_show(struct device *dev, struct device_attr
 					msleep(10);
 					err = asus_StartScan();
 				}
-				printk("[FT5X46][Touch] %s : dump Frequency High FIR OFF raw data result = %d !\n", __func__, err);
+				printk("[Focal][Touch] %s : dump Frequency High FIR OFF raw data result = %d !\n", __func__, err);
 				asus_GetRawData(TPrawdata);
 				/*Print RawData Start*/
 				count += sprintf(buf + count, "[ASUS] dump Frequency High FIR OFF raw data result ! \n");
@@ -1282,11 +1346,11 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 			GetRX_TXNum();
 			switch (g_asus_tp_raw_data_flag) {
 			case 1:
-				printk("[FT5X46][Touch] %s : dump Frequency Low FIR ON raw data \n", __func__);
+				printk("[Focal][Touch] %s : dump Frequency Low FIR ON raw data \n", __func__);
 
 				filp = filp_open("/sdcard/Frequency-Low-FIR-ON-raw-data.csv", O_RDWR | O_CREAT, S_IRUSR);
 				if (IS_ERR(filp)) {
-					printk("[FT5X46][TOUCH_ERR] %s: open /sdcard/Frequency-Low-FIR-ON-raw-data.txt failed\n", __func__);
+					printk("[Focal][TOUCH_ERR] %s: open /sdcard/Frequency-Low-FIR-ON-raw-data.txt failed\n", __func__);
 					return 0;
 				}
 				oldfs = get_fs();
@@ -1300,7 +1364,7 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 					msleep(10);
 					err = asus_StartScan();
 				}
-				printk("[FT5X46][Touch] %s : dump Frequency Low FIR ON raw data result = %d !\n", __func__, err);
+				printk("[Focal][Touch] %s : dump Frequency Low FIR ON raw data result = %d !\n", __func__, err);
 				asus_GetRawData(TPrawdata);
 				/*Print RawData Start*/
 				count += sprintf(buf + count, "[ASUS] dump Frequency Low FIR ON raw data result ! \n");
@@ -1315,11 +1379,11 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 				break;
 
 			case 2:
-				printk("[FT5X46][Touch] %s : dump Frequency Low FIR OFF raw data \n", __func__);
+				printk("[Focal][Touch] %s : dump Frequency Low FIR OFF raw data \n", __func__);
 
 				filp = filp_open("/sdcard/Frequency-Low-FIR-OFF-raw-data.csv", O_RDWR | O_CREAT, S_IRUSR);
 				if (IS_ERR(filp)) {
-					printk("[FT5X46][TOUCH_ERR] %s: open /sdcard/Frequency-Low-FIR-OFF-raw-data.txt\n", __func__);
+					printk("[Focal][TOUCH_ERR] %s: open /sdcard/Frequency-Low-FIR-OFF-raw-data.txt\n", __func__);
 					return 0;
 				}
 				oldfs = get_fs();
@@ -1333,7 +1397,7 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 					msleep(10);
 					err = asus_StartScan();
 				}
-				printk("[FT5X46][Touch] %s : dump Frequency Low FIR OFF raw data result = %d !\n", __func__, err);
+				printk("[Focal][Touch] %s : dump Frequency Low FIR OFF raw data result = %d !\n", __func__, err);
 				asus_GetRawData(TPrawdata);
 				/*Print RawData Start*/
 				count += sprintf(buf + count, "[ASUS] dump Frequency Low FIR OFF raw data result ! \n");
@@ -1348,11 +1412,11 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 				break;
 
 			case 3:
-				printk("[FT5X46][Touch] %s : dump Frequency High FIR ON raw data \n", __func__);
+				printk("[Focal][Touch] %s : dump Frequency High FIR ON raw data \n", __func__);
 
 				filp = filp_open("/sdcard/Frequency-High-FIR-ON-raw-data.csv", O_RDWR | O_CREAT, S_IRUSR);
 				if (IS_ERR(filp)) {
-					printk("[FT5X46][TOUCH_ERR] %s: open /sdcard/Frequency-High-FIR-ON-raw-data.txt failed\n", __func__);
+					printk("[Focal][TOUCH_ERR] %s: open /sdcard/Frequency-High-FIR-ON-raw-data.txt failed\n", __func__);
 					return 0;
 				}
 				oldfs = get_fs();
@@ -1366,7 +1430,7 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 					msleep(10);
 					err = asus_StartScan();
 				}
-				printk("[FT5X46][Touch] %s : dump Frequency High FIR ON raw data result = %d !\n", __func__, err);
+				printk("[Focal][Touch] %s : dump Frequency High FIR ON raw data result = %d !\n", __func__, err);
 				asus_GetRawData(TPrawdata);
 				/*Print RawData Start*/
 				count += sprintf(buf + count, "[ASUS] dump Frequency High FIR ON raw data result ! \n");
@@ -1380,11 +1444,11 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 				/*Print RawData End*/
 				break;
 			case 4:
-				printk("[FT5X46][Touch] %s : dump Frequency High FIR OFF raw data \n", __func__);
+				printk("[Focal][Touch] %s : dump Frequency High FIR OFF raw data \n", __func__);
 
 				filp = filp_open("/sdcard/Frequency-High-FIR-OFF-raw-data.csv", O_RDWR | O_CREAT, S_IRUSR);
 				if (IS_ERR(filp)) {
-					printk("[FT5X46][TOUCH_ERR] %s: open /sdcard/Frequency-High-FIR-OFF-raw-data.txt failed\n", __func__);
+					printk("[Focal][TOUCH_ERR] %s: open /sdcard/Frequency-High-FIR-OFF-raw-data.txt failed\n", __func__);
 					return 0;
 				}
 				oldfs = get_fs();
@@ -1398,7 +1462,7 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 					msleep(10);
 					err = asus_StartScan();
 				}
-				printk("[FT5X46][Touch] %s : dump Frequency High FIR OFF raw data result = %d !\n", __func__, err);
+				printk("[Focal][Touch] %s : dump Frequency High FIR OFF raw data result = %d !\n", __func__, err);
 				asus_GetRawData(TPrawdata);
 				/*Print RawData Start*/
 				count += sprintf(buf + count, "[ASUS] dump Frequency High FIR OFF raw data result ! \n");
@@ -1429,7 +1493,7 @@ static ssize_t asus_dump_tp_raw_data_to_file(struct device *dev, struct device_a
 	}
 	return count;
 }
-//ASUS_BSP Freeman: add for get tp raw data ---
+/*--- ASUS jacob add for get tp raw data ---*/
 
 static ssize_t ftxxxx_tpfwver_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
@@ -1462,30 +1526,30 @@ static ssize_t ftxxxx_tprwreg_store(struct device *dev, struct device_attribute 
 	num_read_chars = count - 1;
 	if (num_read_chars != 2) {
 		if (num_read_chars != 4) {
-			dev_err(dev, "[FT5X46][Touch] %s : please input 2 or 4 character \n", __func__);
+			dev_err(dev, "[Focal][Touch] %s : please input 2 or 4 character \n", __func__);
 			goto error_return;
 		}
 	}
 	memcpy(valbuf, buf, num_read_chars);
 	retval = strict_strtoul(valbuf, 16, &wmreg);
 	if (0 != retval) {
-		dev_err(dev, "[FT5X46][Touch] %s() - ERROR: Could not convert the given input to a number. The given input was: \"%s\"\n", __FUNCTION__, buf);
+		dev_err(dev, "[Focal][Touch] %s() - ERROR: Could not convert the given input to a number. The given input was: \"%s\"\n", __FUNCTION__, buf);
 		goto error_return;
 	}
 	if (2 == num_read_chars) {
 		/*read register*/
 		regaddr = wmreg;
 		if (ftxxxx_read_reg(client, regaddr, &regvalue) < 0)
-			printk("[FT5X46][TOUCH_ERR] %s : Could not read the register(0x%02x) \n", __func__, regaddr);
+			printk("[Focal][TOUCH_ERR] %s : Could not read the register(0x%02x) \n", __func__, regaddr);
 		else
-			printk("[FT5X46][Touch] %s : the register(0x%02x) is 0x%02x \n", __func__, regaddr, regvalue);
+			printk("[Focal][Touch] %s : the register(0x%02x) is 0x%02x \n", __func__, regaddr, regvalue);
 	} else {
 		regaddr = wmreg>>8;
 		regvalue = wmreg;
 		if (ftxxxx_write_reg(client, regaddr, regvalue)<0)
-			dev_err(dev, "[FT5X46][TOUCH_ERR] %s : Could not write the register(0x%02x) \n", __func__, regaddr);
+			dev_err(dev, "[Focal][TOUCH_ERR] %s : Could not write the register(0x%02x) \n", __func__, regaddr);
 		else
-			dev_dbg(dev, "[FT5X46][Touch] %s : Write 0x%02x into register(0x%02x) successful \n", __func__, regvalue, regaddr);
+			dev_dbg(dev, "[Focal][Touch] %s : Write 0x%02x into register(0x%02x) successful \n", __func__, regvalue, regaddr);
 	}
 	error_return:
 	mutex_unlock(&ftxxxx_ts->g_device_mutex);
@@ -1518,18 +1582,19 @@ static ssize_t DoubleTapConfig_store(struct device *dev, struct device_attribute
 	u8 cvtbuf[5]={0};
 
 	wake_lock(&ftxxxx_ts->wake_lock);
+
 	mutex_lock(&ftxxxx_ts->g_device_mutex);
 
-	printk("[FT5X46][Touch] %s : Input char num = %ld ! \n", __func__, count);
+	printk("[Focal][Touch] %s : DoubleTapConfig_store ! \n", __func__);
 
 	if (count/LoopBaseNum) {
 		for (i = 0; i < (count/LoopBaseNum); i++) {
 			if ((buf[LoopBaseNum*i] == 'w') && (buf[LoopBaseNum*i + 1] == ':') && (buf[LoopBaseNum*i + 2] == 'x')) {
 				memcpy(cvtbuf, buf + (LoopBaseNum*i + 3), 4);
-				printk("[FT5X46][Touch] %s : Set char %s ! \n", __func__, cvtbuf);
+				printk("[Focal][Touch] %s : Set char %s ! \n", __func__, cvtbuf);
 				retval = strict_strtoul(cvtbuf, 16, &wmreg);
 				if (0 != retval) {
-					printk("[FT5X46][Touch] %s() - ERROR: Could not convert the given input to a number. The given input was: \"%s\"\n", __FUNCTION__, buf);
+					printk("[Focal][Touch] %s() - ERROR: Could not convert the given input to a number. The given input was: \"%s\"\n", __FUNCTION__, buf);
 					goto error_return;
 				}
 
@@ -1555,9 +1620,9 @@ static ssize_t DoubleTapConfig_store(struct device *dev, struct device_attribute
 				}
 
 				if (ftxxxx_write_reg(client, regaddr, regvalue)<0)
-					printk("[FT5X46][TOUCH_ERR] %s : Could not write the register(0x%02x) \n", __func__, regaddr);
+					printk("[Focal][TOUCH_ERR] %s : Could not write the register(0x%02x) \n", __func__, regaddr);
 				else
-					printk("[FT5X46][Touch] %s : Write 0x%02x into register(0x%02x) successful \n", __func__, regvalue, regaddr);
+					printk("[Focal][Touch] %s : Write 0x%02x into register(0x%02x) successful \n", __func__, regvalue, regaddr);
 
 			}
 		}
@@ -1625,9 +1690,9 @@ static ssize_t ftxxxx_fwupgradeapp_show(struct device *dev, struct device_attrib
 	/* place holder for future use */
 	size_t count = 0;
 	if (fw_update_complete) {
-		printk("[FT5X46][Touch_H] FW Update Complete \n");
+		printk("[Touch_H] FW Update Complete \n");
 	} else {
-		printk("[FT5X46][Touch_H] FW Update Fail \n");
+		printk("[Touch_H] FW Update Fail \n");
 	}
 	count += sprintf(buf, "%d\n", fw_update_complete);
 
@@ -1658,9 +1723,11 @@ static ssize_t ftxxxx_fwupgradeapp_store(struct device *dev, struct device_attri
 
 	err_tmp = fts_ctpm_fw_upgrade_with_app_file(ftxxxx_ts->client, fwname);
 
-	//if (err_tmp != 0)
-		//ASUSEvtlog("[Touch] touch update fw fail ! \n");
-
+	if (err_tmp != 0) {
+#ifdef CONFIG_FT5X46_FC
+		ASUSEvtlog("[Touch] touch update fw fail ! \n");
+#endif
+	}
 	asus_check_touch_mode();
 
 	ftxxxx_irq_enable(ftxxxx_ts->client);
@@ -1694,7 +1761,7 @@ static ssize_t ftxxxx_ftsgetprojectcode_store(struct device *dev, struct device_
 	return -EPERM;
 }
 #ifdef FTS_SELF_TEST
-#define FTXXXX_INI_FILEPATH "/asusfw/touch/"
+#define FTXXXX_INI_FILEPATH "/mnt/sdcard/"
 static int ftxxxx_GetInISize(char *config_name)
 {
 	struct file *pfile = NULL;
@@ -1708,7 +1775,7 @@ static int ftxxxx_GetInISize(char *config_name)
 	if (NULL == pfile)
 		pfile = filp_open(filepath, O_RDONLY, 0);
 	if (IS_ERR(pfile)) {
-		pr_err("[FT5X46][TOUCH_ERR] %s : error occured while opening file %s. \n", __func__, filepath);
+		pr_err("[Focal][TOUCH_ERR] %s : error occured while opening file %s. \n", __func__, filepath);
 		return -EIO;
 	}
 	inode = pfile->f_dentry->d_inode;
@@ -1733,7 +1800,7 @@ static int ftxxxx_ReadInIData(char *config_name, char *config_buf)
 	if (NULL == pfile)
 		pfile = filp_open(filepath, O_RDONLY, 0);
 	if (IS_ERR(pfile)) {
-		pr_err("[FT5X46][TOUCH_ERR] %s : error occured while opening file %s. \n", __func__, filepath);
+		pr_err("[Focal][TOUCH_ERR] %s : error occured while opening file %s. \n", __func__, filepath);
 		return -EIO;
 	}
 	inode = pfile->f_dentry->d_inode;
@@ -1752,18 +1819,18 @@ static int ftxxxx_get_testparam_from_ini(char *config_name)
 	char *filedata = NULL;
 
 	int inisize = ftxxxx_GetInISize(config_name);
-	printk("[FT5X46][Touch] %s : inisize = %d \n ", __func__, inisize);
+	printk("[Focal][Touch] %s : inisize = %d \n ", __func__, inisize);
 	if (inisize <= 0) {
-		pr_err("[FT5X46][TOUCH_ERR] %s : ERROR : Get firmware size failed \n", __func__);
+		pr_err("[Focal][TOUCH_ERR] %s : ERROR : Get firmware size failed \n", __func__);
 		return -EIO;
 	}
 	filedata = kmalloc(inisize + 1, GFP_ATOMIC);
 	if (ftxxxx_ReadInIData(config_name, filedata)) {
-		pr_err("[FT5X46][TOUCH_ERR] %s() - ERROR: request_firmware failed \n", __func__);
+		pr_err("[Focal][TOUCH_ERR] %s() - ERROR: request_firmware failed \n", __func__);
 		kfree(filedata);
 		return -EIO;
 	} else {
-		pr_info("[FT5X46][Touch] %s : ftxxxx_ReadInIData successful \n", __func__);
+		pr_info("[Focal][Touch] %s : ftxxxx_ReadInIData successful \n", __func__);
 	}
 	SetParamData(filedata);
 	return 0;
@@ -1774,7 +1841,7 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 	/* place holder for future use */
 	int count = 0, frame_flag = 0;
 	int err = 0;
-	int i = 0, j = 0,space=(11+TX_NUM);
+	int i = 0, j = 0, space = (11 + TX_NUM);
 	int flag[8];
 	int BufLen = 20 * 1024;
 	char *tmpbuf = NULL;
@@ -1803,7 +1870,7 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 	flag[7] = SCab_8;
 	filp = filp_open("/mnt/sdcard/TP_Raw_data.csv", O_RDWR | O_CREAT, S_IRUSR);
 	if (IS_ERR(filp)) {
-		printk("[FT5X46][TOUCH_ERR] %s: open /data/TP_Raw_data failed\n", __func__);
+		printk("[Focal][TOUCH_ERR] %s: open /data/TP_Raw_data failed\n", __func__);
 		mutex_unlock(&ftxxxx_ts->g_device_mutex);
 		wake_unlock(&ftxxxx_ts->wake_lock);
 		vfree(tmpbuf);
@@ -1856,7 +1923,7 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 	count += snprintf(tmpbuf + count, BufLen - count, "\n");
 	for (i = 0; i < 8; i++)
 		count += snprintf(tmpbuf + count, BufLen - count, "\n");
-	printk("[FT5X46][%s]	123 data result = %d !\n", __func__, err);
+	printk("[Focal][%s]	123 data result = %d !\n", __func__, err);
 
 	for (i = 0; i < TX_NUM; i++) {
 		
@@ -1923,7 +1990,7 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 
 	filp = filp_open("/mnt/sdcard/TP_Raw_data.txt", O_RDWR | O_CREAT, S_IRUSR);
 	if (IS_ERR(filp)) {
-		printk("[FT5X46][TOUCH_ERR] %s: open /data/TP_Raw_data.txt failed\n", __func__);
+		printk("[Focal][TOUCH_ERR] %s: open /data/TP_Raw_data.txt failed\n", __func__);
 		mutex_unlock(&ftxxxx_ts->g_device_mutex);
 		wake_unlock(&ftxxxx_ts->wake_lock);
 		vfree(tmpbuf);
@@ -1931,7 +1998,7 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 	}
 	oldfs = get_fs();
 	set_fs(get_ds());
-	printk("[FT5X46][%s]	dump data to CVS count = %d !\n", __func__, count);
+	printk("[Focal][%s]	dump data to CVS count = %d !\n", __func__, count);
 	count = 0;
 	for (i = 0; i < TX_NUM; i++) {
 		
@@ -1993,16 +2060,16 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 	filp->f_op->write(filp, tmpbuf, count, &filp->f_pos);
 	set_fs(oldfs);
 	filp_close(filp, NULL);
-	printk("[FT5X46][%s]	dump data to TXT count = %d !\n", __func__, count);
+	printk("[Focal][%s]	dump data to TXT count = %d !\n", __func__, count);
 	mutex_unlock(&ftxxxx_ts->g_device_mutex);
 	wake_unlock(&ftxxxx_ts->wake_lock);
 	vfree(tmpbuf);
 /*zax 20141116 --------------------*/
 
 	if (TP_TEST_RESULT == 2) {
-		return sprintf(buf, "PASS ! \n");
+		return sprintf(buf, "TP Raw Data Test PASS ! \n");
 	} else if (TP_TEST_RESULT == 1) {
-		return sprintf(buf, "Fail ! \n");
+		return sprintf(buf, "TP Raw Data Test Fail ! \n");
 	} else {
 		return sprintf(buf, "Please echo ini file first ! \n");
 	}
@@ -2035,14 +2102,14 @@ static ssize_t ftxxxx_ftsscaptest_store(struct device *dev, struct device_attrib
 	Init_I2C_Read_Func(FTS_I2c_Read);
 
 	if (ftxxxx_get_testparam_from_ini(cfgname) < 0)
-		printk("[FT5X46][TOUCH_ERR] %s : get testparam from ini failure \n", __func__);
+		printk("[Focal][TOUCH_ERR] %s : get testparam from ini failure \n", __func__);
 	else {
-		printk("[FT5X46][Touch] %s : tp test Start... \n", __func__);
+		printk("[Focal][Touch] %s : tp test Start... \n", __func__);
 		if (true == StartTestTP()) {
-			printk("[FT5X46][Touch] %s : tp test pass \n", __func__);
+			printk("[Focal][Touch] %s : tp test pass \n", __func__);
 			TP_TEST_RESULT = 2;
 		} else {
-			printk("[FT5X46][Touch] %s : tp test failure \n", __func__);
+			printk("[Focal][Touch] %s : tp test failure \n", __func__);
 			TP_TEST_RESULT = 1;
 		}
 /*		GetData_RawDataTest(&TestData, &iTxNumber, &iRxNumber, 0xff, 0xff);
@@ -2063,17 +2130,16 @@ static ssize_t ftxxxx_ftsscaptest_store(struct device *dev, struct device_attrib
 	return count;
 }
 #endif
-
 /****************************************/
 /* sysfs */
 /*get the fw version
 *example:cat ftstpfwver
 */
-static DEVICE_ATTR(fw_version, Focal_RW_ATTR, ftxxxx_tpfwver_show, ftxxxx_tpfwver_store);
+static DEVICE_ATTR(ftstpfwver, Focal_RW_ATTR, ftxxxx_tpfwver_show, ftxxxx_tpfwver_store);
 /*upgrade from *.i
 *example: echo 1 > ftsfwupdate
 */
-static DEVICE_ATTR(fw_update, Focal_RW_ATTR, ftxxxx_fwupdate_show, ftxxxx_fwupdate_store);
+static DEVICE_ATTR(ftsfwupdate, Focal_RW_ATTR, ftxxxx_fwupdate_show, ftxxxx_fwupdate_store);
 /*read and write register
 *read example: echo 88 > ftstprwreg ---read register 0x88
 *write example:echo 8807 > ftstprwreg ---write 0x07 into register 0x88
@@ -2089,56 +2155,57 @@ static DEVICE_ATTR(DoubleTapConfig, Focal_RW_ATTR, DoubleTapConfig_show, DoubleT
 /*upgrade from app.bin
 *example:echo "*_app.bin" > ftsfwupgradeapp
 */
-static DEVICE_ATTR(fw_upgradeapp, Focal_RW_ATTR, ftxxxx_fwupgradeapp_show, ftxxxx_fwupgradeapp_store);
+static DEVICE_ATTR(ftsfwupgradeapp, Focal_RW_ATTR, ftxxxx_fwupgradeapp_show, ftxxxx_fwupgradeapp_store);
 static DEVICE_ATTR(ftsgetprojectcode, Focal_RW_ATTR, ftxxxx_ftsgetprojectcode_show, ftxxxx_ftsgetprojectcode_store);
 #ifdef FTS_SELF_TEST
 static DEVICE_ATTR(ftsscaptest, Focal_RW_ATTR, ftxxxx_ftsscaptest_show, ftxxxx_ftsscaptest_store);
 #endif
 static DEVICE_ATTR(ftresetic, Focal_RW_ATTR, NULL, ftxxxx_ftreset_ic);
-static DEVICE_ATTR(touch_status, Focal_RW_ATTR, ftxxxx_init_show, NULL);
+static DEVICE_ATTR(ftinitstatus, Focal_RW_ATTR, ftxxxx_init_show, NULL);
 static DEVICE_ATTR(dump_tp_raw_data, Focal_RW_ATTR, asus_dump_tp_raw_data_show, asus_dump_tp_raw_data_store);
 static DEVICE_ATTR(dump_tp_raw_data_to_files, Focal_RW_ATTR, asus_dump_tp_raw_data_to_file, asus_dump_tp_raw_data_store);
 static DEVICE_ATTR(TP_ID, Focal_RW_ATTR, asus_get_tpid, NULL);
 static DEVICE_ATTR(INR_STATUS, Focal_RW_ATTR, asus_itr_status_show, NULL);
-static DEVICE_ATTR(fw_info, Focal_RW_ATTR, fw_info_show, NULL);
+static DEVICE_ATTR(tp_fw_info, Focal_RW_ATTR, fw_info_show, NULL);
 static DEVICE_ATTR(update_progress, Focal_RW_ATTR, update_progress_show, NULL);
 static DEVICE_ATTR(set_reset_pin_level, Focal_RW_ATTR, set_reset_pin_level_show, set_reset_pin_level_store);
 static DEVICE_ATTR(glove_mode, Focal_RW_ATTR, switch_glove_mode_show, switch_glove_mode_store);
 static DEVICE_ATTR(cover_mode, Focal_RW_ATTR, switch_cover_mode_show, switch_cover_mode_store);
 static DEVICE_ATTR(dclick_mode, Focal_RW_ATTR, switch_dclick_mode_show, switch_dclick_mode_store);
 static DEVICE_ATTR(gesture_mode, Focal_RW_ATTR, switch_gesture_mode_show, switch_gesture_mode_store);
+static DEVICE_ATTR(HW_ID, Focal_RW_ATTR, asus_get_hwid_show, NULL);
+static DEVICE_ATTR(IRQ_FORCE_DISABLE, Focal_RW_ATTR, irq_disable_show, irq_disable_store);
 static DEVICE_ATTR(IRQ_status, Focal_RW_ATTR, irq_status_show, NULL);
 static DEVICE_ATTR(Enable_Proximyty_Check, Focal_RW_ATTR, enable_proximity_check_show, enable_proximity_check_store);
-//ASUS_BSP Freeman: add node for show FW vendor ID ++++
-static DEVICE_ATTR(vd_version, Focal_RW_ATTR, vd_version_show, NULL);
 
 /*add your attr in here*/
 static struct attribute *ftxxxx_attributes[] = {
-	&dev_attr_fw_version.attr,
-	&dev_attr_fw_update.attr,
+	&dev_attr_ftstpfwver.attr,
+	&dev_attr_ftsfwupdate.attr,
 	&dev_attr_ftstprwreg.attr,
 	&dev_attr_DoubleTapConfig.attr,
-	&dev_attr_fw_upgradeapp.attr,
+	&dev_attr_ftsfwupgradeapp.attr,
 	&dev_attr_ftsgetprojectcode.attr,
 #ifdef FTS_SELF_TEST
 	&dev_attr_ftsscaptest.attr,
 #endif 
 	&dev_attr_ftresetic.attr,
-	&dev_attr_touch_status.attr,
+	&dev_attr_ftinitstatus.attr,
 	&dev_attr_dump_tp_raw_data.attr,
 	&dev_attr_dump_tp_raw_data_to_files.attr,
 	&dev_attr_TP_ID.attr,
 	&dev_attr_INR_STATUS.attr,
-	&dev_attr_fw_info.attr,
+	&dev_attr_tp_fw_info.attr,
 	&dev_attr_update_progress.attr,
 	&dev_attr_set_reset_pin_level.attr,
 	&dev_attr_glove_mode.attr,
 	&dev_attr_cover_mode.attr,
 	&dev_attr_gesture_mode.attr,
+	&dev_attr_HW_ID.attr,
 	&dev_attr_dclick_mode.attr,
+	&dev_attr_IRQ_FORCE_DISABLE.attr,
 	&dev_attr_IRQ_status.attr,
 	&dev_attr_Enable_Proximyty_Check.attr,
-	&dev_attr_vd_version.attr,
 	NULL
 };
 
@@ -2153,21 +2220,21 @@ int ftxxxx_create_sysfs(struct i2c_client * client)
 	G_Client = client;
 	err = sysfs_create_group(&client->dev.kobj, &ftxxxx_attribute_group);
 	if (0 != err) {
-		dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s() - ERROR: sysfs_create_group() failed.error code: %d\n", __FUNCTION__, err);
+		dev_err(&client->dev, "[Focal][TOUCH_ERR] %s() - ERROR: sysfs_create_group() failed.error code: %d\n", __FUNCTION__, err);
 		sysfs_remove_group(&client->dev.kobj, &ftxxxx_attribute_group);
 		return -EIO;
 	} else {
-		dev_dbg(&client->dev, "[FT5X46][Touch] %s() - sysfs_create_group() succeeded. \n", __FUNCTION__);
+		dev_dbg(&client->dev, "[Focal][Touch] %s() - sysfs_create_group() succeeded. \n", __FUNCTION__);
 	}
 
 	android_touch_kobj = kobject_create_and_add("android_touch", NULL);
 	if (android_touch_kobj == NULL) {
-		printk("[FT5X46][TOUCH_ERR] : subsystem_register failed\n");
+		printk("[Focal][TOUCH_ERR] : subsystem_register failed\n");
 		return -1;
 	}
 
-	if (sysfs_create_file(android_touch_kobj, &dev_attr_fw_upgradeapp.attr)) {
-		printk("[FT5X46][TOUCH_ERR] : create_file ftsfwupgradeapp failed\n");
+	if (sysfs_create_file(android_touch_kobj, &dev_attr_ftsfwupgradeapp.attr)) {
+		printk("[Focal][TOUCH_ERR] : create_file ftsfwupgradeapp failed\n");
 		return -1;
 	}
 
@@ -2205,11 +2272,11 @@ static int ftxxxx_debug_write(struct file *filp, const char __user *buff, unsign
 	char upgrade_file_path[128];
 
 	if (copy_from_user(&writebuf, buff, buflen)) {
-		dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : copy from user error \n", __func__);
+		dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : copy from user error \n", __func__);
 		return -EFAULT;
 	}
 	proc_operate_mode = writebuf[0] - 48;
-	printk("[FT5X46][Touch] %s : proc write proc_operate_mode = %d !! \n", __func__, proc_operate_mode);
+	printk("[Focal][Touch] %s : proc write proc_operate_mode = %d !! \n", __func__, proc_operate_mode);
 	switch (proc_operate_mode) {
 	case PROC_UPGRADE:
 		memset(upgrade_file_path, 0, sizeof(upgrade_file_path));
@@ -2220,7 +2287,7 @@ static int ftxxxx_debug_write(struct file *filp, const char __user *buff, unsign
 		ret = fts_ctpm_fw_upgrade_with_app_file(client, upgrade_file_path);
 		ftxxxx_irq_enable(ftxxxx_ts->client);
 		if (ret < 0) {
-			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : upgrade failed. \n", __func__);
+			dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : upgrade failed. \n", __func__);
 			return ret;
 		}
 		break;
@@ -2228,7 +2295,7 @@ static int ftxxxx_debug_write(struct file *filp, const char __user *buff, unsign
 		writelen = 1;
 		ret = ftxxxx_i2c_Write(client, writebuf + 1, writelen);
 		if (ret < 0) {
-			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : write iic error \n", __func__);
+			dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : write iic error \n", __func__);
 			return ret;
 		}
 		break;
@@ -2236,12 +2303,12 @@ static int ftxxxx_debug_write(struct file *filp, const char __user *buff, unsign
 		writelen = 2;
 		ret = ftxxxx_i2c_Write(client, writebuf + 1, writelen);
 		if (ret < 0) {
-			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : write iic error \n", __func__);
+			dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : write iic error \n", __func__);
 			return ret;
 		}
 		break;
 	case PROC_AUTOCLB:
-		FTS_DBG("[FT5X46] %s : autoclb\n", __func__);
+		FTS_DBG("[Touch] %s : autoclb\n", __func__);
 		fts_ctpm_auto_clb(client);
 		break;
 	case PROC_READ_DATA:
@@ -2249,7 +2316,7 @@ static int ftxxxx_debug_write(struct file *filp, const char __user *buff, unsign
 		writelen = len - 1;
 		ret = ftxxxx_i2c_Write(client, writebuf + 1, writelen);
 		if (ret < 0) {
-			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : write iic error\n", __func__);
+			dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : write iic error\n", __func__);
 			return ret;
 		}
 		break;
@@ -2286,7 +2353,7 @@ static ssize_t ftxxxx_debug_read(struct file *filp, char __user *buff, unsigned 
 		readlen = 1;
 		ret = ftxxxx_i2c_Read(client, NULL, 0, buf, readlen);
 		if (ret < 0) {
-			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : read iic error\n", __func__);
+			dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : read iic error\n", __func__);
 			return ret;
 		}
 		num_read_chars = 1;
@@ -2295,7 +2362,7 @@ static ssize_t ftxxxx_debug_read(struct file *filp, char __user *buff, unsigned 
 		readlen = len;
 		ret = ftxxxx_i2c_Read(client, NULL, 0, buf, readlen);
 		if (ret < 0) {
-			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s : read iic error\n", __func__);
+			dev_err(&client->dev, "[Focal][TOUCH_ERR] %s : read iic error\n", __func__);
 			return ret;
 		}
 		num_read_chars = readlen;
@@ -2329,10 +2396,10 @@ int ftxxxx_create_apk_debug_channel(struct i2c_client * client)
 	ftxxxx_proc_entry = proc_create(PROC_NAME, 0666, NULL, &debug_flag_fops);
 	/*ftxxxx_proc_entry = proc_create(PROC_NAME, 0777, NULL);*/
 	if (NULL == ftxxxx_proc_entry) {
-		dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s: Couldn't create proc entry!\n", __func__);
+		dev_err(&client->dev, "[Focal][TOUCH_ERR] %s: Couldn't create proc entry!\n", __func__);
 		return -ENOMEM;
 	} else {
-		dev_info(&client->dev, "[FT5X46][Touch] %s: Create proc entry success! \n", __func__);
+		dev_info(&client->dev, "[Focal][Touch] %s: Create proc entry success! \n", __func__);
 
 /*		ftxxxx_proc_entry->data = client;
 		ftxxxx_proc_entry->write_proc = ftxxxx_debug_write;
@@ -2523,19 +2590,91 @@ int fts_ctpm_fw_upgrade_ReadProjectCode(struct i2c_client *client)
 		ftxxxx_i2c_Read(client, auc_i2c_write_buf, 0, B_projectcode, 8);
 	}
 
-	printk("[FT5X46][Touch] %s : project code =  %s  \n", __func__, B_projectcode);
+	printk("[Focal][Touch] %s : project code =  %s  \n", __func__, B_projectcode);
 
 	msleep(50);
 	/*********Step 5: reset the new FW***********************/
-	FTS_DBG("[FT5X46][Touch] %s : Step 5: reset the new FW \n", __func__);
+	FTS_DBG("[Focal][Touch] %s : Step 5: reset the new FW \n", __func__);
 	auc_i2c_write_buf[0] = 0x07;
 	ftxxxx_i2c_Write(client, auc_i2c_write_buf, 1);
 	msleep(200);	/*make sure CTP startup normally */
 	i_ret = HidI2c_To_StdI2c(client);	/*Android to Std i2c.*/
 	if (i_ret == 0) {
-		FTS_DBG("[FT5X46][TOUCH_ERR] %s : HidI2c change to StdI2c fail ! \n", __func__);
+		FTS_DBG("[Focal][TOUCH_ERR] %s : HidI2c change to StdI2c fail ! \n", __func__);
 	}
 	msleep(10);
 	return 0;
 }
 /*asus*/
+
+/* +++ asus jacob add for auto fw update +++ */
+
+
+
+int focal_fw_auto_update(struct i2c_client *client)
+{
+	int err_code = 0;
+//	int tar_fw_ver = 0;
+//	int tar_vendor_config = 0;
+	u8 tar_vendor_id = 0;
+
+	/* 1. get touch ic tp vendor */
+	g_vendor_id = ftxxxx_read_tp_id();
+	if (g_vendor_id == 0xFF) {
+		printk("[TOUCH_ERR] %s : Read Vendor ID fail ! \n", __func__);
+		return 2;
+	}
+	printk("[Focal][Touch] %s : Vendor ID = %x \n", __func__, g_vendor_id);
+
+	if (g_asus_lcdID == 0) {	//AUO panel
+		tar_vendor_id = (g_vendor_id & 0xf0) | 0x3;
+	} else if (g_asus_lcdID == 2) {	//BOE panel
+		tar_vendor_id = (g_vendor_id & 0xf0) | 0x4;
+	} else {						//others
+		tar_vendor_id = g_vendor_id;
+	}
+
+	printk("[Focal][Touch] %s : ASUS judgment Vendor ID = %x \n", __func__, tar_vendor_id);
+
+	g_vendor_id = tar_vendor_id;
+
+	wake_lock(&ftxxxx_ts->wake_lock);
+
+	mutex_lock(&ftxxxx_ts->g_device_mutex);
+
+	switch (tar_vendor_id) {
+	case TP_TM :
+		fw_size = sizeof(TM_FW);
+		err_code = fts_ctpm_auto_upgrade(client, TM_FW);
+		break;
+	case TP_TM_old :
+		fw_size = sizeof(TM_FW);
+		err_code = fts_ctpm_auto_upgrade(client, TM_FW);
+		break;
+	case TP_GIS_AUO :
+		fw_size = sizeof(GIS_AUO_FW);
+		err_code = fts_ctpm_auto_upgrade(client, GIS_AUO_FW);
+		break;
+	case TP_GIS_BOE :
+		fw_size = sizeof(GIS_BOE_FW);
+		err_code = fts_ctpm_auto_upgrade(client, GIS_BOE_FW);
+		break;
+	case TP_TOT_AUO :
+		fw_size = sizeof(TOT_AUO_FW);
+		err_code = fts_ctpm_auto_upgrade(client, TOT_AUO_FW);
+		break;
+	case TP_TOT_BOE :
+		fw_size = sizeof(TOT_BOE_FW);
+		err_code = fts_ctpm_auto_upgrade(client, TOT_BOE_FW);
+		break;
+	}
+
+	mutex_unlock(&ftxxxx_ts->g_device_mutex);
+
+	wake_unlock(&ftxxxx_ts->wake_lock);
+
+	return err_code;
+}
+
+/* --- asus jacob add for auto fw update --- */
+

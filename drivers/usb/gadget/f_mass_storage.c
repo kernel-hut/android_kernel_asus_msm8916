@@ -218,9 +218,11 @@
 #include <linux/usb/gadget.h>
 #include <linux/usb/composite.h>
 
-//ASUS_BSP+++ Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+//ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
+#ifdef ASUS_ZC550KL_PROJECT
 #include <linux/usb/android.h>
-//ASUS_BSP--- Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+#endif
+//ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
 #include "gadget_chips.h"
 
 
@@ -229,7 +231,7 @@
 #define FSG_DRIVER_DESC		"Mass Storage Function"
 #define FSG_DRIVER_VERSION	"2009/09/11"
 
-static const char fsg_string_interface[] = "Mass Storage";
+static const char fsg_string_interface[] = "Android Mass Storage";
 
 #include "storage_common.c"
 
@@ -1954,10 +1956,12 @@ static int do_scsi_command(struct fsg_common *common)
 	int			reply = -EINVAL;
 	int			i;
 	static char		unknown[16];
-//ASUS_BSP+++ Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+//ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
+#ifdef ASUS_ZC550KL_PROJECT
 	int scsi_cmd_factory_mode[6]={0xF1, 0x01, 0x00, 0x00, 0x24, 0x00};
 	bool  cmdEqual = true;
-//ASUS_BSP--- Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+#endif
+//ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
 
 	dump_cdb(common);
 
@@ -2193,7 +2197,8 @@ static int do_scsi_command(struct fsg_common *common)
 			reply = do_write(common);
 		break;
 
-//ASUS_BSP+++ Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+//ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
+#ifdef ASUS_ZC550KL_PROJECT
 	case FACTORY_MODE:
 		printk("[USB] add scsi cmd to enable factory mode \n");
 		if ( common->cmnd_size == 6) {
@@ -2210,7 +2215,8 @@ static int do_scsi_command(struct fsg_common *common)
 				}
 		}
 		break;
-//ASUS_BSP--- Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+#endif
+//ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
 
 	/*
 	 * Some mandatory commands that we recognize but don't implement.

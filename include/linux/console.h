@@ -195,9 +195,9 @@ void vcs_remove_sysfs(int index);
 #ifdef CONFIG_VGA_CONSOLE
 extern bool vgacon_text_force(void);
 #endif
-//[+++][Power]Add for wakeup debug
+//ASUS_BSP +++ [Power] jeff_gu Add for wakeup debug
 extern int gpio_irq_cnt, gpio_resume_irq[8], gic_irq_cnt, gic_resume_irq[8];
 extern unsigned int pm_pwrcs_ret;
-extern unsigned int pwrcs_time;	//jeff_gu add for trace suspend time
-//[---][Power]Add for wakeup debug
+extern unsigned int pwrcs_time;
+//ASUS_BSP --- [Power] jeff_gu Add for wakeup debug
 #endif /* _LINUX_CONSOLE_H */

@@ -97,7 +97,6 @@ static void dump_mem(const char *lvl, const char *str, unsigned long bottom,
 static void dump_backtrace_entry(unsigned long where, unsigned long stack)
 {
 	print_ip_sym(where);
-
 	if (in_exception_text(where))
 		dump_mem("", "Exception stack", stack,
 			 stack + sizeof(struct pt_regs));
@@ -243,11 +242,11 @@ void die(const char *str, struct pt_regs *regs, int err)
 	console_verbose();
 	bust_spinlocks(1);
 	if (regs != NULL) {
-		if (!user_mode(regs))
-			bug_type = report_bug(regs->pc, regs);
-		if (bug_type != BUG_TRAP_TYPE_NONE)
-			str = "Oops - BUG";
-		ret = __die(str, err, thread, regs);
+	if (!user_mode(regs))
+		bug_type = report_bug(regs->pc, regs);
+	if (bug_type != BUG_TRAP_TYPE_NONE)
+		str = "Oops - BUG";
+	ret = __die(str, err, thread, regs);
 	}
 
 	if (regs && kexec_should_crash(thread->task))

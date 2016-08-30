@@ -358,6 +358,7 @@ CFLAGS_GCOV	= -fprofile-arcs -ftest-coverage
 USERINCLUDE    := \
 		-I$(srctree)/arch/$(hdr-arch)/include/uapi \
 		-Iarch/$(hdr-arch)/include/generated/uapi \
+		-I$(srctree)/drivers/soc/qcom \
 		-I$(srctree)/include/uapi \
 		-Iinclude/generated/uapi \
                 -include $(srctree)/include/linux/kconfig.h
@@ -693,6 +694,30 @@ else
         KBUILD_CPPFLAGS += -DASUS_SW_VER=\"$(ASUS_BUILD_PROJECT)_ENG\"
 endif
 
+#ASUS_BSP Ander: ZC550KL support mutliple project build +++
+ifeq ($(ASUS_BUILD_PROJECT), ZC550KL)
+        KBUILD_CPPFLAGS += -DASUS_ZC550KL_PROJECT=1
+endif
+# ASUS_BSP Ander : ZC550KL support mutliple project build ---
+
+#ASUS_BSP ShowWang: ZC550KL support mutliple platform build +++
+ifeq ($(IS_BOARD_PLATFORM), 8939)
+        KBUILD_CPPFLAGS += -DASUS_ZC550KL8939_PROJECT=1
+endif
+# ASUS_BSP ShowWang : ZC550KL support mutliple platform build ---
+
+# ASUS_BSP : support ZC550KL_8916 build +++
+ifeq ($(IS_BOARD_PLATFORM), 8916)
+        KBUILD_CPPFLAGS += -DASUS_ZC550KL8916_PROJECT=1
+endif
+# ASUS_BSP : support ZC550KL_8916 build---
+
+# ASUS_BSP Ander: for userdebuf build
+ifeq ($(TARGET_BUILD_VARIANT), userdebug)
+        KBUILD_CPPFLAGS += -DASUS_USERDEBUG_BUILD=1
+#        KBUILD_CPPFLAGS += -DASUS_DOWNLOAD_MODE_DISABLE=1
+endif
+# ASUS_BSP Ander : for userdebug build
 
 # Add user supplied CPPFLAGS, AFLAGS and CFLAGS as the last assignments
 KBUILD_CPPFLAGS += $(KCPPFLAGS)
@@ -716,6 +741,9 @@ LDFLAGS_vmlinux += $(LDFLAGS_BUILD_ID)
 ifeq ($(CONFIG_STRIP_ASM_SYMS),y)
 LDFLAGS_vmlinux	+= $(call ld-option, -X,)
 endif
+
+LDFLAGS_vmlinux += $(call ld-option, --fix-cortex-a53-843419)
+LDFLAGS_MODULE += $(call ld-option, --fix-cortex-a53-843419)
 
 # Default kernel image to build when no specific target is given.
 # KBUILD_IMAGE may be overruled on the command line or

@@ -25,7 +25,7 @@
 
 #define FOCAL_DBG
 #ifdef FOCAL_DBG
-#define FTS_DBG(fmt, args...) printk("[FT5X46]" fmt, ## args)
+#define FTS_DBG(fmt, args...) printk("[FTS]" fmt, ## args)
 #else
 #define FTS_DBG(fmt, args...) do{}while(0)
 #endif

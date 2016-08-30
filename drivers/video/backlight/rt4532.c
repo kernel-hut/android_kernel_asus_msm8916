@@ -12,8 +12,6 @@
 #include <linux/of_gpio.h>
 #include <linux/kernel.h>
 
-extern enum DEVICE_HWID g_ASUS_hwID;
-
 static struct i2c_client *rt4532_client;
 int bl_en_gpio;
 
@@ -110,9 +108,6 @@ EXPORT_SYMBOL(rt4532_suspend);
 void rt4532_resume(void)
 {
 	gpio_direction_output(bl_en_gpio,1);
-	
-	if (g_ASUS_hwID == ZE500KL_EVB || g_asus_lcdID == A500_HSD)
-		rt4532_I2C_PWMmode_low_active(rt4532_client);
 
 	/*rt4532_I2C_read(rt4532_client, 0x02);*/
 	return;
@@ -136,8 +131,6 @@ static int rt4532_probe(struct i2c_client *client, const struct i2c_device_id *i
 
 	rt4532_I2C_read(client, 0x02);
 
-	if (g_ASUS_hwID == ZE500KL_EVB || g_asus_lcdID == A500_HSD)
-		rt4532_I2C_PWMmode_low_active(client);
 	return 0;
 }
 

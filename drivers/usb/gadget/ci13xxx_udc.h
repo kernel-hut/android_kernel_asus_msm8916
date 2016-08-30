@@ -146,10 +146,12 @@ struct ci13xxx_udc_driver {
 #define CI13XXX_CONTROLLER_RESUME_EVENT		4
 #define CI13XXX_CONTROLLER_DISCONNECT_EVENT		5
 #define CI13XXX_CONTROLLER_UDC_STARTED_EVENT		6
+#define CI13XXX_CONTROLLER_ERROR_EVENT			7
 
 	void	(*notify_event) (struct ci13xxx *udc, unsigned event);
 	bool    (*in_lpm) (struct ci13xxx *udc);
 	void    (*set_fpr_flag) (struct ci13xxx *udc);
+	struct clk *system_clk;
 };
 
 /* CI13XXX UDC descriptor & global resources */
@@ -178,6 +180,7 @@ struct ci13xxx {
 	int                        softconnect; /* is pull-up enable allowed */
 	unsigned long dTD_update_fail_count;
 	struct usb_phy            *transceiver; /* Transceiver struct */
+	struct clk                *system_clk;
 	bool                      skip_flush; /* skip flushing remaining EP
 						upon flush timeout for the
 						first EP. */

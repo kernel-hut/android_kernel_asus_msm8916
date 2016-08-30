@@ -21,10 +21,24 @@
 #include <linux/i2c.h>
 #include <linux/fs.h>
 #include <linux/input/ASH.h>
-#include "../ASH_log.h"
 
 HALLsensor_ATTR *g_hall_ATTR = NULL;
 struct device *g_hallsensor_dev;
+
+/**************************/
+/* Debug and Log System */
+/************************/
+#define MODULE_NAME			"ASH_ATTR"
+#define SENSOR_TYPE_NAME		"Hallsensor"
+
+#undef dbg
+#ifdef ASH_ATTR_DEBUG
+	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#else
+	#define dbg(fmt, args...)
+#endif
+#define log(fmt, args...) printk(KERN_INFO "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 static ssize_t show_action_status(struct device *dev,struct device_attribute *attr, char *buf)
 {
@@ -113,11 +127,11 @@ static ssize_t store_hall_sensor_debounce(struct device *dev,
 
 static struct device_attribute hallsensor_property_attrs[] = {
 	/*read only*/
-	__ATTR(status, 0440, show_action_status, NULL),
+	__ATTR(status, 0444, show_action_status, NULL),
 	
 	/*read/write*/
-	__ATTR(switch, 0660, show_hall_sensor_enable, store_hall_sensor_enable),
-	__ATTR(debounce, 0660, show_hall_sensor_debounce, store_hall_sensor_debounce),
+	__ATTR(switch, 0664, show_hall_sensor_enable, store_hall_sensor_enable),
+	__ATTR(debounce, 0664, show_hall_sensor_debounce, store_hall_sensor_debounce),
 };
 
 int HALLsensor_ATTR_register(HALLsensor_ATTR *mATTR)
@@ -127,11 +141,11 @@ int HALLsensor_ATTR_register(HALLsensor_ATTR *mATTR)
 		
 	g_hall_ATTR = mATTR;
 
-	/* psensor device */
+	/* hallsensor device */
 	g_hallsensor_dev = ASH_ATTR_device_create(hallsensor);
 	if (IS_ERR(g_hallsensor_dev) || g_hallsensor_dev == NULL) {
 		ret = PTR_ERR(g_hallsensor_dev);
-		err("HALLsensor_ATTR_register : hall sensor create ERROR.\n");
+		err("%s: ASH_ATTR_device_create ERROR(%d).\n", __FUNCTION__, ret);
 		return ret;
 	}	
 	for (ATTR_index=0; ATTR_index < ARRAY_SIZE(hallsensor_property_attrs); ATTR_index++) {
@@ -153,12 +167,12 @@ int HALLsensor_ATTR_create(struct device_attribute *mhallsensor_attr)
 {
 	int ret = 0;
 	if(mhallsensor_attr == NULL) {
-		err("HALLsensor_ATTR_create : the device_attribute is NULL point. \n");
+		err("%s: the device_attribute is NULL pointer.\n", __FUNCTION__);
 		return -EINVAL;
 	}
 	ret = device_create_file(g_hallsensor_dev, mhallsensor_attr);
 	if (ret){		
-		err("HALLsensor_ATTR_create : hall sensor create customize attribute ERROR. \n");
+		err("%s: device_create_file ERROR(%d). \n", __FUNCTION__, ret);
 		return ret;
 	}
 

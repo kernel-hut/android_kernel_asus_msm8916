@@ -29,11 +29,11 @@ static struct i2c_driver bd7710_i2c_driver;
 
 static struct msm_camera_i2c_reg_array bd7710_init_array[] = {
 	{0x04, 0x00},
-	{0x05, 0x07},
+//	{0x05, 0x07},
 	{0x06, 0x65},
 //	{0x00, 0x0A},
 //	{0x01, 0x0A},
-	{0x02, 0xBB},
+	{0x02, 0xFF},
 //	{0x03, 0x11},
 };
 
@@ -139,12 +139,7 @@ static int __init msm_flash_bd7710_init_module(void)
 {
 	int32_t rc = 0;
 	pr_info("%s entry\n", __func__);
-	if ((g_ASUS_hwID < ZE500KL_ER1) ||
-		(ZE500KL_CMCC_EVB <= g_ASUS_hwID && g_ASUS_hwID < ZE500KL_CMCC_ER1) ||
-		(ZE500KG_EVB <= g_ASUS_hwID && g_ASUS_hwID < ZE500KG_SR2)) {
-		pr_info("%s init fail HW_ID = %d\n", __func__, g_ASUS_hwID);
-		return -EINVAL;
-	}
+
 	rc = platform_driver_register(&bd7710_platform_driver);
 	if (!rc)
 		return rc;

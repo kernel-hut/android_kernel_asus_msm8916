@@ -13,7 +13,6 @@
 
 /* Display current time */
 struct timeval get_current_time(void);
-void O_get_current_time(struct timeval* now);
 /* Check if timeout happen */
 bool is_timeout(struct timeval start, struct timeval now, int timeout);
 #if 0

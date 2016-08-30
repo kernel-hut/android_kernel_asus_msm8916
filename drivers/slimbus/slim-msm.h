@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -215,7 +215,7 @@ struct msm_slim_qmi {
 	struct work_struct		ssr_up;
 };
 
-struct msm_slim_mdm {
+struct msm_slim_ss {
 	struct notifier_block nb;
 	void *ssr;
 	enum msm_ctrl_state state;
@@ -270,7 +270,8 @@ struct msm_slim_ctrl {
 	u32			ver;
 	struct msm_slim_qmi	qmi;
 	struct msm_slim_pdata	pdata;
-	struct msm_slim_mdm	mdm;
+	struct msm_slim_ss	ext_mdm;
+	struct msm_slim_ss	dsp;
 	int			default_ipc_log_mask;
 	int			ipc_log_mask;
 	bool			sysfs_created;
@@ -378,7 +379,7 @@ int msm_send_msg_buf(struct msm_slim_ctrl *dev, u32 *buf, u8 len, u32 tx_reg);
 u32 *msm_get_msg_buf(struct msm_slim_ctrl *dev, int len,
 			struct completion *comp);
 u32 *msm_slim_manage_tx_msgq(struct msm_slim_ctrl *dev, bool getbuf,
-			struct completion *comp);
+			struct completion *comp, int err);
 int msm_slim_rx_msgq_get(struct msm_slim_ctrl *dev, u32 *data, int offset);
 int msm_slim_sps_init(struct msm_slim_ctrl *dev, struct resource *bam_mem,
 			u32 pipe_reg, bool remote);

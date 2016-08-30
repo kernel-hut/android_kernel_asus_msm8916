@@ -67,8 +67,8 @@ struct msm_rpm_stats_data_v2 {
 	//[CR] Support to trace Subsystem voting status
 	u32 client_votes;
 	u32 subsystem_votes;
-    u32 debug0;
-    u32 debug1;
+	u32 debug0;
+	u32 debug1;
 	//u32 reserved[3];
 };
 
@@ -110,7 +110,7 @@ static inline int msm_rpmstats_append_data_to_buf(char *buf,
 		"time since last mode(sec):%llu\nactual last sleep(msec):%llu\n"
 		"Client votes: %#010x, Subsystem votes: 0x%x\n\n",
 		stat_type, data->count, time_in_last_mode,
-		time_since_last_mode, actual_last_sleep, 
+		time_since_last_mode, actual_last_sleep,
 		data->client_votes, data->subsystem_votes);
 }
 
@@ -486,7 +486,7 @@ static int rpm_stats_suspend(struct device *dev)
 				offsetof(struct msm_rpm_stats_data_v2, client_votes));
 	data.subsystem_votes = msm_rpmstats_read_quad_register_v2(reg, 0,
 				offsetof(struct msm_rpm_stats_data_v2, subsystem_votes));
-		
+
 	printk("[RPM] Suspend: Voting status: Client: 0x%x, Subsystem: 0x%0x\n",
 			data.client_votes, data.subsystem_votes);
 
@@ -514,16 +514,16 @@ static int rpm_stats_resume(struct device *dev)
 				offsetof(struct msm_rpm_stats_data_v2, stat_type));
 		data.count = msm_rpmstats_read_long_register_v2(reg, i,
 				offsetof(struct msm_rpm_stats_data_v2, count));
-		data.last_entered_at = msm_rpmstats_read_quad_register_v2(reg, i, 
+		data.last_entered_at = msm_rpmstats_read_quad_register_v2(reg, i,
 				offsetof(struct msm_rpm_stats_data_v2, last_entered_at));
 		data.last_exited_at = msm_rpmstats_read_quad_register_v2(reg, i,
 				offsetof(struct msm_rpm_stats_data_v2, last_exited_at));
-		data.accumulated = msm_rpmstats_read_quad_register_v2(reg, i, 
+		data.accumulated = msm_rpmstats_read_quad_register_v2(reg, i,
 				offsetof(struct msm_rpm_stats_data_v2, accumulated));
 		if(0 == i) {
-			data.client_votes = msm_rpmstats_read_quad_register_v2(reg,	i, 
+			data.client_votes = msm_rpmstats_read_quad_register_v2(reg,	i,
 					offsetof(struct msm_rpm_stats_data_v2, client_votes));
-			data.subsystem_votes = msm_rpmstats_read_quad_register_v2(reg, i, 
+			data.subsystem_votes = msm_rpmstats_read_quad_register_v2(reg, i,
 					offsetof(struct msm_rpm_stats_data_v2, subsystem_votes));
 		}
 
@@ -542,7 +542,7 @@ static int rpm_stats_resume(struct device *dev)
 
 			printk("[RPM] Resume: Mode:%s, Count:%d, In last mode(ms):%llu, Since last mode(s):%llu, Actual last sleep(ms):%llu\n",
 				stat_type, data.count, time_in_last_mode,
-				time_since_last_mode, actual_last_sleep);			
+				time_since_last_mode, actual_last_sleep);
 		}
 		else {
 			printk("[RPM] Resume: Mode:%s, Count:%d, In last mode(ms):%llu, Since last mode(s):%llu, Actual last sleep(ms):%llu\n",

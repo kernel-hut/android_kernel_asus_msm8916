@@ -446,11 +446,6 @@ struct mmc_card {
 //ASUS_BSP +++ Gavin_Chang "add eMMC total size for AMAX"
 	char                mmc_total_size[10];
 //ASUS_BSP --- Gavin_Chang "add eMMC total size for AMAX"
-//ASUS_BSP +++ Gavin_Chang "mmc suspend stress test"
-#ifdef CONFIG_MMC_SUSPENDTEST
-	unsigned int    sectors_changed;
-#endif
-//ASUS_BSP --- Gavin_Chang "mmc suspend stress test"
 //ASUS_BSP +++ Gavin_Chang "mmc cmd statistics"
 	struct mmc_cmd_stats *cmd_stats;
 //ASUS_BSP --- Gavin_Chang "mmc cmd statistics"

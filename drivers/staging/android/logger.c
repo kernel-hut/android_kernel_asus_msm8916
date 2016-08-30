@@ -831,7 +831,7 @@ static int __init logger_init(void)
 {
 	int ret;
 
-	ret = create_log(LOGGER_LOG_MAIN, CONFIG_LOGCAT_SIZE*1024 * 2);
+	ret = create_log(LOGGER_LOG_MAIN, CONFIG_LOGCAT_SIZE*1024 * 2 );
 	if (unlikely(ret))
 		goto out;
 

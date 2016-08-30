@@ -1,0 +1,16 @@
+#
+# SOUNDWIRE driver configuration
+#
+menuconfig SOUNDWIRE
+	bool "Soundwire support"
+	help
+	  Soundwire is a two wire interface for audio to connect
+	  simple peripheral components in mobile devices.
+
+if SOUNDWIRE
+config SOUNDWIRE_WCD_CTRL
+	tristate "QTI WCD CODEC Soundwire controller"
+	default y
+	help
+	  Select driver for QTI's Soundwire Master Component.
+endif

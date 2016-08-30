@@ -36,7 +36,6 @@ int pmsp_flag = 0;
 bool g_resume_status;
 int pm_stay_unattended_period = 0;
 //[---]Debug for active wakelock before entering suspend
-
 const char *const pm_states[PM_SUSPEND_MAX] = {
 	[PM_SUSPEND_ON] = "on",
 	[PM_SUSPEND_FREEZE]	= "freeze",
@@ -275,7 +274,6 @@ void unattended_timer_expired(unsigned long data)
 	mod_timer(&unattended_timer, jiffies + msecs_to_jiffies(PM_UNATTENDED_TIMEOUT));
 }
 //[---]Debug for active wakelock before entering suspend
-
 /**
  * suspend_devices_and_enter - Suspend devices and enter system sleep state.
  * @state: System sleep state to enter.
@@ -316,6 +314,8 @@ int suspend_devices_and_enter(suspend_state_t state)
 		error = suspend_enter(state, &wakeup);
 	} while (!error && !wakeup && need_suspend_ops(state)
 		&& suspend_ops->suspend_again && suspend_ops->suspend_again());
+
+	pm_pwrcs_ret = 1;//ASUS_BSP [Power] jeff_gu Add for wakeup debug
 
  Resume_devices:
 	suspend_test_start();

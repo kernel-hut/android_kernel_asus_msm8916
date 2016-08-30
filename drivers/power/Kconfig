@@ -496,6 +496,12 @@ config BATTERY_GOLDFISH
 	  Say Y to enable support for the battery and AC power in the
 	  Goldfish emulator.
 
+config QPNP_VM_BMS_SUSPEND_PREDICT
+	tristate "QPNP Voltage-Mode Battery Monitoring System driver suspend predict"
+	depends on QPNP_VM_BMS
+	help
+	  Say Y here to enable support suspend predict for QPNP chip vm-bms device.
+
 config QPNP_VM_BMS
 	tristate "QPNP Voltage-Mode Battery Monitoring System driver"
 	depends on SPMI
@@ -505,12 +511,6 @@ config QPNP_VM_BMS
 	  The voltage-mode (vm) BMS driver uses periodic VBATT
 	  readings from the battery to calculate the State of
 	  Charge.
-
-config QPNP_VM_BMS_SUSPEND_PREDICT
-	tristate "QPNP Voltage-Mode Battery Monitoring System driver suspend predict"
-	depends on QPNP_VM_BMS
-	help
-	  Say Y here to enable support suspend predict for QPNP chip vm-bms device.
 
 config QPNP_BMS
 	tristate "QPNP Battery Monitoring System driver"

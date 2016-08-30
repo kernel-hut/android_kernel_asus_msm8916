@@ -6,8 +6,10 @@
 
 obj-$(CONFIG_INPUT_UINPUT)		+= uinput.o
 
-#+++ ASUS Alian_Shen "add BMA223"
-obj-y += bma2x2.o
-obj-y += bstclass.o
-obj-y += kxtj9.o
-#--- ASUS Alian_Shen "add BMA223"
+#+++ ASUS_BSP alian_Shen "Add GSensor for ZC550KL"
+ifeq ($(ASUS_BUILD_PROJECT), ZC550KL)
+#obj-$(CONFIG_KXTJ2_ZC550K) +=  kxtj9_zc550kl.o
+obj-y +=  kxtj9_zc550kl.o
+obj-y +=  bma2x2_zc550kl.o
+endif
+#--- ASUS_BSP alian_Shen "Add GSensor for ZC550KL"

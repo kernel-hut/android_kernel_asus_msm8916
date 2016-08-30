@@ -44,6 +44,8 @@
 
 #include <asm/irq_regs.h>
 
+bool perf_call=false;    //ASUS_BSP+++ jeff_gu workaround for simpleperf  mutex lock twice
+
 struct remote_function_call {
 	struct task_struct	*p;
 	int			(*func)(void *info);
@@ -1366,7 +1368,9 @@ static void perf_retry_remove(struct remove_event *rep)
 	 * CPU was offline. Bring it online so we can
 	 * gracefully exit a perf context.
 	 */
+	perf_call = true;    //ASUS_BSP+++ jeff_gu workaround for simpleperf mutex lock twice
 	up_ret = cpu_up(event->cpu);
+	perf_call = false;    //ASUS_BSP+++ jeff_gu workaround for simpleperf mutex lock twice
 	if (!up_ret)
 		/* Try the remove call once again. */
 		cpu_function_call(event->cpu, __perf_remove_from_context, rep);

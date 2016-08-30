@@ -53,8 +53,9 @@
 #include <linux/msm-bus.h>
 #include "msm_serial_hs_hwreg.h"
 
-extern int g_user_dbg_mode;  //ASUSDEBUG jeffery_hu@asus.com  avoid log to uart console in user version
-
+#ifdef ASUS_ZC550KL_PROJECT
+extern int g_uart_dbg_mode;  //ASUSDEBUG jeffery_hu@asus.com  avoid log to uart console in user version
+#endif
 /*
  * There are 3 different kind of UART Core available on MSM.
  * High Speed UART (i.e. Legacy HSUART), GSBI based HSUART
@@ -1449,8 +1450,10 @@ static void msm_hsl_console_write(struct console *co, const char *s,
 	unsigned int vid;
 	int locked;
 //ASUSDEBUG+ jeffery_hu@asus.com  avoid log to uart console in user version
-	if (!g_user_dbg_mode)
+#ifdef ASUS_ZC550KL_PROJECT
+	if (!g_uart_dbg_mode)
 		return;
+#endif
 //ASUSDEBUG -
 	BUG_ON(co->index < 0 || co->index >= UART_NR);
 

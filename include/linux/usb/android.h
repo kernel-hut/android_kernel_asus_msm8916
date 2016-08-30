@@ -72,12 +72,14 @@ int acm_port_setup(struct usb_configuration *c);
 void acm_port_cleanup(void);
 int acm_init_port(int port_num, const char *name);
 
-//ASUS_BSP+++ Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+//ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
+#ifdef ASUS_ZC550KL_PROJECT
 #include <linux/switch.h>
 #define ASUS_FACTORY_MODE_ON 1
 #define ASUS_FACTORY_MODE_OFF 0
 int asus_factory_mode_state = ASUS_FACTORY_MODE_OFF;
 struct switch_dev asus_switch_otg_factory_mode;
-//ASUS_BSP--- Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+#endif
+//ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
 
 #endif	/* __LINUX_USB_ANDROID_H */

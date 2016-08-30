@@ -783,7 +783,7 @@ EXPORT_SYMBOL(pil_shutdown);
  */
 void pil_free_memory(struct pil_desc *desc)
 {
- 	struct pil_priv *priv = desc->priv;
+	struct pil_priv *priv = desc->priv;
 
 	if (priv->region) {
 		dma_free_attrs(desc->dev, priv->region_size,

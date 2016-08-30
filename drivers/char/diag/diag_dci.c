@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -1105,8 +1105,12 @@ void extract_dci_events(unsigned char *buf, int len, int data_source, int token)
 	/* Move directly to the start of the event series. 1 byte for
 	 * event code and 2 bytes for the length field.
 	 */
+	/* The length field indicates the total length removing the cmd_code
+	 * and the lenght field. The event parsing in that case should happen
+	 * till the end.
+	 */
 	temp_len = 3;
-	while (temp_len < (length - 1)) {
+	while (temp_len < length) {
 		event_id_packet = *(uint16_t *)(buf + temp_len);
 		event_id = event_id_packet & 0x0FFF; /* extract 12 bits */
 		if (event_id_packet & 0x8000) {
@@ -1640,7 +1644,6 @@ static int diag_dci_process_apps_pkt(struct diag_pkt_header_t *pkt_header,
 						   APPS_BUF_SIZE - header_len);
 		goto fill_buffer;
 	} else if (cmd_code != DIAG_CMD_DIAG_SUBSYS) {
-		pr_err("diag: dci: DIAG_DCI_TABLE_ERR cmd_code(%d) != DIAG_CMD_DIAG_SUBSYS in %s", cmd_code, __func__);
 		return DIAG_DCI_TABLE_ERR;
 	}
 
@@ -1679,6 +1682,10 @@ static int diag_dci_process_apps_pkt(struct diag_pkt_header_t *pkt_header,
 			write_len = sizeof(struct diag_pkt_header_t);
 			*(uint16_t *)(payload_ptr + write_len) = wrap_count;
 			write_len += sizeof(uint16_t);
+		} else if (ss_cmd_code == DIAG_EXT_MOBILE_ID) {
+			write_len = diag_cmd_get_mobile_id(req_buf, req_len,
+						   payload_ptr,
+						   APPS_BUF_SIZE - header_len);
 		}
 	}
 
@@ -1719,7 +1726,7 @@ fill_buffer:
 		}
 		return DIAG_DCI_NO_ERROR;
 	}
-	pr_err("diag: dci: DIAG_DCI_TABLE_ERR write_len(%d) in %s", cmd_code, __func__);
+
 	return DIAG_DCI_TABLE_ERR;
 }
 
@@ -2092,13 +2099,13 @@ struct diag_dci_client_tbl *diag_dci_get_client_entry(int client_id)
 	return NULL;
 }
 
-struct diag_dci_client_tbl *dci_lookup_client_entry_pid(int pid)
+struct diag_dci_client_tbl *dci_lookup_client_entry_pid(int tgid)
 {
 	struct list_head *start, *temp;
 	struct diag_dci_client_tbl *entry = NULL;
 	list_for_each_safe(start, temp, &driver->dci_client_list) {
 		entry = list_entry(start, struct diag_dci_client_tbl, track);
-		if (entry->client->tgid == pid)
+		if (entry->client->tgid == tgid)
 			return entry;
 	}
 	return NULL;
@@ -2811,25 +2818,19 @@ int diag_dci_register_client(struct diag_dci_reg_tbl_t *reg_entry)
 	struct diag_dci_client_tbl *new_entry = NULL;
 	struct diag_dci_buf_peripheral_t *proc_buf = NULL;
 
-	if (!reg_entry) {
-		pr_err("diag: DIAG_DCI_NO_REG, reg_entry null in %s\n", __func__);
+	if (!reg_entry)
 		return DIAG_DCI_NO_REG;
-	}
 	if (!VALID_DCI_TOKEN(reg_entry->token)) {
 		pr_alert("diag: Invalid DCI client token, %d\n",
 						reg_entry->token);
 		return DIAG_DCI_NO_REG;
 	}
 
-	if (driver->dci_state == DIAG_DCI_NO_REG) {
-		pr_err("diag: DIAG_DCI_NO_REG, dci_state error in %s\n", __func__);
+	if (driver->dci_state == DIAG_DCI_NO_REG)
 		return DIAG_DCI_NO_REG;
-	}
 
-	if (driver->num_dci_client >= MAX_DCI_CLIENTS) {
-		pr_err("diag: DIAG_DCI_NO_REG,num_dci_client error:%d in %s\n", driver->num_dci_client, __func__);
+	if (driver->num_dci_client >= MAX_DCI_CLIENTS)
 		return DIAG_DCI_NO_REG;
-	}
 
 	new_entry = kzalloc(sizeof(struct diag_dci_client_tbl), GFP_KERNEL);
 	if (new_entry == NULL) {
@@ -2891,10 +2892,8 @@ int diag_dci_register_client(struct diag_dci_reg_tbl_t *reg_entry)
 
 	for (i = 0; i < new_entry->num_buffers; i++) {
 		proc_buf = &new_entry->buffers[i];
-		if (!proc_buf) {
-			pr_err("diag: proc_buf null in %s\n", __func__);
+		if (!proc_buf)
 			goto fail_alloc;
-		}
 
 		mutex_init(&proc_buf->health_mutex);
 		mutex_init(&proc_buf->buf_mutex);
@@ -2905,27 +2904,19 @@ int diag_dci_register_client(struct diag_dci_reg_tbl_t *reg_entry)
 		proc_buf->buf_primary = kzalloc(
 					sizeof(struct diag_dci_buffer_t),
 					GFP_KERNEL);
-		if (!proc_buf->buf_primary) {
-			pr_err("diag: buf_primary allocate fail in %s\n", __func__);
+		if (!proc_buf->buf_primary)
 			goto fail_alloc;
-		}
 		proc_buf->buf_cmd = kzalloc(sizeof(struct diag_dci_buffer_t),
 					    GFP_KERNEL);
-		if (!proc_buf->buf_cmd) {
-			pr_err("diag: buf_cmd allocate fail in %s\n", __func__);
+		if (!proc_buf->buf_cmd)
 			goto fail_alloc;
-		}
 		err = diag_dci_init_buffer(proc_buf->buf_primary,
 					   DCI_BUF_PRIMARY);
-		if (err) {
-			pr_err("diag: buf_primary init error:%d in %s\n", err, __func__);
+		if (err)
 			goto fail_alloc;
-		}
 		err = diag_dci_init_buffer(proc_buf->buf_cmd, DCI_BUF_CMD);
-		if (err) {
-			pr_err("diag: buf_cmd init error:%d in %s\n", err, __func__);
+		if (err)
 			goto fail_alloc;
-		}
 		proc_buf->buf_curr = proc_buf->buf_primary;
 	}
 

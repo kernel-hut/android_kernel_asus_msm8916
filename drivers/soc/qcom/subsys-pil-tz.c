@@ -816,9 +816,9 @@ static int subsys_ramdump(int enable, const struct subsys_desc *subsys)
 
 static void subsys_free_memory(const struct subsys_desc *subsys)
 {
- 	struct pil_tz_data *d = subsys_to_data(subsys);
+	struct pil_tz_data *d = subsys_to_data(subsys);
 
- 	pil_free_memory(&d->desc);
+	pil_free_memory(&d->desc);
 }
 
 static void subsys_crash_shutdown(const struct subsys_desc *subsys)
@@ -859,6 +859,11 @@ static irqreturn_t subsys_wdog_bite_irq_handler(int irq, void *dev_id)
 							d->subsys_desc.name);
 		return IRQ_HANDLED;
 	}
+
+	if (d->subsys_desc.system_debug &&
+			!gpio_get_value(d->subsys_desc.err_fatal_gpio))
+		panic("%s: System ramdump requested. Triggering device restart!\n",
+							__func__);
 	subsys_set_crash_status(d->subsys, true);
 	log_failure_reason(d);
 	subsystem_restart_dev(d->subsys);

@@ -29,6 +29,15 @@
 #include <linux/syscore_ops.h>
 #include <linux/tick.h>
 #include <trace/events/power.h>
+//ASUS Joy_Lin +++
+#ifdef CONFIG_ASUS_PERF
+#include <asm/uaccess.h>
+#include <linux/proc_fs.h>
+#include <linux/cpufreq.h>
+#include <linux/timer.h>
+#define ASUS_CB_FREQ_FILE "ASUS_CB_freq"
+#endif
+//ASUS Joy_Lin ---
 
 /**
  * The "cpufreq driver" - the arch- or hardware-dependent low
@@ -80,6 +89,7 @@ static void handle_update(struct work_struct *work);
  */
 static BLOCKING_NOTIFIER_HEAD(cpufreq_policy_notifier_list);
 static struct srcu_notifier_head cpufreq_transition_notifier_list;
+struct atomic_notifier_head cpufreq_govinfo_notifier_list;
 
 static bool init_cpufreq_transition_notifier_list_called;
 static int __init init_cpufreq_transition_notifier_list(void)
@@ -89,6 +99,15 @@ static int __init init_cpufreq_transition_notifier_list(void)
 	return 0;
 }
 pure_initcall(init_cpufreq_transition_notifier_list);
+
+static bool init_cpufreq_govinfo_notifier_list_called;
+static int __init init_cpufreq_govinfo_notifier_list(void)
+{
+	ATOMIC_INIT_NOTIFIER_HEAD(&cpufreq_govinfo_notifier_list);
+	init_cpufreq_govinfo_notifier_list_called = true;
+	return 0;
+}
+pure_initcall(init_cpufreq_govinfo_notifier_list);
 
 static int off __read_mostly;
 static int cpufreq_disabled(void)
@@ -1463,6 +1482,9 @@ static unsigned int __cpufreq_get(unsigned int cpu)
 
 	ret_freq = cpufreq_driver->get(cpu);
 
+	if (!policy)
+		return ret_freq;
+
 	if (ret_freq && policy->cur &&
 		!(cpufreq_driver->flags & CPUFREQ_CONST_LOOPS)) {
 		/* verify no discrepancy between actual and
@@ -1635,7 +1657,8 @@ int cpufreq_register_notifier(struct notifier_block *nb, unsigned int list)
 	if (cpufreq_disabled())
 		return -EINVAL;
 
-	WARN_ON(!init_cpufreq_transition_notifier_list_called);
+	WARN_ON(!init_cpufreq_transition_notifier_list_called ||
+		!init_cpufreq_govinfo_notifier_list_called);
 
 	switch (list) {
 	case CPUFREQ_TRANSITION_NOTIFIER:
@@ -1645,6 +1668,10 @@ int cpufreq_register_notifier(struct notifier_block *nb, unsigned int list)
 	case CPUFREQ_POLICY_NOTIFIER:
 		ret = blocking_notifier_chain_register(
 				&cpufreq_policy_notifier_list, nb);
+		break;
+	case CPUFREQ_GOVINFO_NOTIFIER:
+		ret = atomic_notifier_chain_register(
+				&cpufreq_govinfo_notifier_list, nb);
 		break;
 	default:
 		ret = -EINVAL;
@@ -1680,6 +1707,10 @@ int cpufreq_unregister_notifier(struct notifier_block *nb, unsigned int list)
 		ret = blocking_notifier_chain_unregister(
 				&cpufreq_policy_notifier_list, nb);
 		break;
+	case CPUFREQ_GOVINFO_NOTIFIER:
+		ret = atomic_notifier_chain_unregister(
+				&cpufreq_govinfo_notifier_list, nb);
+		break;
 	default:
 		ret = -EINVAL;
 	}
@@ -1711,15 +1742,6 @@ int __cpufreq_driver_target(struct cpufreq_policy *policy,
 
 	pr_debug("target for CPU %u: %u kHz, relation %u, requested %u kHz\n",
 			policy->cpu, target_freq, relation, old_target_freq);
-
-	/*
-	 * This might look like a redundant call as we are checking it again
-	 * after finding index. But it is left intentionally for cases where
-	 * exactly same freq is called again and so we can save on few function
-	 * calls.
-	 */
-	if (target_freq == policy->cur)
-		return 0;
 
 	if (cpufreq_driver->target)
 		retval = cpufreq_driver->target(policy, target_freq, relation);
@@ -1968,10 +1990,84 @@ EXPORT_SYMBOL(cpufreq_get_policy);
  * policy : current policy.
  * new_policy: policy to be set.
  */
+//ASUS Joy_Lin +++
+#ifdef CONFIG_ASUS_PERF
+unsigned int asus_boost_freq = 0;
+static int readflag = 0;
+static DEFINE_MUTEX(boost_freq_control_mutex);
+
+static ssize_t asus_proc_file_read_file(struct file *filp, char __user *buff, size_t len, loff_t *off)
+{
+	char print_buf[32];
+	unsigned int ret = 0,iret = 0;
+	sprintf(print_buf, "asusdebug: %s\n", asus_boost_freq? "on":"off");
+
+	ret = strlen(print_buf);
+	iret = copy_to_user(buff, print_buf, ret);
+	if (!readflag){
+		readflag = 1;
+		return ret;
+	}
+	else{
+		readflag = 0;
+		return 0;
+	}
+}
+
+static ssize_t __ref asus_proc_file_write_file(struct file *filp, const char __user *buff, size_t len, loff_t *off)
+{
+	char messages[32];
+	int i;
+
+	memset(messages, 0, 32);
+	if (len > 32)
+		len = 32;
+	if (copy_from_user(messages, buff, len))
+		return -EFAULT;
+	messages[1]='\0';
+	printk("[POWER_HINT_CAM] CPUfeq boost:%s\n",messages);
+	mutex_lock(&boost_freq_control_mutex);
+	if(strncmp(messages, "1", 1) == 0)
+	{
+		asus_boost_freq = 1;
+		for(i=0; i<4; i++){
+			cpufreq_update_policy(i);
+		}
+	}
+	else if(strncmp(messages, "0", 1) == 0)
+	{
+		asus_boost_freq = 0;
+		for(i=0; i<4; i++){
+			cpufreq_update_policy(i);
+		}
+	}
+	else
+		return 0;
+	mutex_unlock(&boost_freq_control_mutex);
+	return len;
+	}
+
+static struct file_operations create_asus_proc_file = {
+	.read = asus_proc_file_read_file,
+	.write = asus_proc_file_write_file,
+};
+
+static int __init camera_boost_init(void)
+{
+	proc_create(ASUS_CB_FREQ_FILE, S_IRWXUGO, NULL, &create_asus_proc_file);
+	return 0;
+}
+module_init(camera_boost_init);
+#endif
+//ASUS Joy_Lin ---
+
 static int cpufreq_set_policy(struct cpufreq_policy *policy,
 				struct cpufreq_policy *new_policy)
 {
 	int ret = 0, failed = 1;
+#ifdef CONFIG_ASUS_PERF
+	int cpuinfo_max = 0;
+#endif
 
 	pr_debug("setting new policy for CPU %u: %u - %u kHz\n", new_policy->cpu,
 		new_policy->min, new_policy->max);
@@ -2009,8 +2105,22 @@ static int cpufreq_set_policy(struct cpufreq_policy *policy,
 	blocking_notifier_call_chain(&cpufreq_policy_notifier_list,
 			CPUFREQ_NOTIFY, new_policy);
 
+	//ASUS Joy_Lin +++
+#ifdef CONFIG_ASUS_PERF
+	cpuinfo_max = policy->cpuinfo.max_freq;
+	if( asus_boost_freq == 1 && policy->max > 800000 ){
+		policy->max = cpuinfo_max;
+		policy->min = policy->max;
+	}
+	else{
+		policy->min = new_policy->min;
+		policy->max = new_policy->max;
+	}
+#else
 	policy->min = new_policy->min;
 	policy->max = new_policy->max;
+#endif
+	//ASUS Joy_Lin ---
 
 	pr_debug("new min and max freqs are %u - %u kHz\n",
 					policy->min, policy->max);
@@ -2201,7 +2311,11 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 	cpufreq_driver = driver_data;
 	write_unlock_irqrestore(&cpufreq_driver_lock, flags);
 
+	register_hotcpu_notifier(&cpufreq_cpu_notifier);
+
+	get_online_cpus();
 	ret = subsys_interface_register(&cpufreq_interface);
+	put_online_cpus();
 	if (ret)
 		goto err_null_driver;
 
@@ -2224,13 +2338,13 @@ int cpufreq_register_driver(struct cpufreq_driver *driver_data)
 		}
 	}
 
-	register_hotcpu_notifier(&cpufreq_cpu_notifier);
 	pr_debug("driver %s up and running\n", driver_data->name);
 
 	return 0;
 err_if_unreg:
 	subsys_interface_unregister(&cpufreq_interface);
 err_null_driver:
+	unregister_hotcpu_notifier(&cpufreq_cpu_notifier);
 	write_lock_irqsave(&cpufreq_driver_lock, flags);
 	cpufreq_driver = NULL;
 	write_unlock_irqrestore(&cpufreq_driver_lock, flags);

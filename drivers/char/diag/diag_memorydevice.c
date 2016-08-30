@@ -106,14 +106,15 @@ void diag_md_close_all()
 			entry = &ch->tbl[j];
 			if (entry->len <= 0)
 				continue;
+			spin_lock_irqsave(&ch->lock, flags);
 			if (ch->ops && ch->ops->write_done)
 				ch->ops->write_done(entry->buf, entry->len,
-						    entry->ctx, ch->ctx);
-			spin_lock_irqsave(&entry->lock, flags);
+						    entry->ctx,
+						    DIAG_MEMORY_DEVICE_MODE);
 			entry->buf = NULL;
 			entry->len = 0;
 			entry->ctx = 0;
-			spin_unlock_irqrestore(&entry->lock, flags);
+			spin_unlock_irqrestore(&ch->lock, flags);
 		}
 		if (ch->ops && ch->ops->close)
 			ch->ops->close(ch->ctx, DIAG_MEMORY_DEVICE_MODE);
@@ -136,8 +137,22 @@ int diag_md_write(int id, unsigned char *buf, int len, int ctx)
 		return -EINVAL;
 
 	ch = &diag_md[id];
+	spin_lock_irqsave(&ch->lock, flags);
 	for (i = 0; i < ch->num_tbl_entries && !found; i++) {
-		spin_lock_irqsave(&ch->tbl[i].lock, flags);
+		if (ch->tbl[i].buf != buf)
+			continue;
+		found = 1;
+		pr_err_ratelimited("diag: trying to write the same buffer buf: %p, ctxt: %d len: %d at i: %d back to the table, proc: %d, mode: %d\n",
+				   buf, ctx, ch->tbl[i].len,
+				   i, id, driver->logging_mode);
+	}
+	spin_unlock_irqrestore(&ch->lock, flags);
+
+	if (found)
+		return -ENOMEM;
+
+	spin_lock_irqsave(&ch->lock, flags);
+	for (i = 0; i < ch->num_tbl_entries && !found; i++) {
 		if (ch->tbl[i].len == 0) {
 			ch->tbl[i].buf = buf;
 			ch->tbl[i].len = len;
@@ -145,8 +160,8 @@ int diag_md_write(int id, unsigned char *buf, int len, int ctx)
 			found = 1;
 			diag_ws_on_read(DIAG_WS_MD, len);
 		}
-		spin_unlock_irqrestore(&ch->tbl[i].lock, flags);
 	}
+	spin_unlock_irqrestore(&ch->lock, flags);
 
 	if (!found) {
 		pr_err_ratelimited("diag: Unable to find an empty space in table, please reduce logging rate, proc: %d\n",
@@ -170,7 +185,7 @@ int diag_md_write(int id, unsigned char *buf, int len, int ctx)
 	return 0;
 }
 
-int diag_md_copy_to_user(char __user *buf, int *pret)
+int diag_md_copy_to_user(char __user *buf, int *pret, size_t buf_size)
 {
 
 	int i, j;
@@ -181,6 +196,7 @@ int diag_md_copy_to_user(char __user *buf, int *pret)
 	unsigned long flags;
 	struct diag_md_info *ch = NULL;
 	struct diag_buf_tbl_t *entry = NULL;
+	uint8_t drain_again = 0;
 
 	for (i = 0; i < NUM_DIAG_MD_DEV && !err; i++) {
 		ch = &diag_md[i];
@@ -192,6 +208,19 @@ int diag_md_copy_to_user(char __user *buf, int *pret)
 			 * If the data is from remote processor, copy the remote
 			 * token first
 			 */
+			if (i > 0) {
+				if ((ret + (3 * sizeof(int)) + entry->len) >=
+							buf_size) {
+					drain_again = 1;
+					break;
+				}
+			} else {
+				if ((ret + (2 * sizeof(int)) + entry->len) >=
+						buf_size) {
+					drain_again = 1;
+					break;
+				}
+			}
 			if (i > 0) {
 				remote_token = diag_get_remote(i);
 				err = copy_to_user(buf + ret, &remote_token,
@@ -222,21 +251,25 @@ int diag_md_copy_to_user(char __user *buf, int *pret)
 			 */
 			num_data++;
 drop_data:
-			ch->ops->write_done(entry->buf, entry->len,
-					    entry->ctx,
-					    DIAG_MEMORY_DEVICE_MODE);
+			spin_lock_irqsave(&ch->lock, flags);
+			if (ch->ops && ch->ops->write_done)
+				ch->ops->write_done(entry->buf, entry->len,
+						    entry->ctx,
+						    DIAG_MEMORY_DEVICE_MODE);
 			diag_ws_on_copy(DIAG_WS_MD);
-			spin_lock_irqsave(&entry->lock, flags);
 			entry->buf = NULL;
 			entry->len = 0;
 			entry->ctx = 0;
-			spin_unlock_irqrestore(&entry->lock, flags);
+			spin_unlock_irqrestore(&ch->lock, flags);
 		}
 	}
 
 	*pret = ret;
 	err = copy_to_user(buf + sizeof(int), (void *)&num_data, sizeof(int));
 	diag_ws_on_copy_complete(DIAG_WS_MD);
+	if (drain_again)
+		chk_logging_wakeup();
+
 	return err;
 }
 
@@ -258,7 +291,7 @@ int diag_md_init()
 			ch->tbl[j].buf = NULL;
 			ch->tbl[j].len = 0;
 			ch->tbl[j].ctx = 0;
-			spin_lock_init(&(ch->tbl[j].lock));
+			spin_lock_init(&(ch->lock));
 		}
 	}
 

@@ -104,6 +104,11 @@ enum sdc_mpm_pin_state {
 #define CORE_HC_SELECT_IN_HS400	(6 << 19)
 #define CORE_HC_SELECT_IN_MASK	(7 << 19)
 
+#define CORE_VENDOR_SPEC_FUNC2 0x110
+#define HC_SW_RST_WAIT_IDLE_DIS	(1 << 20)
+#define HC_SW_RST_REQ (1 << 21)
+#define CORE_ONE_MID_EN     (1 << 25)
+
 #define CORE_VENDOR_SPEC_CAPABILITIES0	0x11C
 #define CORE_8_BIT_SUPPORT		(1 << 18)
 #define CORE_3_3V_SUPPORT		(1 << 24)
@@ -303,11 +308,14 @@ struct sdhci_msm_pltfm_data {
 	unsigned long mmc_bus_width;
 	struct sdhci_msm_slot_reg_data *vreg_data;
 	bool nonremovable;
+	bool use_mod_dynamic_qos;
 	bool nonhotplug;
+	bool no_1p8v;
 	bool pin_cfg_sts;
 	struct sdhci_msm_pin_data *pin_data;
 	struct sdhci_pinctrl_data *pctrl_data;
-	u32 cpu_dma_latency_us;
+	u32 *cpu_dma_latency_us;
+	unsigned int cpu_dma_latency_tbl_sz;
 	int status_gpio; /* card detection GPIO that is configured as IRQ */
 	int enable_gpio; /* card power enable GPIO that is replaced L11 pin */  //ASUS_BSP Deeo : for gpio enable pin +++
 	struct sdhci_msm_bus_voting_data *voting_data;
@@ -316,6 +324,7 @@ struct sdhci_msm_pltfm_data {
 	int mpm_sdiowakeup_int;
 	int sdiowakeup_irq;
 	enum pm_qos_req_type cpu_affinity_type;
+	cpumask_t cpu_affinity_mask;
 	char *name;		//ASUS_BSP Deeo : add host_name to pdata +++
 };
 
@@ -356,6 +365,7 @@ struct sdhci_msm_host {
 	bool is_sdiowakeup_enabled;
 	atomic_t controller_clock;
 	bool use_cdclp533;
+	struct device_attribute cd_status_attr; //ASU_BSP Deeo : add for sd_status
 };
 
 enum vdd_io_level {
@@ -456,6 +466,24 @@ static ssize_t show_auto_cmd21(struct device *dev,
 
 	return snprintf(buf, PAGE_SIZE, "%d\n", msm_host->en_auto_cmd21);
 }
+
+//ASUS_BSP Deeo : add for sd_status +++
+static ssize_t store_cd_status(struct device *dev, struct device_attribute
+				*attr, const char *buf, size_t count)
+{
+	return count;
+}
+
+static ssize_t show_cd_status(struct device *dev,
+			       struct device_attribute *attr, char *buf)
+{
+	struct sdhci_host *host = dev_get_drvdata(dev);
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_msm_host *msm_host = pltfm_host->priv;
+
+	return snprintf(buf, PAGE_SIZE, "%d\n", !gpio_get_value(msm_host->pdata->status_gpio));
+}
+//ASUS_BSP Deeo : add for sd_status ---
 
 /* MSM auto-tuning handler */
 static int sdhci_msm_config_auto_tuning_cmd(struct sdhci_host *host,
@@ -998,6 +1026,7 @@ int sdhci_msm_execute_tuning(struct sdhci_host *host, u32 opcode)
 	u8 drv_type = 0;
 	bool drv_type_changed = false;
 	struct mmc_card *card = host->mmc->card;
+	int sts_retry;
 
 	/*
 	 * Tuning is required for SDR104, HS200 and HS400 cards and
@@ -1055,6 +1084,7 @@ retry:
 			.data = &data
 		};
 		struct scatterlist sg;
+		struct mmc_command sts_cmd = {0};
 
 		/* set the phase in delay line hw block */
 		rc = msm_config_cm_dll_phase(host, phase);
@@ -1075,14 +1105,35 @@ retry:
 		memset(data_buf, 0, size);
 		mmc_wait_for_req(mmc, &mrq);
 
-		/*
-		 * wait for 146 MCLK cycles for the card to send out the data
-		 * and thus move to TRANS state. As the MCLK would be minimum
-		 * 200MHz when tuning is performed, we need maximum 0.73us
-		 * delay. To be on safer side 1ms delay is given.
-		 */
-		if (cmd.error)
-			usleep_range(1000, 1200);
+		if (card && (cmd.error || data.error)) {
+			sts_cmd.opcode = MMC_SEND_STATUS;
+			sts_cmd.arg = card->rca << 16;
+			sts_cmd.flags = MMC_RSP_R1 | MMC_CMD_AC;
+			sts_retry = 5;
+			while (sts_retry) {
+				mmc_wait_for_cmd(mmc, &sts_cmd, 0);
+
+				if (sts_cmd.error ||
+				   (R1_CURRENT_STATE(sts_cmd.resp[0])
+				   != R1_STATE_TRAN)) {
+					sts_retry--;
+					/*
+					 * wait for at least 146 MCLK cycles for
+					 * the card to move to TRANS state. As
+					 * the MCLK would be min 200MHz for
+					 * tuning, we need max 0.73us delay. To
+					 * be on safer side 1ms delay is given.
+					 */
+					usleep_range(1000, 1200);
+					pr_debug("%s: phase %d sts cmd err %d resp 0x%x\n",
+						mmc_hostname(mmc), phase,
+						sts_cmd.error, sts_cmd.resp[0]);
+					continue;
+				}
+				break;
+			};
+		}
+
 		if (!cmd.error && !data.error &&
 			!memcmp(data_buf, tuning_block_pattern, size)) {
 			/* tuning is successful at this tuning point */
@@ -1457,40 +1508,195 @@ out:
 }
 
 #ifdef CONFIG_SMP
-static void sdhci_msm_populate_affinity_type(struct sdhci_msm_pltfm_data *pdata,
-					     struct device_node *np)
+static void sdhci_msm_populate_affinity(struct sdhci_msm_pltfm_data *pdata,
+					struct device_node *np,
+					char *qos_affinity_name,
+					char *qos_affinity_mask)
 {
 	const char *cpu_affinity = NULL;
+	u32 cpu_mask;
 
 	pdata->cpu_affinity_type = PM_QOS_REQ_AFFINE_IRQ;
-	if (!of_property_read_string(np, "qcom,cpu-affinity",
-				    &cpu_affinity)) {
+	if (!of_property_read_string(np, qos_affinity_name, &cpu_affinity)) {
 		if (!strcmp(cpu_affinity, "all_cores"))
 			pdata->cpu_affinity_type = PM_QOS_REQ_ALL_CORES;
-		else if (!strcmp(cpu_affinity, "affine_cores"))
-			pdata->cpu_affinity_type = PM_QOS_REQ_AFFINE_CORES;
-		else if (!strcmp(cpu_affinity, "affine_irq"))
-			pdata->cpu_affinity_type = PM_QOS_REQ_AFFINE_IRQ;
+		else if (!strcmp(cpu_affinity, "affine_cores") &&
+			 !of_property_read_u32(np, qos_affinity_mask,
+						&cpu_mask)) {
+				cpumask_bits(&pdata->cpu_affinity_mask)[0] =
+					cpu_mask;
+				pdata->cpu_affinity_type =
+					PM_QOS_REQ_AFFINE_CORES;
+		}
 	}
 }
+
+static inline void sdhci_set_pm_qos_irq_type(struct sdhci_host *host,
+						int i)
+{
+	struct sdhci_host_qos *host_qos = host->host_qos;
+	/*
+	 * The default request type PM_QOS_REQ_ALL_CORES is
+	 * applicable to all CPU cores that are online and
+	 * this would have a power impact when there are more
+	 * number of CPUs. This new PM_QOS_REQ_AFFINE_IRQ request
+	 * type shall update/apply the vote only to that CPU to
+	 * which this IRQ's affinity is set to.
+	 * PM_QOS_REQ_AFFINE_CORES request type is used for targets that have
+	 * little cluster and will update/apply the vote to all the cores in
+	 * the little cluster.
+	 */
+
+	if (host_qos[i].pm_qos_req_dma.type == PM_QOS_REQ_AFFINE_IRQ)
+		host_qos[i].pm_qos_req_dma.irq = host->irq;
+}
+
 #else
-static void sdhci_msm_populate_affinity_type(struct sdhci_msm_pltfm_data *pdata,
-					     struct device_node *np)
+static void sdhci_msm_populate_affinity(struct sdhci_msm_pltfm_data *pdata,
+				struct device_node *np, char *qos_affinity_name,
+				char *qos_affinity_mask)
+{
+}
+
+static inline void sdhci_set_pm_qos_irq_type(struct sdhci_host *host,
+						int i)
 {
 }
 #endif
 
+static void sdhci_msm_update_host_qos_data(struct sdhci_msm_pltfm_data *pdata,
+		struct sdhci_host *host, int i)
+{
+	struct sdhci_host_qos *host_qos = host->host_qos;
+
+	host_qos[i].cpu_dma_latency_us = pdata->cpu_dma_latency_us;
+	host_qos[i].cpu_dma_latency_tbl_sz = pdata->cpu_dma_latency_tbl_sz;
+	host_qos[i].pm_qos_req_dma.type = pdata->cpu_affinity_type;
+	if (host_qos[i].pm_qos_req_dma.type == PM_QOS_REQ_AFFINE_CORES)
+		cpumask_copy(&host_qos[i].pm_qos_req_dma.cpus_affine,
+			    &pdata->cpu_affinity_mask);
+
+	sdhci_set_pm_qos_irq_type(host, i);
+}
+
+static void sdhci_msm_print_qos_data(struct device *dev,
+		struct sdhci_host *host)
+{
+	int i, j;
+	struct sdhci_host_qos *host_qos = host->host_qos;
+
+	dev_info(dev, "host_use_default_qos = %d\n",
+			host->host_use_default_qos);
+
+	for (i = 0; i < SDHCI_QOS_MAX_POLICY; i++) {
+		dev_info(dev, "For qos_policy(%s qos) = %d, tbl_sz = %d, qos type = %d\n",
+				i ? "modified dynamic" : "default", i,
+				host_qos[i].cpu_dma_latency_tbl_sz,
+				host_qos[i].pm_qos_req_dma.type);
+
+		for (j = 0; j < host_qos[i].cpu_dma_latency_tbl_sz; j++)
+			dev_info(dev, "\tdma_latency = %d\n",
+				host_qos[i].cpu_dma_latency_us[j]);
+	}
+}
+
+static int sdhci_msm_populate_qos(struct device *dev,
+		struct sdhci_msm_pltfm_data *pdata,
+		struct sdhci_host *host)
+{
+	struct device_node *np = dev->of_node;
+	u32 prop_val = 0;
+	bool skip_qos_from_dt = false;
+	int qos_planes = 0, i;
+	char *qos_planes_name[SDHCI_QOS_MAX_POLICY] = {
+			"qcom,cpu-dma-latency-us",
+			"qcom,cpu-dma-latency-us-r",
+			"qcom,cpu-dma-latency-us-w"
+			};
+	char *qos_affinity_name[SDHCI_QOS_MAX_POLICY] = {
+			"qcom,cpu-affinity",
+			"qcom,cpu-affinity-r",
+			"qcom,cpu-affinity-w"
+			};
+	char *qos_affinity_mask[SDHCI_QOS_MAX_POLICY] = {
+			"qcom,cpu-affinity-mask",
+			"qcom,cpu-affinity-mask-r",
+			"qcom,cpu-affinity-mask-w"
+			};
+	if (of_property_read_u32(np, "qcom,qos-planes", &qos_planes))
+			qos_planes = SDHCI_QOS_MAX_POLICY;
+
+	if (qos_planes > SDHCI_QOS_MAX_POLICY) {
+		dev_warn(dev, "max qos plane supported is %d\n",
+				SDHCI_QOS_MAX_POLICY);
+		qos_planes = SDHCI_QOS_MAX_POLICY;
+	}
+
+	for (i = 0; i < qos_planes; i++) {
+		if (of_get_property(np, qos_planes_name[i],
+					&prop_val)) {
+
+			pdata->cpu_dma_latency_tbl_sz =
+				prop_val/sizeof(*pdata->cpu_dma_latency_us);
+
+			if (!(pdata->cpu_dma_latency_tbl_sz == 1 ||
+				pdata->cpu_dma_latency_tbl_sz == 3)) {
+				dev_warn(dev, "incorrect pm_qos param passed from DT: %d\n",
+					pdata->cpu_dma_latency_tbl_sz);
+				skip_qos_from_dt = true;
+			} else {
+				pdata->cpu_dma_latency_us = devm_kzalloc(dev,
+					sizeof(*pdata->cpu_dma_latency_us) *
+					pdata->cpu_dma_latency_tbl_sz,
+					GFP_KERNEL);
+				if (!pdata->cpu_dma_latency_us)
+					goto out;
+				if (of_property_read_u32_array(np,
+					qos_planes_name[i],
+					pdata->cpu_dma_latency_us,
+					pdata->cpu_dma_latency_tbl_sz)) {
+					dev_err(dev, "failed to parse cpu-dma-latency\n");
+					goto out;
+				}
+			}
+		} else {
+			dev_dbg(dev, "no %s property found\n",
+					qos_planes_name[i]);
+			skip_qos_from_dt = true;
+		}
+
+		if (skip_qos_from_dt) {
+			pdata->cpu_dma_latency_tbl_sz = 1;
+			pdata->cpu_dma_latency_us = devm_kzalloc(dev,
+				sizeof(*pdata->cpu_dma_latency_us) *
+				pdata->cpu_dma_latency_tbl_sz,
+				GFP_KERNEL);
+			if (!pdata->cpu_dma_latency_us)
+				goto out;
+			pdata->cpu_dma_latency_us[0] =
+				MSM_MMC_DEFAULT_CPU_DMA_LATENCY;
+		}
+		sdhci_msm_populate_affinity(pdata, np,
+				qos_affinity_name[i], qos_affinity_mask[i]);
+		sdhci_msm_update_host_qos_data(pdata, host, i);
+	}
+
+	return 0;
+out:
+	return -EINVAL;
+}
+
 /* Parse platform data */
-static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
+static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev,
+						struct sdhci_host *host)
 {
 	struct sdhci_msm_pltfm_data *pdata = NULL;
 	struct device_node *np = dev->of_node;
 	u32 bus_width = 0;
-	u32 cpu_dma_latency;
 	int len, i, mpm_int;
 	int clk_table_len;
 	u32 *clk_table = NULL;
-//	u8 rc;	//ASUS_BSP Deeo : add return value for request gpio +++
+	u8 rc;	//ASUS_BSP Deeo : add return value for request gpio +++
 	enum of_gpio_flags flags = OF_GPIO_ACTIVE_LOW;
 
 	pdata = devm_kzalloc(dev, sizeof(*pdata), GFP_KERNEL);
@@ -1506,7 +1712,7 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
 	printk("[SD] pdata->status_gpio %d\n", pdata->status_gpio);
 
 	//ASUS_BSP Deeo : request gpio enable pin +++
-/*	pdata->enable_gpio= of_get_named_gpio_flags(np, "en-gpios", 0, &flags);
+	pdata->enable_gpio= of_get_named_gpio_flags(np, "en-gpios", 0, &flags);
 	printk("[SD] pdata->enable_gpio %d\n", pdata->enable_gpio);
 	if (gpio_is_valid(pdata->enable_gpio)) {
 		printk("[SD] pdata->enable_gpio %d\n", pdata->enable_gpio);
@@ -1520,7 +1726,7 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
 			printk("[SD] free GPIO %d\n", pdata->enable_gpio);
 			gpio_free(pdata->enable_gpio);
 		}
-	}*/
+	}
 	//ASUS_BSP Deeo : request gpio enable pin ---
 
 	of_property_read_u32(np, "qcom,bus-width", &bus_width);
@@ -1532,12 +1738,9 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
 		dev_notice(dev, "invalid bus-width, default to 1-bit mode\n");
 		pdata->mmc_bus_width = 0;
 	}
+	if (sdhci_msm_populate_qos(dev, pdata, host))
+		goto out;
 
-	if (!of_property_read_u32(np, "qcom,cpu-dma-latency-us",
-				&cpu_dma_latency))
-		pdata->cpu_dma_latency_us = cpu_dma_latency;
-	else
-		pdata->cpu_dma_latency_us = MSM_MMC_DEFAULT_CPU_DMA_LATENCY;
 	if (sdhci_msm_dt_get_array(dev, "qcom,clk-rates",
 			&clk_table, &clk_table_len, 0)) {
 		dev_err(dev, "failed parsing supported clock rates\n");
@@ -1604,16 +1807,20 @@ static struct sdhci_msm_pltfm_data *sdhci_msm_populate_pdata(struct device *dev)
 	if (of_get_property(np, "qcom,nonremovable", NULL))
 		pdata->nonremovable = true;
 
+	if (of_get_property(np, "qcom,modified-dynamic-qos", NULL))
+		pdata->use_mod_dynamic_qos = true;
+
 	if (of_get_property(np, "qcom,nonhotplug", NULL))
 		pdata->nonhotplug = true;
+
+	if (of_property_read_bool(np, "qcom,no-1p8v"))
+		pdata->no_1p8v = true;
 
 	if (!of_property_read_u32(np, "qcom,dat1-mpm-int",
 				  &mpm_int))
 		pdata->mpm_sdiowakeup_int = mpm_int;
 	else
 		pdata->mpm_sdiowakeup_int = -1;
-
-	sdhci_msm_populate_affinity_type(pdata, np);
 
 	return pdata;
 out:
@@ -2013,13 +2220,13 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 	for (i = 0; i < ARRAY_SIZE(vreg_table); i++) {
 		if (vreg_table[i]) {
 			if (enable) {
-				if (strcmp(pdata->name,"mmc1") || !strcmp(vreg_table[i]->name,"vdd-io")) {		//ASUS_BSP Deeo : except not mmc1 host & vdd-io
+				if (strcmp(pdata->name,"mmc1") || !strcmp(vreg_table[i]->name,"vdd-io")) {		//ASUS_BSP Deeo : except not mmc1 nost & vdd-io
 					ret = sdhci_msm_vreg_enable(vreg_table[i]);
 				//ASUS_BSP Deeo : Replace L11 enable pin to GPIO +++
 				} else {
-					ret = sdhci_msm_vreg_enable(vreg_table[i]);
-					/*if ((g_ASUS_hwID < ZE500KL_ER1) || (ZE500KG_EVB <= g_ASUS_hwID &&  g_ASUS_hwID < ZE500KG_ER1)
-										|| (ZE500KL_CMCC_EVB <= g_ASUS_hwID && g_ASUS_hwID < ZE500KL_CMCC_ER1)) {
+					//if ((g_ASUS_hwID < ZE500KL_ER1) || (ZE500KG_EVB <= g_ASUS_hwID &&  g_ASUS_hwID < ZE500KG_ER1)
+					//					|| (ZE500KL_CMCC_EVB <= g_ASUS_hwID && g_ASUS_hwID < ZE500KL_CMCC_ER1)) {
+					if (!gpio_is_valid(pdata->enable_gpio)) {
 						printk("[SD] use LDO11 as power\n");
 						ret = sdhci_msm_vreg_enable(vreg_table[i]);
 					} else if (!strcmp(vreg_table[i]->name,"vdd")) {
@@ -2027,11 +2234,11 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 							gpio_set_value(pdata->enable_gpio, 1);
 							printk("[SD] enable_gpio %d\n", gpio_get_value(pdata->enable_gpio));
 						}
-					}*/
+					}
 				}
 				//ASUS_BSP Deeo : Replace L11 enable pin to GPIO ---
 			}else {
-				if (strcmp(pdata->name,"mmc1") || !strcmp(vreg_table[i]->name,"vdd-io")) {		//ASUS_BSP Deeo : except not mmc1 host & vdd-io
+				if (strcmp(pdata->name,"mmc1") || !strcmp(vreg_table[i]->name,"vdd-io")) {		//ASUS_BSP Deeo : except not mmc1 nost & vdd-io
 					ret = sdhci_msm_vreg_disable(vreg_table[i]);
 
 					//ASUS_BSP : add delay time after close mmc1 vdd-io +++
@@ -2041,9 +2248,9 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 
 				//ASUS_BSP Deeo : Replace L11 enable pin to GPIO +++
 				} else {
-					ret = sdhci_msm_vreg_disable(vreg_table[i]);
-					/*if ((g_ASUS_hwID < ZE500KL_ER1) || (ZE500KG_EVB <= g_ASUS_hwID &&  g_ASUS_hwID < ZE500KG_ER1)
-										|| (ZE500KL_CMCC_EVB <= g_ASUS_hwID && g_ASUS_hwID < ZE500KL_CMCC_ER1)) {
+					//if ((g_ASUS_hwID < ZE500KL_ER1) || (ZE500KG_EVB <= g_ASUS_hwID &&  g_ASUS_hwID < ZE500KG_ER1)
+					//					|| (ZE500KL_CMCC_EVB <= g_ASUS_hwID && g_ASUS_hwID < ZE500KL_CMCC_ER1)) {
+					if (!gpio_is_valid(pdata->enable_gpio)) {
 						printk("[SD] use LDO11 as power\n");
 						ret = sdhci_msm_vreg_disable(vreg_table[i]);
 					} else if (!strcmp(vreg_table[i]->name,"vdd")) {
@@ -2051,7 +2258,7 @@ static int sdhci_msm_setup_vreg(struct sdhci_msm_pltfm_data *pdata,
 							gpio_set_value(pdata->enable_gpio, 0);
 							printk("[SD] enable_gpio %d\n", gpio_get_value(pdata->enable_gpio));
 						}
-					}*/
+					}
 				}
 				//ASUS_BSP Deeo : Replace L11 enable pin to GPIO ---
 			}
@@ -2070,6 +2277,7 @@ out:
 static int sdhci_msm_vreg_reset(struct sdhci_msm_pltfm_data *pdata)
 {
 	int ret;
+
 	ret = sdhci_msm_setup_vreg(pdata, 1, true);
 	if (ret)
 		return ret;
@@ -2195,6 +2403,18 @@ static irqreturn_t sdhci_msm_sdiowakeup_irq(int irq, void *data)
 	return IRQ_HANDLED;
 }
 
+void sdhci_msm_dump_pwr_ctrl_regs(struct sdhci_host *host)
+{
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_msm_host *msm_host = pltfm_host->priv;
+
+	pr_err("%s: PWRCTL_STATUS: 0x%08x | PWRCTL_MASK: 0x%08x | PWRCTL_CTL: 0x%08x\n",
+		mmc_hostname(host->mmc),
+		readl_relaxed(msm_host->core_mem + CORE_PWRCTL_STATUS),
+		readl_relaxed(msm_host->core_mem + CORE_PWRCTL_MASK),
+		readl_relaxed(msm_host->core_mem + CORE_PWRCTL_CTL));
+}
+
 static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 {
 	struct sdhci_host *host = (struct sdhci_host *)data;
@@ -2205,12 +2425,13 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 	int ret = 0;
 	int pwr_state = 0, io_level = 0;
 	unsigned long flags;
+	int retry = 10;
 
 	irq_status = readb_relaxed(msm_host->core_mem + CORE_PWRCTL_STATUS);
-	//pr_debug("%s: Received IRQ(%d), status=0x%x\n",
-	//	mmc_hostname(msm_host->mmc), irq, irq_status);
+	pr_debug("%s: Received IRQ(%d), status=0x%x\n",
+		mmc_hostname(msm_host->mmc), irq, irq_status);
 
-	//printk("%s: Received IRQ(%d), status=0x%x\n", mmc_hostname(msm_host->mmc), irq, irq_status);
+	printk("%s: Received IRQ(%d), status=0x%x\n", mmc_hostname(msm_host->mmc), irq, irq_status);
 
 	/* Clear the interrupt */
 	writeb_relaxed(irq_status, (msm_host->core_mem + CORE_PWRCTL_CLEAR));
@@ -2221,6 +2442,29 @@ static irqreturn_t sdhci_msm_pwr_irq(int irq, void *data)
 	 * completed before its next update to registers within hc_mem.
 	 */
 	mb();
+	/*
+	 * There is a rare HW scenario where the first clear pulse could be
+	 * lost when actual reset and clear/read of status register is
+	 * happening at a time. Hence, retry for at least 10 times to make
+	 * sure status register is cleared. Otherwise, this will result in
+	 * a spurious power IRQ resulting in system instability.
+	 */
+	while (irq_status &
+		readb_relaxed(msm_host->core_mem + CORE_PWRCTL_STATUS)) {
+		if (retry == 0) {
+			pr_err("%s: Timedout clearing (0x%x) pwrctl status register\n",
+				mmc_hostname(host->mmc), irq_status);
+			sdhci_msm_dump_pwr_ctrl_regs(host);
+			BUG_ON(1);
+		}
+		writeb_relaxed(irq_status,
+				(msm_host->core_mem + CORE_PWRCTL_CLEAR));
+		retry--;
+		udelay(10);
+	}
+	if (likely(retry < 10))
+		pr_debug("%s: success clearing (0x%x) pwrctl status register, retries left %d\n",
+				mmc_hostname(host->mmc), irq_status, retry);
 
 	/* Handle BUS ON/OFF*/
 	if (irq_status & CORE_PWRCTL_BUS_ON) {
@@ -2935,6 +3179,8 @@ void sdhci_msm_dump_vendor_regs(struct sdhci_host *host)
 		readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC),
 		readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_ADMA_ERR_ADDR0),
 		readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_ADMA_ERR_ADDR1));
+	pr_info("Vndr func2: 0x%08x\n",
+		readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_FUNC2));
 
 	/*
 	 * tbsel indicates [2:0] bits and tbsel2 indicates [7:4] bits
@@ -2966,6 +3212,48 @@ void sdhci_msm_dump_vendor_regs(struct sdhci_host *host)
 			CORE_TESTBUS_CONFIG);
 }
 
+void sdhci_msm_reset_workaround(struct sdhci_host *host, u32 enable)
+{
+	u32 vendor_func2;
+	unsigned long timeout;
+
+	vendor_func2 = readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_FUNC2);
+
+	if (enable) {
+		writel_relaxed(vendor_func2 | HC_SW_RST_REQ, host->ioaddr +
+				CORE_VENDOR_SPEC_FUNC2);
+		timeout = 10000;
+		while (readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_FUNC2) &
+				HC_SW_RST_REQ) {
+			if (timeout == 0) {
+				pr_info("%s: Applying wait idle disable workaround\n",
+					mmc_hostname(host->mmc));
+				/*
+				 * Apply the reset workaround to not wait for
+				 * pending data transfers on AXI before
+				 * resetting the controller. This could be
+				 * risky if the transfers were stuck on the
+				 * AXI bus.
+				 */
+				vendor_func2 = readl_relaxed(host->ioaddr +
+						CORE_VENDOR_SPEC_FUNC2);
+				writel_relaxed(vendor_func2 |
+					HC_SW_RST_WAIT_IDLE_DIS,
+					host->ioaddr + CORE_VENDOR_SPEC_FUNC2);
+				host->reset_wa_t = ktime_get();
+				return;
+			}
+			timeout--;
+			udelay(10);
+		}
+		pr_info("%s: waiting for SW_RST_REQ is successful\n",
+				mmc_hostname(host->mmc));
+	} else {
+		writel_relaxed(vendor_func2 & ~HC_SW_RST_WAIT_IDLE_DIS,
+				host->ioaddr + CORE_VENDOR_SPEC_FUNC2);
+	}
+}
+
 static struct sdhci_ops sdhci_msm_ops = {
 	.set_uhs_signaling = sdhci_msm_set_uhs_signaling,
 	.check_power_status = sdhci_msm_check_power_status,
@@ -2979,6 +3267,7 @@ static struct sdhci_ops sdhci_msm_ops = {
 	.dump_vendor_regs = sdhci_msm_dump_vendor_regs,
 	.config_auto_tuning_cmd = sdhci_msm_config_auto_tuning_cmd,
 	.enable_controller_clock = sdhci_msm_enable_controller_clock,
+	.reset_workaround = sdhci_msm_reset_workaround,
 };
 
 static int sdhci_msm_cfg_mpm_pin_wakeup(struct sdhci_host *host, unsigned mode)
@@ -3019,6 +3308,7 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 	u32 version, caps;
 	u16 minor;
 	u8 major;
+	u32 val;
 
 	version = readl_relaxed(msm_host->core_mem + CORE_MCI_VERSION);
 	major = (version & CORE_VERSION_MAJOR_MASK) >>
@@ -3049,6 +3339,16 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 	}
 
 	/*
+	 * Enable one MID mode for SDCC5 (major 1) on 8916/8939 (minor 0x2e) and
+	 * on 8992 (minor 0x3e) as a workaround to reset for data stuck issue.
+	 */
+	if (major == 1 && (minor == 0x2e || minor == 0x3e)) {
+		host->quirks2 |= SDHCI_QUIRK2_USE_RESET_WORKAROUND;
+		val = readl_relaxed(host->ioaddr + CORE_VENDOR_SPEC_FUNC2);
+		writel_relaxed((val | CORE_ONE_MID_EN),
+			host->ioaddr + CORE_VENDOR_SPEC_FUNC2);
+	}
+	/*
 	 * SDCC 5 controller with major version 1, minor version 0x34 and later
 	 * with HS 400 mode support will use CM DLL instead of CDC LP 533 DLL.
 	 */
@@ -3066,6 +3366,7 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 	writel_relaxed(caps, host->ioaddr + CORE_VENDOR_SPEC_CAPABILITIES0);
 }
 
+extern void create_emmc_health_proc_file(void);  //ASUS_BSP lei_guo : add proc file node for eMMC health +++
 static int sdhci_msm_probe(struct platform_device *pdev)
 {
 	struct sdhci_host *host;
@@ -3113,7 +3414,7 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 			goto pltfm_free;
 		}
 
-		msm_host->pdata = sdhci_msm_populate_pdata(&pdev->dev);
+		msm_host->pdata = sdhci_msm_populate_pdata(&pdev->dev, host);
 		if (!msm_host->pdata) {
 			dev_err(&pdev->dev, "DT parsing error\n");
 			goto pltfm_free;
@@ -3285,9 +3586,15 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	host->quirks2 |= SDHCI_QUIRK2_IGNORE_DATATOUT_FOR_R1BCMD;
 	host->quirks2 |= SDHCI_QUIRK2_BROKEN_PRESET_VALUE;
 	host->quirks2 |= SDHCI_QUIRK2_USE_RESERVED_MAX_TIMEOUT;
+	host->quirks2 |= SDHCI_QUIRK2_BROKEN_LED_CONTROL;
 
 	if (host->quirks2 & SDHCI_QUIRK2_ALWAYS_USE_BASE_CLOCK)
 		host->quirks2 |= SDHCI_QUIRK2_DIVIDE_TOUT_BY_4;
+
+	host->host_use_default_qos = !msm_host->pdata->use_mod_dynamic_qos;
+	sdhci_msm_print_qos_data(&pdev->dev, host);
+	dev_info(&pdev->dev, "Host using %s pm_qos\n",
+		host->host_use_default_qos ? "default" : "mod dynamic");
 
 	host_version = readw_relaxed((host->ioaddr + SDHCI_HOST_VERSION));
 	dev_dbg(&pdev->dev, "Host Version: 0x%x Vendor Version 0x%x\n",
@@ -3309,6 +3616,9 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 
 	host->quirks2 |= SDHCI_QUIRK2_IGN_DATA_END_BIT_ERROR;
 	host->quirks2 |= SDHCI_QUIRK2_ADMA_SKIP_DATA_ALIGNMENT;
+
+	if (msm_host->pdata->no_1p8v)
+		host->quirks2 |= SDHCI_QUIRK2_NO_1_8_V;
 
 	/* Setup PWRCTL irq */
 	msm_host->pwr_irq = platform_get_irq_byname(pdev, "pwr_irq");
@@ -3335,6 +3645,7 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	/* Set host capabilities */
 	msm_host->mmc->caps |= msm_host->pdata->mmc_bus_width;
 	msm_host->mmc->caps |= msm_host->pdata->caps;
+	msm_host->mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY;
 	msm_host->mmc->caps2 |= msm_host->pdata->caps2;
 	msm_host->mmc->caps2 |= MMC_CAP2_CORE_RUNTIME_PM;
 	msm_host->mmc->caps2 |= MMC_CAP2_PACKED_WR;
@@ -3348,17 +3659,14 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	msm_host->mmc->caps2 |= MMC_CAP2_ASYNC_SDIO_IRQ_4BIT_MODE;
 	msm_host->mmc->pm_caps |= MMC_PM_KEEP_POWER | MMC_PM_WAKE_SDIO_IRQ;
 	msm_host->mmc->caps2 |= MMC_CAP2_CORE_PM;
-//ASUS_BSP +++ Gavin_Chang "card detect config"
-	msm_host->mmc->cd_delay = 100;   //default 100ms
-//ASUS_BSP --- Gavin_Chang "card detect config"
+	//ASUS_BSP +++ Allen_Zhuang "card detect config"
+       msm_host->mmc->cd_delay = 200;   //default 200ms
+	//ASUS_BSP --- Allen_Zhuang "card detect config"
 	if (msm_host->pdata->nonremovable)
 		msm_host->mmc->caps |= MMC_CAP_NONREMOVABLE;
 
 	if (msm_host->pdata->nonhotplug)
 		msm_host->mmc->caps2 |= MMC_CAP2_NONHOTPLUG;
-
-	host->cpu_dma_latency_us = msm_host->pdata->cpu_dma_latency_us;
-	host->pm_qos_req_dma.type = msm_host->pdata->cpu_affinity_type;
 
 	init_completion(&msm_host->pwr_irq_completion);
 
@@ -3455,6 +3763,28 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 		       mmc_hostname(host->mmc), __func__, ret);
 		device_remove_file(&pdev->dev, &msm_host->auto_cmd21_attr);
 	}
+
+	//ASUS BSP Deeo : add for sd_status +++
+	if (!strcmp("mmc1",mmc_hostname(host->mmc))) {
+		msm_host->cd_status_attr.show = show_cd_status;
+		msm_host->cd_status_attr.store = store_cd_status;
+		sysfs_attr_init(&msm_host->cd_status_attr.attr);
+		msm_host->cd_status_attr.attr.name = "cd_gpio_status";
+		msm_host->cd_status_attr.attr.mode = S_IRUGO | S_IWUSR;
+		ret = device_create_file(&pdev->dev, &msm_host->cd_status_attr);
+		if (ret) {
+			pr_err("%s: %s: failed creating auto-cmd21 attr: %d\n",
+				   mmc_hostname(host->mmc), __func__, ret);
+			device_remove_file(&pdev->dev, &msm_host->cd_status_attr);
+		}
+	}
+	//ASUS BSP Deeo : add for sd_status ---
+
+	//ASUS BSP lei_guo : create proc file +++
+	if (!strcmp("mmc0",mmc_hostname(host->mmc))) {
+		create_emmc_health_proc_file();
+	}
+	//ASUS BSP lei_guo : create proc file ---
 
 	if (msm_host->pdata->mpm_sdiowakeup_int != -1) {
 		ret = sdhci_msm_cfg_mpm_pin_wakeup(host, SDC_DAT1_ENABLE);

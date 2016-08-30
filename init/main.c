@@ -87,6 +87,8 @@
 #include <asm/smp.h>
 #endif
 
+#include <linux/asus_global.h>
+
 static int kernel_init(void *);
 
 extern void init_IRQ(void);
@@ -135,16 +137,13 @@ static char *static_command_line;
 static char *execute_command;
 static char *ramdisk_execute_command;
 
-//+++ ASUS_BSP : miniporting
+#if 0
 enum DEVICE_HWID g_ASUS_hwID=ZE500KL_UNKNOWN;
 char hwid_info[32]={0};
-
 EXPORT_SYMBOL(g_ASUS_hwID);
-
  static int set_hardware_id(char *str)
  {
 	strcpy(hwid_info,"HW ID : ");
-	// ZE500KL
 	if ( strcmp("ZE500KL_EVB", str) == 0 )
 	{
 		g_ASUS_hwID = ZE500KL_EVB;
@@ -345,7 +344,7 @@ EXPORT_SYMBOL(g_ASUS_hwID);
 	return 0;
 }
  __setup("HW_ID=", set_hardware_id);
-
+#endif
 //--- ASUS_BSP : miniporting
 
 //+++ ASUS_BSP : Add for FM ID
@@ -368,7 +367,65 @@ __setup("FM_ID=", set_fm_id);
 EXPORT_SYMBOL(g_ASUS_fmID);
 //--- ASUS_BSP : Add for FM ID
 
-//+++ ASUS_BSP : miniporting : Add for audio dbg mode
+//+++ ASUS_BSP : Add for LASER ID
+int g_ASUS_laserID = 1;
+
+static int set_laser_id(char *str)
+{
+    if ( strcmp("1", str) == 0 )
+    {
+        g_ASUS_laserID = 1;
+    }
+    else
+    {
+        g_ASUS_laserID = 0;
+    }
+    printk("Kernel LASER ID = %d\n", g_ASUS_laserID);
+    return 0;
+}
+__setup("LASER_ID=", set_laser_id);
+EXPORT_SYMBOL(g_ASUS_laserID);
+//--- ASUS_BSP : Add for LASER ID
+
+#ifdef ASUS_ZC550KL_PROJECT
+uint32_t zc550kl_pcb_rev_val = ZC550KL_8916_MP;
+static int set_zc550kl_pcb_rev(char *str)
+{
+	if(NULL == str || strlen(str) == 0)
+	{
+		zc550kl_pcb_rev_val = ZC550KL_8916_MP;
+		return 0;
+	}
+
+	if(0 == strcmp(str, "0"))
+	{
+		zc550kl_pcb_rev_val = ZC550KL_8916_MP;
+		//printk("PCB_VER: ZC550KL_8916_MP\n");
+	}
+	else if(0 == strcmp(str, "1"))
+	{
+		zc550kl_pcb_rev_val = ZC550KL_8939_PR;
+		//printk("PCB_VER: ZC550KL_8939_PR\n");
+	}
+	else if(0 == strcmp(str, "2"))
+	{
+		zc550kl_pcb_rev_val = ZC550KL_8939_ER;
+		//printk("PCB_VER: ZC550KL_8939_ER\n");
+	}
+
+	//printk("PCB_VER val = %u\n", zc550kl_pcb_rev_val);
+
+	return 0;
+}
+early_param("pcb_rev", set_zc550kl_pcb_rev);
+
+uint32_t get_zc550kl_pcb_rev(void)
+{
+	return zc550kl_pcb_rev_val;
+}
+EXPORT_SYMBOL(get_zc550kl_pcb_rev);
+
+//+++ ASUS_BSP : miniporting : Add for uart / kernel log
 int g_user_klog_mode = 0;
 EXPORT_SYMBOL(g_user_klog_mode);
 
@@ -387,7 +444,28 @@ static int set_user_klog_mode(char *str)
     return 0;
 }
 early_param("klog", set_user_klog_mode);
-int g_user_dbg_mode = 0;
+int g_uart_dbg_mode = 0;
+EXPORT_SYMBOL(g_uart_dbg_mode);
+
+static int set_uart_dbg_mode(char *str)
+{
+    if ( strcmp("y", str) == 0 )
+    {
+        g_uart_dbg_mode = 1;
+    }
+    else
+    {
+        g_uart_dbg_mode = 0;
+    }
+
+    //printk("Kernel uart dbg mode = %d\n", g_uart_dbg_mode);
+    return 0;
+}
+early_param("dbg", set_uart_dbg_mode);
+//--- ASUS_BSP : miniporting : Add for uart / kernel log
+#else
+//+++ ASUS_BSP : miniporting : Add for audio dbg mode
+int g_user_dbg_mode = 1;
 EXPORT_SYMBOL(g_user_dbg_mode);
 
 static int set_user_dbg_mode(char *str)
@@ -400,12 +478,81 @@ static int set_user_dbg_mode(char *str)
     {
         g_user_dbg_mode = 0;
     }
-
-    //printk("Kernel dbg mode = %d\n", g_user_dbg_mode);
+    g_user_dbg_mode = 1;
+    printk("Kernel dbg mode = %d\n", g_user_dbg_mode);
     return 0;
 }
-early_param("dbg", set_user_dbg_mode);
+__setup("dbg=", set_user_dbg_mode);
 //--- ASUS_BSP : miniporting : Add for audio dbg mode
+#endif
+
+//add for UNLOCKED judgement ++++
+int unlocked_judgement = -1;
+EXPORT_SYMBOL(unlocked_judgement);
+
+static int set_unlocked_judgement(char *str)
+{
+    if ( strcmp("Y", str) == 0 )
+    {
+        unlocked_judgement = 1;
+    }
+    else
+    {
+        unlocked_judgement = 0;
+    }
+
+    printk("Kernel unlocked_judgement = %d\n", unlocked_judgement);
+    return 0;
+}
+__setup("UNLOCKED=", set_unlocked_judgement);
+//add for UNLOCKED judgement ----
+
+//add for SB judgement ++++
+int SB_judgement = -1;
+EXPORT_SYMBOL(SB_judgement);
+
+static int set_SB_judgement(char *str)
+{
+    if ( strcmp("Y", str) == 0 )
+    {
+        SB_judgement = 1;
+    }
+    else
+    {
+        SB_judgement = 0;
+    }
+
+    printk("Kernel SB_judgement = %d\n", SB_judgement);
+    return 0;
+}
+__setup("SB=", set_SB_judgement);
+//add for SB judgement ----
+
+//ASUS_BSP Austin_T : add for kernel charger mode. +++
+bool g_Charger_mode = false;
+int g_CHG_mode = 0;
+static int set_charger_mode(char *str)
+{
+    if ( strncmp("charger", str, 7) == 0 )
+    {
+        g_Charger_mode = true;
+        g_CHG_mode = 1;
+	}
+    else
+    {
+        g_Charger_mode = false;
+        if( strcmp("bank", str) == 0 )
+            g_CHG_mode = 2;
+         else
+           g_CHG_mode = 0;
+	}
+
+    printk("g_Charger_mode = %d\n", g_Charger_mode);
+    return 0;
+}
+__setup("androidboot.mode=", set_charger_mode);
+EXPORT_SYMBOL(g_Charger_mode);
+//ASUS_BSP Austin_T : add for kernel charger mode. ---
 
 //+++ ASUS_BSP: Louis, parsing lcd id from aboot
 int g_asus_lcdID = -1;
@@ -461,27 +608,7 @@ const char* get_oem_ssn(void)
 {
 	return g_oem_ssn_str;
 }
-
 //--- ASUS_BSP: Enter_Zhang
-
-//+++ ASUS_BSP Jorney_dong: enable ZC550KL charger mode
-int g_CHG_mode=0;
-static int set_chg_mode(char *str)
-{
-       if ( strncmp("charger", str, 7) == 0 )
-       {
-               g_CHG_mode = 1;
-       }
-       else
-       {
-               g_CHG_mode = 0;
-       }
-       printk("ZC550KL charger mode = %d\n", g_CHG_mode);
-       return 0;
-}
-__setup("androidboot.mode=", set_chg_mode);
-
-//+++ ASUS_BSP Jorney_dong: enable ZC550KL charger mode
 
 //+++ ASUS_BSP: Yan_Sun
 enum CPU_FEATUREID cpu_feature_id = FEATUREID_UNKNOWN;
@@ -498,7 +625,7 @@ static int set_oem_feature_ID(char *str)
 		cpu_feature_id = FEATUREID_8916;
 		printk("cpu_feature_id = FEATUREID_8916\n");
 	}
-	else if(!strncmp(str,"01",2))
+	else if(!strncmp(str,"11",2))
 	{
 		cpu_feature_id = FEATUREID_COS;
 		printk("cpu_feature_id = FEATUREID_COS\n");
@@ -605,7 +732,6 @@ static int get_mcp_id(char *str)
 }
 __setup("MCP_ID=", get_mcp_id);
 //--- ASUS_BSP: Deeo add for MCP_ID
-
 /*
  * If set, this is an indication to the drivers that reset the underlying
  * device before going ahead with the initialization otherwise driver might

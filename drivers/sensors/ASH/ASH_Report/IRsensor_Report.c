@@ -20,7 +20,21 @@
 #include <linux/kernel.h>
 #include <linux/input.h>
 #include <linux/input/ASH.h>
-#include "../ASH_log.h"
+
+/**************************/
+/* Debug and Log System */
+/************************/
+#define MODULE_NAME			"ASH_Report"
+#define SENSOR_TYPE_NAME		"IRsensor"
+
+#undef dbg
+#ifdef ASH_REPORT_DEBUG
+	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#else
+	#define dbg(fmt, args...)
+#endif
+#define log(fmt, args...) printk(KERN_INFO "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 /******************/
 /*Global Variables*/
@@ -35,7 +49,7 @@ int IRsensor_report_register(void)
 	/* Proximity Input event allocate */
 	input_dev_ps = input_allocate_device();
 	if (!input_dev_ps) {		
-		err("Proximity Failed to allocate input event device\n");
+		err("%s: psensor input_allocate_device is return NULL Pointer. \n", __FUNCTION__);
 		return -ENOMEM;
 	}
 
@@ -51,14 +65,14 @@ int IRsensor_report_register(void)
 	/* Register Proximity input device */
 	ret = input_register_device(input_dev_ps);
 	if (ret < 0) {
-		err("Proximity Failed to register input event device\n");
+		err("%s: psensor input_register_device ERROR(%d). \n", __FUNCTION__, ret);
 		return -1;
 	}
 
 	/* Light Sensor Input event allocate */
 	input_dev_als = input_allocate_device();
 	if (!input_dev_als) {
-		err("Light Sensor Failed to allocate input event device\n");
+		err("%s: lsensor input_allocate_device is return NULL Pointer. \n", __FUNCTION__);
 		return -ENOMEM;
 	}
 
@@ -74,11 +88,11 @@ int IRsensor_report_register(void)
 	/* Register Light Sensor input device */
 	ret = input_register_device(input_dev_als);
 	if (ret < 0) {
-		err("Light Sensor Failed to register input event device\n");
+		err("%s: lsensor input_register_device ERROR(%d). \n", __FUNCTION__, ret);
 		return -1;
 	}
 
-	log("IR Sensor Input Event registration Success!\n");
+	dbg("Input Event Success Registration\n");
 	return 0;
 }
 EXPORT_SYMBOL(IRsensor_report_register);
@@ -97,7 +111,7 @@ void psensor_report_abs(int abs)
 
 	if(abs != IRSENSOR_REPORT_PS_AWAY &&
 		abs != IRSENSOR_REPORT_PS_CLOSE) {
-			err("Proximity Detect Object ERROR.\n");
+			err("%s: Proximity Detect Object ERROR.\n", __FUNCTION__);
 	}
 	input_report_abs(input_dev_ps, ABS_DISTANCE, abs);
 	input_sync(input_dev_ps);

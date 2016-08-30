@@ -54,7 +54,7 @@
 
 #define _FTS_DBG
 #ifdef _FTS_DBG
-#define FTS_DBG(fmt, args...) printk("[FT5X46]" fmt, ## args)
+#define FTS_DBG(fmt, args...) printk("[Focal]" fmt, ## args)
 #else
 #define FTS_DBG(fmt, args...) do{}while(0)
 #endif
@@ -70,6 +70,7 @@ void ftxxxx_release_apk_debug_channel(void);
 int fts_ctpm_fw_preupgrade_hwreset(struct i2c_client * client, u8* pbt_buf, u32 dw_lenth);
 int fts_ctpm_fw_preupgrade(struct i2c_client * client, u8* pbt_buf, u32 dw_lenth);
 int fts_ctpm_fw_upgrade(struct i2c_client * client, u8* pbt_buf, u32 dw_lenth);
+int focal_fw_auto_update(struct i2c_client *client);
 int fts_ctpm_fw_upgrade_ReadProjectCode(struct i2c_client *client);
 int fts_ctpm_fw_upgrade_ReadVendorID(struct i2c_client *client, u8 *ucPVendorID);
 /*

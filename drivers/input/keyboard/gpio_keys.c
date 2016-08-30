@@ -367,16 +367,18 @@ static ssize_t gpio_keys_wakeup_enable(struct device *dev,
 static ssize_t gpio_keys_store_enabled_wakeup(struct device *dev,
 				struct device_attribute *attr, const char *buf, size_t size)
 {
-		printk("[Gpio_keys] set volkey wakeup:True\n");
-
+#ifdef CONFIG_ZE500KL
+				printk("[Gpio_keys] set volkey wakeup:True\n");
+#endif
 		return gpio_keys_wakeup_enable(dev, attr, buf, size, 1);
 }
 
 static ssize_t gpio_keys_store_disabled_wakeup(struct device *dev,
 				struct device_attribute *attr, const char *buf, size_t size)
 {
-		printk("[Gpio_keys] set volkey wakeup:False\n");
-
+#ifdef CONFIG_ZE500KL
+				printk("[Gpio_keys] set volkey wakeup:False\n");
+#endif
 		return gpio_keys_wakeup_enable(dev, attr, buf, size, 0);
 }
 static DEVICE_ATTR(enabled_wakeup, S_IWUSR | S_IRUGO,
@@ -401,8 +403,9 @@ static struct attribute_group gpio_keys_attr_group = {
 	.attrs = gpio_keys_attrs,
 };
 
-
+#ifndef ASUS_ZC550KL_PROJECT
 unsigned int b_press = 0;
+#endif
 
 static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 {
@@ -421,26 +424,30 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 
 		if(state) {
 			//ASUS BSP Austin_T+++ : Fix DoubleClickVolumeKey sometimes can't bring up panel
-			//if ((button->code == KEY_VOLUMEUP) || (button->code == KEY_VOLUMEDOWN)) { //remove by freeman
-			if(button->code == KEY_VOLUMEUP){
+			if ((button->code == KEY_VOLUMEUP) || (button->code == KEY_VOLUMEDOWN)) {
 				printk("[Gpio_keys]vol_key:%x,pm sts:%x,\r\n", state, g_bResume);
 				wake_lock_timeout(&pwr_key_wake_lock, 3 * HZ);
 				printk("[Gpio_keys]Wakelock 3 sec for vol_key \n");
 			}
 			//ASUS BSP Austin_T--- : Fix DoubleClickVolumeKey sometimes can't bring up panel
-			/*if(button->code == 114)
-				b_press |= 0x01;*/     //remove by freeman
+		}
+
+#ifndef ASUS_ZC550KL_PROJECT
+		if (state) {
+			if(button->code == 114)
+				b_press |= 0x01;
 
 			if(button->code == 115)
 				b_press |= 0x02;
 		}
 		else {
-			/*if(button->code == 114)
-				b_press &= ~(0x01);*/      //remove by freeman
+			if(button->code == 114)
+				b_press &= ~(0x01);
 
 			if(button->code == 115)
 				b_press &= ~(0x02);
 		}
+#endif
 	}
 	input_sync(input);
 }

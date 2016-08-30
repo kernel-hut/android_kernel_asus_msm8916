@@ -15,16 +15,6 @@
 /**************************/
 /* Debug and Log System */
 /************************/
-#define MODULE_NAME	"ASH_testDriver"
-#undef dbg
-#ifdef ASH_INTERFACE_DEBUG
-	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s] "fmt,MODULE_NAME,##args)
-#else
-	#define dbg(fmt, args...)
-#endif
-#define log(fmt, args...) printk(KERN_INFO "[%s] "fmt,MODULE_NAME,##args)
-#define err(fmt, args...) printk(KERN_ERR "[%s] "fmt,MODULE_NAME,##args)
-
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/device.h>
@@ -244,7 +234,6 @@ static IRsensor_ATTR_Extension mATTR_Extension={
 static IRsensor_ATTR mIRsensor_ATTR={
 	.info_type={
 		.vendor="ASUS",
-		.version="2.2",
 	},
 	.ATTR_Calibration=&mATTR_Calibration,
 	.ATTR_BMMI=&mATTR_BMMI,

@@ -69,6 +69,7 @@ obj-$(CONFIG_MTD)		+= mtd/
 obj-$(CONFIG_SPI)		+= spi/
 obj-$(CONFIG_SPMI)		+= spmi/
 obj-$(CONFIG_SLIMBUS)		+= slimbus/
+obj-$(CONFIG_SOUNDWIRE)     += soundwire/
 obj-y				+= hsi/
 obj-y				+= net/
 obj-$(CONFIG_ATM)		+= atm/
@@ -171,10 +172,35 @@ obj-$(CONFIG_SENSORS_SSC)	+= sensors/
 
 #Texura
 ifdef CONFIG_TEXURA_ARM64
-	ifdef CONFIG_TEXURA_USERDEBUG
-	obj-y				+= exfat/userdebug/64/objects/
+	ifeq ($(ASUS_BUILD_PROJECT), ZC550KL)
+		ifeq ($(IS_BOARD_PLATFORM), 8939)
+			ifdef CONFIG_TEXURA_USERDEBUG
+			obj-y				+= exfat/ZC550KL/8939/userdebug/64/objects/
+			else
+			obj-y				+= exfat/ZC550KL/8939/user/64/objects/
+			endif
+		else
+			ifdef CONFIG_TEXURA_USERDEBUG
+			obj-y				+= exfat/ZC550KL/8916/userdebug/64/objects/
+			else
+			obj-y				+= exfat/ZC550KL/8916/user/64/objects/
+			endif
+		endif
 	else
-	obj-y				+= exfat/user/64/objects/
+		ifdef CONFIG_TEXURA_USERDEBUG
+		obj-y				+= ntfs/userdebug/64/objects/
+		obj-y				+= exfat/userdebug/64/objects/
+		else
+		obj-y				+= ntfs/user/64/objects/
+		obj-y				+= exfat/user/64/objects/
+		endif
 	endif
 else
+	ifdef CONFIG_TEXURA_USERDEBUG
+#	obj-y				+= ntfs/userdebug/32/objects/
+#	obj-y				+= exfat/userdebug/32/objects/
+	else
+#	obj-y				+= ntfs/user/32/objects/
+#	obj-y				+= exfat/user/32/objects/
+	endif
 endif

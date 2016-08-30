@@ -16,10 +16,8 @@
 //[---]Debug for active wakelock before entering suspend
 #include "power.h"
 
-
 static suspend_state_t autosleep_state;
 static struct workqueue_struct *autosleep_wq;
-
 //[+++]Debug for active wakelock before entering suspend
 static struct switch_dev pmsp_dev;
 struct work_struct pms_printer;
@@ -30,7 +28,6 @@ struct work_struct pm_cpuinfo_printer;
 void pmsp_print(void);
 extern bool g_resume_status;
 //[---]Debug for active wakelock before entering suspend
-
 /*
  * Note: it is only safe to mutex_lock(&autosleep_lock) if a wakeup_source
  * is active, otherwise a deadlock with try_to_suspend() is possible.
@@ -149,15 +146,11 @@ void pmsp_print(void){
 }
 
 EXPORT_SYMBOL(pmsp_print);
-
 void print_pm_cpuinfo(void){
     schedule_work(&pm_cpuinfo_printer);
     return;
 }
 EXPORT_SYMBOL(print_pm_cpuinfo);
-
-
-
 void pms_printer_func(struct work_struct *work){
 	static int pmsp_counter = 0;
 	if(pmsp_counter % 2){
@@ -169,8 +162,6 @@ void pms_printer_func(struct work_struct *work){
 		switch_set_state(&pmsp_dev,1);
 		pmsp_counter++;}
 }
-
-
 void pm_cpuinfo_func(struct work_struct *work){
 
 	static bool toggle = false;
@@ -179,8 +170,6 @@ void pm_cpuinfo_func(struct work_struct *work){
 	printk("%s: Dump PowerManagerService wakelocks, toggle %d\n",__func__, toggle ? 1 : 0);
 	switch_set_state(&pm_dumpthread_dev, toggle);
 }
-
-
 int __init pm_autosleep_init(void)
 {
 	//[+++]Debug for active wakelock before entering suspend
@@ -193,8 +182,6 @@ int __init pm_autosleep_init(void)
         printk("%s:fail to register switch power_manager_printer \n",__func__);
     else
         printk("%s:success to register pmsp switch \n",__func__);
-
-
     pm_dumpthread_dev.name = "UnattendedTimerDumpBusyThread";
     pm_dumpthread_dev.index = 0;
     INIT_WORK(&pm_cpuinfo_printer, pm_cpuinfo_func);
@@ -203,8 +190,6 @@ int __init pm_autosleep_init(void)
         printk("%s:fail to register switch device pm_dumpthread_dev\n",__func__);
     else
         printk("%s:success to register switch device pm_dumpthread_dev\n",__func__);
-
-
 	autosleep_ws = wakeup_source_register("autosleep");
 	if (!autosleep_ws)
 		return -ENOMEM;

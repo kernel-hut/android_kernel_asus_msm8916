@@ -55,17 +55,10 @@
 struct platform_device;
 
 struct kgsl_clk_stats {
-	unsigned int old_clock_time[KGSL_MAX_PWRLEVELS];
-	unsigned int clock_time[KGSL_MAX_PWRLEVELS];
-	unsigned int on_time_old;
 	unsigned int busy;
 	unsigned int total;
 	unsigned int busy_old;
 	unsigned int total_old;
-	ktime_t start;
-	ktime_t stop;
-	unsigned int elapsed;
-	unsigned int elapsed_old;
 };
 
 struct kgsl_pwr_constraint {
@@ -105,6 +98,7 @@ struct kgsl_pwr_constraint {
  * @pm_qos_wakeup_latency - allowed CPU latency in microseconds during wakeup
  * @bus_control - true if the bus calculation is independent
  * @bus_mod - modifier from the current power level for the bus vote
+ * @bus_percent_ab - current percent of total possible bus usage
  * @bus_index - default bus index into the bus_ib table
  * @bus_ib - the set of unique ib requests needed for the bus calculation
  * @constraint - currently active power constraint
@@ -138,6 +132,7 @@ struct kgsl_pwrctrl {
 	unsigned int pm_qos_wakeup_latency;
 	bool bus_control;
 	int bus_mod;
+	unsigned int bus_percent_ab;
 	struct device *devbw;
 	unsigned int bus_index[KGSL_MAX_PWRLEVELS];
 	uint64_t bus_ib[KGSL_MAX_PWRLEVELS];
@@ -150,7 +145,6 @@ struct kgsl_pwrctrl {
 	uint32_t thermal_highlow;
 };
 
-void kgsl_pwrctrl_irq(struct kgsl_device *device, int state);
 int kgsl_pwrctrl_init(struct kgsl_device *device);
 void kgsl_pwrctrl_close(struct kgsl_device *device);
 void kgsl_timer(unsigned long data);
@@ -162,9 +156,6 @@ void kgsl_pwrctrl_buslevel_update(struct kgsl_device *device,
 	bool on);
 int kgsl_pwrctrl_init_sysfs(struct kgsl_device *device);
 void kgsl_pwrctrl_uninit_sysfs(struct kgsl_device *device);
-int kgsl_pwrctrl_enable(struct kgsl_device *device);
-void kgsl_pwrctrl_disable(struct kgsl_device *device);
-bool kgsl_pwrctrl_isenabled(struct kgsl_device *device);
 int kgsl_pwrctrl_change_state(struct kgsl_device *device, int state);
 
 static inline unsigned long kgsl_get_clkrate(struct clk *clk)

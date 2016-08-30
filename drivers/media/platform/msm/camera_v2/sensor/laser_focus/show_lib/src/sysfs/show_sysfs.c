@@ -274,25 +274,11 @@ bool Laser_Forcus_sysfs_write_offset(int calvalue)
 	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
 
 	/* Write offset value to file */
-/*
 #ifdef ASUS_FACTORY_BUILD
 	rc = Sysfs_write_int(LASERFOCUS_SENSOR_OFFSET_CALIBRATION_FACTORY_FILE, calvalue);
 #else
-	rc = Sysfs_write_int(LASERFOCUS_SENSOR_OFFSET_CALIBRATION_FACTORY_FILE, calvalue);
+	rc = Sysfs_write_int(LASERFOCUS_SENSOR_OFFSET_CALIBRATION_FILE, calvalue);
 #endif
-*/
-	if(g_ASUS_bootmode == USER_MODE || g_ASUS_bootmode == CHARGER_FACTORY_MODE || g_ASUS_bootmode == FFBM_MODE)
-	{
-		rc = Sysfs_write_int(LASERFOCUS_SENSOR_OFFSET_CALIBRATION_FACTORY_FILE, calvalue);
-	}
-	else if(g_ASUS_bootmode == SHIPPING_MODE || g_ASUS_bootmode == CHARGER_SHIPPING_MODE)
-	{
-		rc = Sysfs_write_int(LASERFOCUS_SENSOR_OFFSET_CALIBRATION_FILE, calvalue);
-	}
-	else
-	{
-		rc = Sysfs_write_int(LASERFOCUS_SENSOR_OFFSET_CALIBRATION_FACTORY_FILE, calvalue);
-	}
 	if(!rc){
 		LOG_Handler(LOG_ERR, "%s: Write Offset Calibration file fail\n", __func__);
 		return false;
@@ -332,7 +318,6 @@ int Laser_Forcus_sysfs_read_cross_talk_offset(void)
 *	@param calvalue the cross talk value
 *
 */
-
 bool Laser_Forcus_sysfs_write_cross_talk_offset(int calvalue)
 {
 	bool rc = false;
@@ -340,28 +325,11 @@ bool Laser_Forcus_sysfs_write_cross_talk_offset(int calvalue)
 	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
 
 	/* Write cross talk value to file */
-/*	
 #ifdef ASUS_FACTORY_BUILD
 	rc = Sysfs_write_int(LASERFOCUS_SENSOR_CROSS_TALK_CALIBRATION_FACTORY_FILE, calvalue);
 #else
-	rc = Sysfs_write_int(LASERFOCUS_SENSOR_CROSS_TALK_CALIBRATION_FACTORY_FILE, calvalue);
+	rc = Sysfs_write_int(LASERFOCUS_SENSOR_CROSS_TALK_CALIBRATION_FILE, calvalue);
 #endif
-*/
-
-	if(g_ASUS_bootmode == USER_MODE || g_ASUS_bootmode == CHARGER_FACTORY_MODE || g_ASUS_bootmode == FFBM_MODE)
-	{
-		rc = Sysfs_write_int(LASERFOCUS_SENSOR_CROSS_TALK_CALIBRATION_FACTORY_FILE, calvalue);
-	}
-	else if(g_ASUS_bootmode == SHIPPING_MODE || g_ASUS_bootmode == CHARGER_SHIPPING_MODE)
-	{
-		rc = Sysfs_write_int(LASERFOCUS_SENSOR_CROSS_TALK_CALIBRATION_FILE, calvalue);
-	}
-	else
-	{
-		rc = Sysfs_write_int(LASERFOCUS_SENSOR_CROSS_TALK_CALIBRATION_FACTORY_FILE, calvalue);
-	}
-
-
 	if(!rc){
 		LOG_Handler(LOG_ERR, "%s: Write Cross-talk Offset Calibration file fail\n", __func__);
 		return false;

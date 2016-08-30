@@ -292,7 +292,8 @@ static const char * const fw_path[] = {
 	"/lib/firmware/updates/" UTS_RELEASE,
 	"/lib/firmware/updates",
 	"/lib/firmware/" UTS_RELEASE,
-	"/lib/firmware"
+	"/lib/firmware",
+	// "/firmware/image" // better_ding, wcnss should be loading from /system/etc/firmware with signed firmware
 };
 
 /*

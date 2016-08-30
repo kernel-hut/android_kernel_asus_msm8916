@@ -20,8 +20,8 @@
 #include <linux/kernel.h>
 #include <linux/interrupt.h>
 #include <linux/gpio.h>
+#include <linux/platform_device.h>
 #include <linux/input/ASH.h>
-#include "../ASH_log.h"
 
 #define HALL_INTEL_NAME 	"hall_det#"
 #define HALL_QCOM_NAME 	"qcom,hall-gpio"
@@ -30,6 +30,21 @@
 
 static int ASUS_HALL_SENSOR_GPIO;
 static HALLsensor_GPIO * mHALLsensor_GPIO;
+
+/**************************/
+/* Debug and Log System */
+/************************/
+#define MODULE_NAME			"ASH_GPIO"
+#define SENSOR_TYPE_NAME		"Hallsensor"
+
+#undef dbg
+#ifdef ASH_GPIO_DEBUG
+	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#else
+	#define dbg(fmt, args...)
+#endif
+#define log(fmt, args...) printk(KERN_INFO "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 static irqreturn_t HALLsensor_irq_handler(int irq, void *dev_id);
 
@@ -41,16 +56,17 @@ static irqreturn_t HALLsensor_irq_handler(int irq, void *dev_id);
 #include <linux/of_gpio.h>
 #define GPIO_LOOKUP_STATE	"hall_gpio_high"
 
-static void set_pinctrl(struct i2c_client *client)
+static void set_pinctrl(struct device *dev)
 {
 	int ret;
 	struct pinctrl *key_pinctrl;
 	struct pinctrl_state *set_state;
 	
-	key_pinctrl = devm_pinctrl_get(&client->dev);
+	key_pinctrl = devm_pinctrl_get(dev);
 	set_state = pinctrl_lookup_state(key_pinctrl, GPIO_LOOKUP_STATE);
 	ret = pinctrl_select_state(key_pinctrl, set_state);
-	log("%s: pinctrl_select_state = %d\n", __FUNCTION__, ret);
+	if(ret < 0)
+		err("%s: pinctrl_select_state ERROR(%d).\n", __FUNCTION__, ret);
 }
 #endif
 static int init_irq (void)
@@ -61,7 +77,7 @@ static int init_irq (void)
 	/* GPIO to IRQ */
 	irq = gpio_to_irq(ASUS_HALL_SENSOR_GPIO);
 	if (irq < 0) {
-		err("gpio_to_irq ERROR, irq=%d.\n", irq);
+		err("%s: gpio_to_irq ERROR(%d).\n", __FUNCTION__, irq);
 		return irq;
 	}else {
 		log("gpio_to_irq IRQ %d successed on GPIO:%d\n", irq, ASUS_HALL_SENSOR_GPIO);
@@ -80,12 +96,12 @@ static int init_irq (void)
 				HALL_INT_NAME, NULL);
 	#endif
 	
-	if (ret < 0) {
-		err("request_irq() ERROR %d.\n", ret);
+	if (ret < 0){
+		err("%s: request_irq/request_threaded_irq ERROR(%d).\n", __FUNCTION__, ret);
 		return ret;
-	}else {		
-		log("Disable irq !! \n");
-		disable_irq(irq);
+	}else {
+		dbg("Enable irq\n");
+		enable_irq_wake(irq);
 	}
 
 	return irq;
@@ -97,7 +113,7 @@ irqreturn_t HALLsensor_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-int HALLsensor_gpio_register(struct i2c_client *client, HALLsensor_GPIO *gpio_ist)
+int HALLsensor_gpio_register(struct platform_device *pdev, HALLsensor_GPIO *gpio_ist)
 {
 	int ret = 0;
 	int irq = 0;
@@ -112,21 +128,21 @@ int HALLsensor_gpio_register(struct i2c_client *client, HALLsensor_GPIO *gpio_is
 	
 	#ifdef GPIO_QCOM
 	log("Qcom GPIO \n");
-	set_pinctrl(client);
-	ASUS_HALL_SENSOR_GPIO = of_get_named_gpio(client->dev.of_node, HALL_QCOM_NAME, 0);	
+	set_pinctrl(&pdev->dev);
+	ASUS_HALL_SENSOR_GPIO = of_get_named_gpio(pdev->dev.of_node, HALL_QCOM_NAME, 0);	
 	#endif
 		
-	log("[GPIO] GPIO =%d(%d)\n", ASUS_HALL_SENSOR_GPIO, gpio_get_value(ASUS_HALL_SENSOR_GPIO));	
+	dbg("GPIO =%d(%d)\n", ASUS_HALL_SENSOR_GPIO, gpio_get_value(ASUS_HALL_SENSOR_GPIO));	
 	/* GPIO Request */
 	ret = gpio_request(ASUS_HALL_SENSOR_GPIO, HALL_IRQ_NAME);
 	if (ret) {
-		err("Unable to request gpio %s(%d)\n", HALL_IRQ_NAME, ASUS_HALL_SENSOR_GPIO);
+		err("%s: gpio_request ERROR(%d). \n", __FUNCTION__, ret);
 		return ret;
 	}
 	/* GPIO Direction */
 	ret = gpio_direction_input(ASUS_HALL_SENSOR_GPIO);
 	if (ret < 0) {
-		err("Unable to set the direction of gpio %d\n", ASUS_HALL_SENSOR_GPIO);
+		err("%s: gpio_direction_input ERROR(%d). \n", __FUNCTION__, ret);
 		return ret;
 	}
 	/*IRQ*/
@@ -145,3 +161,12 @@ int HALLsensor_gpio_unregister(int irq)
 	return 0;
 }
 EXPORT_SYMBOL(HALLsensor_gpio_unregister);
+
+int HALLsensor_gpio_value(void)
+{
+	 if (gpio_get_value(ASUS_HALL_SENSOR_GPIO) > 0)
+			return 1;
+        else
+                	return 0;		
+}
+EXPORT_SYMBOL(HALLsensor_gpio_value);

@@ -20,7 +20,21 @@
 #include <linux/kernel.h>
 #include <linux/input.h>
 #include <linux/input/ASH.h>
-#include "../ASH_log.h"
+
+/**************************/
+/* Debug and Log System */
+/************************/
+#define MODULE_NAME			"ASH_Report"
+#define SENSOR_TYPE_NAME		"Hallsensor"
+
+#undef dbg
+#ifdef ASH_REPORT_DEBUG
+	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#else
+	#define dbg(fmt, args...)
+#endif
+#define log(fmt, args...) printk(KERN_INFO "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 /******************/
 /*Global Variables*/
@@ -33,7 +47,7 @@ int HALLsensor_report_register(void)
 
 	input_dev_hall = input_allocate_device();     
 	if(!input_dev_hall){
-		err("Hall Sensor Failed to allocate input event device\n");
+		err("%s: input_allocate_device is return NULL Pointer. \n", __FUNCTION__);
 		return -ENOMEM;		
 	}
 
@@ -44,11 +58,11 @@ int HALLsensor_report_register(void)
 
 	ret = input_register_device(input_dev_hall);
 	if (ret) {
-		err("Hall Sensor Failed to register input event device\n");
+		err("%s: input_register_device ERROR(%d). \n", __FUNCTION__, ret);
 		return -1;		
 	}
 		
-	log("Hall Sensor Input Event registration Success!\n");
+	dbg("Input Event Success Registration\n");
 	return 0;
 }
 EXPORT_SYMBOL(HALLsensor_report_register);
@@ -64,7 +78,7 @@ void hallsensor_report_lid(int lid)
 {
 	if(lid != HALLSENSOR_REPORT_LID_OPEN &&
 		lid != HALLSENSOR_REPORT_LID_CLOSE) {
-			err("Hall Sensor Detect Magnetic ERROR.\n");
+			err("%s: Hall Sensor Detect Magnetic ERROR.\n", __FUNCTION__);
 	}
 	
 	input_report_switch(input_dev_hall, SW_LID, lid);

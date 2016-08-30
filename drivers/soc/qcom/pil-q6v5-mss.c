@@ -159,7 +159,7 @@ static void modem_free_memory(const struct subsys_desc *subsys)
 {
 	struct modem_data *drv = subsys_to_drv(subsys);
 
- 	pil_free_memory(&drv->q6->desc);
+	pil_free_memory(&drv->q6->desc);
 }
 
 static int modem_ramdump(int enable, const struct subsys_desc *subsys)
@@ -182,7 +182,7 @@ static int modem_ramdump(int enable, const struct subsys_desc *subsys)
 	if (ret < 0)
 		pr_err("Unable to dump modem fw memory (rc = %d).\n", ret);
 
-	ret = pil_mss_deinit_image(&drv->q6->desc);
+	ret = __pil_mss_deinit_image(&drv->q6->desc, false);
 	if (ret < 0)
 		pr_err("Unable to free up resources (rc = %d).\n", ret);
 
@@ -195,7 +195,12 @@ static irqreturn_t modem_wdog_bite_intr_handler(int irq, void *dev_id)
 	struct modem_data *drv = subsys_to_drv(dev_id);
 	if (drv->ignore_errors)
 		return IRQ_HANDLED;
+
 	pr_err("Watchdog bite received from modem software!\n");
+	if (drv->subsys_desc.system_debug &&
+			!gpio_get_value(drv->subsys_desc.err_fatal_gpio))
+		panic("%s: System ramdump requested. Triggering device restart!\n",
+							__func__);
 	subsys_set_crash_status(drv->subsys, true);
 	restart_modem(drv);
 	return IRQ_HANDLED;
@@ -361,10 +366,11 @@ static int pil_mss_driver_probe(struct platform_device *pdev)
 			return ret;
 	}
 	init_completion(&drv->stop_ack);
- 	/* Probe the MBA mem device if present */
- 	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
- 	if (ret)
- 		return ret;
+
+	/* Probe the MBA mem device if present */
+	ret = of_platform_populate(pdev->dev.of_node, NULL, NULL, &pdev->dev);
+	if (ret)
+		return ret;
 
 	return pil_subsys_init(drv, pdev);
 }
@@ -381,29 +387,29 @@ static int pil_mss_driver_exit(struct platform_device *pdev)
 
 static int pil_mba_mem_driver_probe(struct platform_device *pdev)
 {
- struct modem_data *drv;
+	struct modem_data *drv;
 
- if (!pdev->dev.parent)
- return -EINVAL;
+	if (!pdev->dev.parent)
+		return -EINVAL;
 
- drv = dev_get_drvdata(pdev->dev.parent);
- drv->mba_mem_dev_fixed = &pdev->dev;
+	drv = dev_get_drvdata(pdev->dev.parent);
+	drv->mba_mem_dev_fixed = &pdev->dev;
 
- return 0;
+	return 0;
 }
 
 static struct of_device_id mba_mem_match_table[] = {
- { .compatible = "qcom,pil-mba-mem" },
- {}
+	{ .compatible = "qcom,pil-mba-mem" },
+	{}
 };
 
 static struct platform_driver pil_mba_mem_driver = {
- .probe = pil_mba_mem_driver_probe,
- .driver = {
- .name = "pil-mba-mem",
- .of_match_table = mba_mem_match_table,
- .owner = THIS_MODULE,
- },
+	.probe = pil_mba_mem_driver_probe,
+	.driver = {
+		.name = "pil-mba-mem",
+		.of_match_table = mba_mem_match_table,
+		.owner = THIS_MODULE,
+	},
 };
 
 static struct of_device_id mss_match_table[] = {
@@ -427,11 +433,11 @@ static int __init pil_mss_init(void)
 {
 	int ret;
 
- 	ret = platform_driver_register(&pil_mba_mem_driver);
- 	if (!ret)
- 		ret = platform_driver_register(&pil_mss_driver);
+	ret = platform_driver_register(&pil_mba_mem_driver);
+	if (!ret)
+		ret = platform_driver_register(&pil_mss_driver);
 
- 	return ret;
+	return ret;
 }
 module_init(pil_mss_init);
 

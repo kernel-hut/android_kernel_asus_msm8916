@@ -89,7 +89,12 @@ void adreno_drawctxt_dump(struct kgsl_device *device,
 			goto stats;
 		}
 
-		spin_lock(&cmdbatch->lock);
+		/*
+		 * We may have cmdbatch timer running, which also uses same
+		 * lock, take a lock with software interrupt disabled (bh)
+		 * to avoid spin lock recursion.
+		 */
+		spin_lock_bh(&cmdbatch->lock);
 
 		if (!list_empty(&cmdbatch->synclist)) {
 			dev_err(device->dev,
@@ -98,7 +103,7 @@ void adreno_drawctxt_dump(struct kgsl_device *device,
 
 			kgsl_dump_syncpoints(device, cmdbatch);
 		}
-		spin_unlock(&cmdbatch->lock);
+		spin_unlock_bh(&cmdbatch->lock);
 	}
 
 stats:
@@ -145,7 +150,7 @@ int adreno_drawctxt_wait(struct adreno_device *adreno_dev,
 	long ret_temp;
 
 	if (kgsl_context_detached(context))
-		return -EINVAL;
+		return -ENOENT;
 
 	if (kgsl_context_invalid(context))
 		return -EDEADLK;
@@ -188,7 +193,7 @@ int adreno_drawctxt_wait(struct adreno_device *adreno_dev,
 
 	/* Return -EINVAL if the context was detached while we were waiting */
 	if (kgsl_context_detached(context))
-		ret = -EINVAL;
+		ret = -ENOENT;
 
 done:
 	trace_adreno_drawctxt_wait_done(-1, context->id, timestamp, ret);
@@ -277,8 +282,8 @@ void adreno_drawctxt_invalidate(struct kgsl_device *device,
 
 	spin_unlock(&drawctxt->lock);
 
-	/* Make sure all "retired" events are processed */
-	kgsl_process_event_group(device, &context->events);
+	/* Make sure all pending events are processed or cancelled */
+	kgsl_flush_event_group(device, &context->events);
 
 	/* Give the bad news to everybody waiting around */
 	wake_up_all(&drawctxt->waiting);
@@ -420,7 +425,7 @@ void adreno_drawctxt_sched(struct kgsl_device *device,
  * @context: Generic KGSL context container for the context
  *
  */
-int adreno_drawctxt_detach(struct kgsl_context *context)
+void adreno_drawctxt_detach(struct kgsl_context *context)
 {
 	struct kgsl_device *device;
 	struct adreno_device *adreno_dev;
@@ -429,7 +434,7 @@ int adreno_drawctxt_detach(struct kgsl_context *context)
 	int ret;
 
 	if (context == NULL)
-		return 0;
+		return;
 
 	device = context->device;
 	adreno_dev = ADRENO_DEVICE(device);
@@ -495,9 +500,7 @@ int adreno_drawctxt_detach(struct kgsl_context *context)
 	 * in and there will be no more commands in the RB pipe from this
 	 * context which is waht we are waiting for, so ignore -EAGAIN error
 	 */
-	if (-EAGAIN == ret)
-		ret = 0;
-	BUG_ON(ret);
+	BUG_ON(ret && ret != -EAGAIN);
 
 	kgsl_sharedmem_writel(device, &device->memstore,
 			KGSL_MEMSTORE_OFFSET(context->id, soptimestamp),
@@ -512,8 +515,6 @@ int adreno_drawctxt_detach(struct kgsl_context *context)
 	/* wake threads waiting to submit commands from this context */
 	wake_up_all(&drawctxt->waiting);
 	wake_up_all(&drawctxt->wq);
-
-	return ret;
 }
 
 void adreno_drawctxt_destroy(struct kgsl_context *context)
@@ -626,7 +627,7 @@ int adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 	/* Get a refcount to the new instance */
 	if (drawctxt) {
 		if (!_kgsl_context_get(&drawctxt->base))
-			return -EINVAL;
+			return -ENOENT;
 
 		new_pt = drawctxt->base.proc_priv->pagetable;
 	} else {

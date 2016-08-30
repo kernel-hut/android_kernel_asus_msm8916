@@ -774,9 +774,6 @@ static inline int usb_gadget_connect(struct usb_gadget *gadget)
 {
 	if (!gadget->ops->pullup)
 		return -EOPNOTSUPP;
-	if(g_ASUS_bootmode == USER_MODE) {
-			printk("[usb_otg] usb gadget connected \n");
-	}
 	return gadget->ops->pullup(gadget, 1);
 }
 
@@ -799,9 +796,6 @@ static inline int usb_gadget_disconnect(struct usb_gadget *gadget)
 {
 	if (!gadget->ops->pullup)
 		return -EOPNOTSUPP;
-	if(g_ASUS_bootmode == USER_MODE) {
-			printk("[usb_otg] usb gadget disonnected \n");
-	}
 	return gadget->ops->pullup(gadget, 0);
 }
 

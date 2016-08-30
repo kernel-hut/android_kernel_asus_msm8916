@@ -526,8 +526,7 @@ void pm_qos_update_request(struct pm_qos_request *req,
 		return;
 
 	if (!pm_qos_request_active(req)) {
-		//WARN(1, KERN_ERR "pm_qos_update_request() called for unknown object\n");
-		WARN(1, "%s() called for unknown object\n", __func__);
+		WARN(1, KERN_ERR "pm_qos_update_request() called for unknown object\n");
 		return;
 	}
 
@@ -578,8 +577,7 @@ void pm_qos_remove_request(struct pm_qos_request *req)
 		/* silent return to keep pcm code cleaner */
 
 	if (!pm_qos_request_active(req)) {
-		//WARN(1, KERN_ERR "pm_qos_remove_request() called for unknown object\n");
-		WARN(1, "%s() called for unknown object\n", __func__);
+		WARN(1, KERN_ERR "pm_qos_remove_request() called for unknown object\n");
 		return;
 	}
 

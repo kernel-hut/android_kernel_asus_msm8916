@@ -37,9 +37,8 @@ static int ft_rw_iic_drv_myread(struct i2c_client *client, u8 *buf, int length)
 	int ret = 0;
 	ret = ftxxxx_i2c_Read(client, NULL, 0, buf, length);
 
-	if(ret<0)
-		dev_err(&client->dev, "%s:IIC Read failed\n",__func__);
-
+	if (ret<0)
+		dev_err(&client->dev, "%s:IIC Read failed\n", __func__);
 	return ret;
 }
 
@@ -47,8 +46,8 @@ static int ft_rw_iic_drv_mywrite(struct i2c_client *client, u8 *buf, int length)
 {
 	int ret = 0;
 	ret = ftxxxx_i2c_Write(client, buf, length);
-	if(ret<0)
-		dev_err(&client->dev, "%s:IIC Write failed\n",__func__);
+	if (ret<0)
+		dev_err(&client->dev, "%s:IIC Write failed\n", __func__);
 	return ret;
 }
 
@@ -63,7 +62,7 @@ static int ft_rw_iic_drv_RDWR(struct i2c_client *client, unsigned long arg)
 	if (!access_ok(VERIFY_READ, (struct ft_rw_i2c_queue *)arg, sizeof(struct ft_rw_i2c_queue)))
 		return -EFAULT;
 
-	if (copy_from_user(&i2c_rw_queue,(struct ft_rw_i2c_queue *)arg, sizeof(struct ft_rw_i2c_queue)))
+	if (copy_from_user(&i2c_rw_queue, (struct ft_rw_i2c_queue *)arg, sizeof(struct ft_rw_i2c_queue)))
 		return -EFAULT;
 
 	if (i2c_rw_queue.queuenum > FT_I2C_RDWR_MAX_QUEUE)
@@ -75,7 +74,7 @@ static int ft_rw_iic_drv_RDWR(struct i2c_client *client, unsigned long arg)
 	if (!i2c_rw_msg)
 		return -ENOMEM;
 
-	if (copy_from_user(i2c_rw_msg, i2c_rw_queue.i2c_queue,i2c_rw_queue.queuenum*sizeof(struct ft_rw_i2c))) {
+	if (copy_from_user(i2c_rw_msg, i2c_rw_queue.i2c_queue, i2c_rw_queue.queuenum*sizeof(struct ft_rw_i2c))) {
 			kfree(i2c_rw_msg);
 			return -EFAULT;
 	}
@@ -123,7 +122,7 @@ static int ft_rw_iic_drv_RDWR(struct i2c_client *client, unsigned long arg)
 				ret = copy_to_user(data_ptrs[i], i2c_rw_msg[i].buf, i2c_rw_msg[i].length);
 		}
 		else
-			ret = ft_rw_iic_drv_mywrite(client,i2c_rw_msg[i].buf, i2c_rw_msg[i].length);
+			ret = ft_rw_iic_drv_mywrite(client, i2c_rw_msg[i].buf, i2c_rw_msg[i].length);
 	}
 
 	return ret;
@@ -233,8 +232,7 @@ long ft_rw_iic_drv_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 	ftdev = filp->private_data;
 
 	mutex_lock(&ft_rw_i2c_dev_tt->ft_rw_i2c_mutex);
-
-	switch (cmd){
+	switch (cmd) {
 	case FT_I2C_RW:
 		ret = ft_rw_iic_drv_RDWR(ftdev->client, arg);
 		break;
@@ -246,7 +244,7 @@ long ft_rw_iic_drv_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		break;
 	case FT_SET_START_TEST_INFO:
 		g_apk_start_test = (int)arg;
-		if(g_apk_start_test)
+		if (g_apk_start_test)
 			g_startbutton = 0;
 		break;
 	case FT_ENABLE_IRQ:
@@ -296,15 +294,15 @@ static int ft_rw_iic_drv_myinitdev(struct i2c_client *client)
 		ft_rw_iic_drv_major = MAJOR(devno);
 	}
 	if (err < 0) {
-		dev_err(&client->dev, "%s:ft_rw_iic_drv failed  error code=%d---\n",__func__, err);
+		dev_err(&client->dev, "%s:ft_rw_iic_drv failed  error code=%d---\n", __func__, err);
 		return err;
 	}
 
 	ft_rw_i2c_dev_tt = kmalloc(sizeof(struct ft_rw_i2c_dev), GFP_KERNEL);
-	if (!ft_rw_i2c_dev_tt){
+	if (!ft_rw_i2c_dev_tt) {
 		err = -ENOMEM;
 		unregister_chrdev_region(devno, 1);
-		dev_err(&client->dev, "%s:ft_rw_iic_drv failed\n",__func__);
+		dev_err(&client->dev, "%s:ft_rw_iic_drv failed\n", __func__);
 		return err;
 	}
 	ft_rw_i2c_dev_tt->client = client;
@@ -314,7 +312,7 @@ static int ft_rw_iic_drv_myinitdev(struct i2c_client *client)
 
 	fts_class = class_create(THIS_MODULE, "fts_class");
 	if (IS_ERR(fts_class)) {
-		dev_err(&client->dev, "%s:failed in creating class.\n",__func__);
+		dev_err(&client->dev, "%s:failed in creating class.\n", __func__);
 		return -1; 
 	}
 	/*create device node*/
@@ -326,7 +324,7 @@ static int ft_rw_iic_drv_myinitdev(struct i2c_client *client)
 
 int ft_rw_iic_drv_init(struct i2c_client *client)
 {
-	dev_dbg(&client->dev, "[FT5X46]----ft_rw_iic_drv init ---\n");
+	dev_dbg(&client->dev, "[FTS]----ft_rw_iic_drv init ---\n");
 	return ft_rw_iic_drv_myinitdev(client);
 }
 

@@ -5068,15 +5068,3 @@ static int __init init_workqueues(void)
 	return 0;
 }
 early_initcall(init_workqueues);
-
-int get_worker_function(void **worker_func, struct task_struct *task)
-{
-	work_func_t *fn = NULL;
-	struct worker *worker;
-
-	worker = probe_kthread_data(task);
-	probe_kernel_read(&fn, &worker->current_func, sizeof(fn));
-	*worker_func = (void *)fn;
-
-	return 0;
-}

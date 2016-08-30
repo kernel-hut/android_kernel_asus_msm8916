@@ -35,8 +35,6 @@ struct msm_laser_focus_ctrl_t;
 
 #include "laser_focus.h"
 
-
-
 // If "export ASUS_FACTORY_BUILD=y" command is run before build image
 #ifdef ASUS_FACTORY_BUILD
 #endif
@@ -68,12 +66,6 @@ enum msm_laser_focus_atd_device_trun_on_type {
 	MSM_LASER_FOCUS_DEVICE_DEINIT_CCI,	/* Device deinitialize CCI only */
 };
 
-enum laser_product_family{
-	PRODUCT_UNKNOWN,
-	PRODUCT_LAURA,
-	PRODUCT_OLIVIA,
-};
-
 /* Laser focus voltage information */
 struct msm_laser_focus_vreg {
 	struct camera_vreg_t *cam_vreg;
@@ -99,8 +91,8 @@ struct msm_laser_focus_ctrl_t {
 	int16_t device_state;
 	
 	/* For calibration */
-	int32_t laser_focus_offset_value;
-	uint32_t laser_focus_cross_talk_offset_value;
+	uint16_t laser_focus_offset_value;
+	uint16_t laser_focus_cross_talk_offset_value;
 
 	
 	uint16_t reg_tbl_size;
@@ -166,7 +158,6 @@ struct msm_laser_focus {
 #define DISABLE_VREG 0
 
 /* Calibration parameter */
-#define MSM_LASER_FOCUS_APPLY_NORMAL_CALIBRATION		0
 #define MSM_LASER_FOCUS_APPLY_OFFSET_CALIBRATION		10	/* Calibration 10cm*/
 #define MSM_LASER_FOCUS_APPLY_CROSSTALK_CALIBRATION	40	/* Calibration 40cm*/
 #define MSM_LASER_FOCUS_APPLY_INFINITY_CALIBRATION		70	/* Calibration infinity */
@@ -191,10 +182,7 @@ struct msm_laser_focus {
 #define DEVICE_DEBUG_VALUE3	"driver/LaserFocus_log_value3" /* Debug value for CE collect data */
 #define DEVICE_DEBUG_VALUE4	"driver/LaserFocus_log_value4" /* Debug value for CE collect data */
 #define DEVICE_DEBUG_VALUE5	"driver/LaserFocus_log_value5" /* Debug value for CE collect data */
-#define DEVICE_DEBUG_VALUE6	"driver/LaserFocus_log_value6"
-#define DEVICE_VALUE_CHECK	"driver/LaserFocus_value_check" /* Check sensor value */
-#define DEVICE_IOCTL_SET_K	"driver/LaserFocus_setK"
-#define DEVICE_IOCTL_PRODUCT_FAMILY	"driver/LaserFocus_ProductFamily"
+#define DEVICE_DEBUG_VALUE6 "driver/LaserFocus_log_value6" /* Debug value for CE collect data */
 
 /* Right of laser focus control file*/
 #ifdef ASUS_FACTORY_BUILD
@@ -208,6 +196,7 @@ struct msm_laser_focus {
 #define	DEVICE_DUMP_DEBUG_VALUE_MODE 0777	/* Dump register value right for vl6180x debug */
 #define	DEVICE_ENFORCE_MODE	0777	/* Laser focus disable right */
 #define	DEVICE_LOG_CTRL_MODE	0777	/* Log contorl right */
+#define DEVICE_DEBUG_VALUE_MODE 0777	/* Debug node right */
 #else
 #define	STATUS_PROC_FILE_MODE 0660	/* Status right */
 #define	STATUS_PROC_FILE_FOR_CAMERA_MODE 0660	/* Status (check on prob only) right */
@@ -219,6 +208,7 @@ struct msm_laser_focus {
 #define	DEVICE_DUMP_DEBUG_VALUE_MODE 0660	/* Dump register value right for vl6180x debug */
 #define	DEVICE_ENFORCE_MODE	0660	/* Laser focus disable right */
 #define	DEVICE_LOG_CTRL_MODE	0660	/* Log contorl right */
+#define DEVICE_DEBUG_VALUE_MODE 0664	/* Debug node right */
 #endif
 
 /* Delay time */
@@ -227,7 +217,7 @@ struct msm_laser_focus {
 #define READ_DELAY_TIME 500	/* us */
 
 /* Check device verify number */
-int Laser_Match_ID(struct msm_laser_focus_ctrl_t *dev_t, int chip_id_size);
+int match_id(struct msm_laser_focus_ctrl_t *dev_t, int chip_id_size);
 /* Voltage control */
 int32_t vreg_control(struct msm_laser_focus_ctrl_t *dev_t, int config);
 /* Power on component */
@@ -238,8 +228,6 @@ int32_t power_down(struct msm_laser_focus_ctrl_t *dev_t);
 int dev_init(struct msm_laser_focus_ctrl_t *dev_t);
 /* Deinitialize device */
 int dev_deinit(struct msm_laser_focus_ctrl_t *dev_t);
-
-void Laser_Match_Module(struct msm_laser_focus_ctrl_t *dev_t);
 /* Check device status */
 int dev_I2C_status_check(struct msm_laser_focus_ctrl_t *dev_t, int chip_id_size);
 /* Mutex controller handles mutex action */

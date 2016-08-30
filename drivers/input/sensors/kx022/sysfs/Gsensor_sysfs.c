@@ -23,7 +23,8 @@ int Gsensor_sysfs_read_calibration_data(struct calidata *cali_data)
 
 	/* Get calibration data */
 	ret = get_cali_data(GSEN_CALI_FILE_V3, cali_data);
-	if (ret < 0 || (g_ASUS_hwID >= ZE500KL_SR1 && cali_data->z_max == 0))	{
+	//if (ret < 0 || (g_ASUS_hwID >= ZE500KL_SR1 && cali_data->z_max == 0))	{
+	if (ret < 0 || (cali_data->z_max == 0))	{
 		printk("[Gsensor] New calibration file %s exists, try get old version data %s\n", GSEN_CALI_FILE_V3, GSEN_CALI_FILE_V2);
 		ret = get_cali_data(GSEN_CALI_FILE_V2, cali_data);
 	}

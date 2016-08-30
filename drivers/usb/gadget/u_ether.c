@@ -95,7 +95,7 @@ struct eth_dev {
 	struct list_head	tx_reqs, rx_reqs;
 	unsigned		tx_qlen;
 /* Minimum number of TX USB request queued to UDC */
-#define TX_REQ_THRESHOLD	5
+#define MAX_TX_REQ_WITH_NO_INT	5
 	int			no_tx_req_used;
 	int			tx_skb_hold_count;
 	u32			tx_req_bufsize;
@@ -307,7 +307,7 @@ rx_submit(struct eth_dev *dev, struct usb_request *req, gfp_t gfp_flags)
 	size_t		size = 0;
 	struct usb_ep	*out;
 	unsigned long	flags;
-	unsigned short reserve_headroom;
+	unsigned short reserve_headroom = 0;
 
 	spin_lock_irqsave(&dev->lock, flags);
 	if (dev->port_usb)
@@ -346,9 +346,7 @@ rx_submit(struct eth_dev *dev, struct usb_request *req, gfp_t gfp_flags)
 	spin_unlock_irqrestore(&dev->lock, flags);
 
 	if (dev->rx_needed_headroom)
-		reserve_headroom = dev->rx_needed_headroom;
-	else
-		reserve_headroom = NET_IP_ALIGN;
+		reserve_headroom = ALIGN(dev->rx_needed_headroom, 4);
 
 	pr_debug("%s: size: %zu + %d(hr)", __func__, size, reserve_headroom);
 
@@ -462,7 +460,7 @@ clean:
 	}
 
 	if (queue)
-		queue_work_on(0, uether_wq, &dev->rx_work);
+		queue_work(uether_wq, &dev->rx_work);
 }
 
 static int prealloc(struct list_head *list,
@@ -723,12 +721,12 @@ static void tx_complete(struct usb_ep *ep, struct usb_request *req)
 	dev->net->stats.tx_packets += n;
 
 	spin_lock(&dev->req_lock);
-	list_add_tail(&req->list, &dev->tx_reqs);
 
 	if (req->num_sgs) {
 		if (!req->status)
 			queue_work(uether_tx_wq, &dev->tx_work);
 
+		list_add_tail(&req->list, &dev->tx_reqs);
 		spin_unlock(&dev->req_lock);
 		return;
 	}
@@ -738,7 +736,8 @@ static void tx_complete(struct usb_ep *ep, struct usb_request *req)
 		req->length = 0;
 		in = dev->port_usb->in_ep;
 
-		if (!list_empty(&dev->tx_reqs)) {
+		/* Do not process further if no_interrupt is set */
+		if (!req->no_interrupt && !list_empty(&dev->tx_reqs)) {
 			new_req = container_of(dev->tx_reqs.next,
 					struct usb_request, list);
 			list_del(&new_req->list);
@@ -766,6 +765,16 @@ static void tx_complete(struct usb_ep *ep, struct usb_request *req)
 					length++;
 				}
 
+				/* set when tx completion interrupt needed */
+				spin_lock(&dev->req_lock);
+				dev->tx_qlen++;
+				if (dev->tx_qlen == MAX_TX_REQ_WITH_NO_INT) {
+					new_req->no_interrupt = 0;
+					dev->tx_qlen = 0;
+				} else {
+					new_req->no_interrupt = 1;
+				}
+				spin_unlock(&dev->req_lock);
 				new_req->length = length;
 				retval = usb_ep_queue(in, new_req, GFP_ATOMIC);
 				switch (retval) {
@@ -810,6 +819,11 @@ static void tx_complete(struct usb_ep *ep, struct usb_request *req)
 		spin_unlock(&dev->req_lock);
 		dev_kfree_skb_any(skb);
 	}
+
+	/* put the completed req back to tx_reqs tail pool */
+	spin_lock(&dev->req_lock);
+	list_add_tail(&req->list, &dev->tx_reqs);
+	spin_unlock(&dev->req_lock);
 
 	if (netif_carrier_ok(dev->net))
 		netif_wake_queue(dev->net);
@@ -1135,7 +1149,14 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 		spin_lock_irqsave(&dev->req_lock, flags);
 		dev->tx_skb_hold_count++;
 		if (dev->tx_skb_hold_count < dev->dl_max_pkts_per_xfer) {
-			if (dev->no_tx_req_used > TX_REQ_THRESHOLD) {
+
+			/*
+			 * should allow aggregation only, if the number of
+			 * requests queued more than the tx requests that can
+			 *  be queued with no interrupt flag set sequentially.
+			 * Otherwise, packets may be blocked forever.
+			 */
+			if (dev->no_tx_req_used > MAX_TX_REQ_WITH_NO_INT) {
 				list_add(&req->list, &dev->tx_reqs);
 				spin_unlock_irqrestore(&dev->req_lock, flags);
 				goto success;
@@ -1174,13 +1195,15 @@ static netdev_tx_t eth_start_xmit(struct sk_buff *skb,
 	if (gadget_is_dualspeed(dev->gadget) &&
 		 (dev->gadget->speed == USB_SPEED_HIGH ||
 		  dev->gadget->speed == USB_SPEED_SUPER)) {
+		spin_lock_irqsave(&dev->req_lock, flags);
 		dev->tx_qlen++;
-		if (dev->tx_qlen == (qmult/2)) {
+		if (dev->tx_qlen == MAX_TX_REQ_WITH_NO_INT) {
 			req->no_interrupt = 0;
 			dev->tx_qlen = 0;
 		} else {
 			req->no_interrupt = 1;
 		}
+		spin_unlock_irqrestore(&dev->req_lock, flags);
 	} else {
 		req->no_interrupt = 0;
 	}
@@ -1612,14 +1635,14 @@ struct eth_dev *gether_setup_name(struct usb_gadget *g, u8 ethaddr[ETH_ALEN],
 		dev_warn(&g->dev,
 			"using random %s ethernet address\n", "host");
 
-//ASUS_BSP+++ "[USB][NA][Fix] fix rndis host MAC"
+	//ASUS_BSP+++ "[USB][NA][Fix] fix rndis host MAC"
 	if (ethaddr && is_valid_ether_addr(ethaddr)) {
 		memcpy(dev->host_mac, ethaddr, ETH_ALEN);
 	} else {
 		memcpy(ethaddr, dev->host_mac, ETH_ALEN);
 	}
-//ASUS_BSP--- "[USB][NA][Fix] fix rndis host MAC"
-
+	//ASUS_BSP--- "[USB][NA][Fix] fix rndis host MAC"
+	
 	net->netdev_ops = &eth_netdev_ops;
 
 	SET_ETHTOOL_OPS(net, &ops);
@@ -2008,7 +2031,7 @@ static void uether_debugfs_exit(struct eth_dev *dev)
 
 static int __init gether_init(void)
 {
-	uether_wq = alloc_workqueue("uether", WQ_CPU_INTENSIVE, 1);
+	uether_wq  = create_singlethread_workqueue("uether");
 	if (!uether_wq) {
 		pr_err("%s: Unable to create workqueue: uether\n", __func__);
 		return -ENOMEM;

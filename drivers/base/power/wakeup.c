@@ -926,7 +926,6 @@ void print_active_locks(void)
 }
 EXPORT_SYMBOL(print_active_locks);
 //[---]Debug for active wakelock before entering suspend
-
 static int wakeup_sources_stats_open(struct inode *inode, struct file *file)
 {
 	return single_open(file, wakeup_sources_stats_show, NULL);

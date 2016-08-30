@@ -421,13 +421,13 @@ static void GetTestParam(void)
 	g_TestParam_FT5X46.SCAPRawDataTest=GetParamValue(Section_TestItem, SCAP_RawData_Test, 0);
 
 	/* +++print test Item+++ */
-	printk("[FT5X46][Selftest Item]  RawDataTest = %d, RawDataTest_LowFreq = %d, RawDataTest_HighFreq = %d \n",
+	printk("[Focal][Selftest Item]  RawDataTest = %d, RawDataTest_LowFreq = %d, RawDataTest_HighFreq = %d \n",
 	g_TestParam_FT5X46.RawDataTest, g_TestParam_FT5X46.RawDataTest_LowFreq, g_TestParam_FT5X46.RawDataTest_HighFreq);
 
-	printk("[FT5X46][Selftest Item]  SCAPCbTest = %d, SCapCbTest_SetWaterproof_ON = %d, RawDataTest_HighFreq = %d \n",
+	printk("[Focal][Selftest Item]  SCAPCbTest = %d, SCapCbTest_SetWaterproof_ON = %d, RawDataTest_HighFreq = %d \n",
 	g_TestParam_FT5X46.SCAPCbTest, g_TestParam_FT5X46.SCapCbTest_SetWaterproof_ON, g_TestParam_FT5X46.SCapCbTest_SetWaterproof_OFF);
 
-	printk("[FT5X46][Selftest Item]  SCAPRawDataTest = %d, SCapRawDataTest_SetWaterproof_ON = %d, SCapRawDataTest_SetWaterproof_OFF = %d \n",
+	printk("[Focal][Selftest Item]  SCAPRawDataTest = %d, SCapRawDataTest_SetWaterproof_ON = %d, SCapRawDataTest_SetWaterproof_OFF = %d \n",
 	g_TestParam_FT5X46.SCAPRawDataTest, g_TestParam_FT5X46.SCapRawDataTest_SetWaterproof_ON, g_TestParam_FT5X46.SCapRawDataTest_SetWaterproof_OFF);
 	/* ---print test Item--- */
 
@@ -657,7 +657,7 @@ static void GetTestParam(void)
 		sprintf(str_tmp, "%s%d",ScapCB_ON_Max,(i+1));
 
 		valuelen = GetParamString(Section_SpecialSet, str_tmp, str_value);
-		printk("[FT5X46] ScapCB_ON_Max_%d gat len = %d \n", i, valuelen);
+		printk("[jacob] ScapCB_ON_Max_%d gat len = %d \n", i, valuelen);
 		if (valuelen > 0) 
 		{
 			index = 0;
@@ -702,7 +702,7 @@ static void GetTestParam(void)
 		sprintf(str_tmp, "%s%d",ScapCB_ON_Min,(i+1));
 
 		valuelen = GetParamString(Section_SpecialSet, str_tmp, str_value);
-		printk("[FT5X46] ScapCB_ON_Min%d gat len = %d \n", i, valuelen);
+		printk("[jacob] ScapCB_ON_Min%d gat len = %d \n", i, valuelen);
 		if (valuelen > 0) 
 		{
 			index = 0;
@@ -746,7 +746,7 @@ static void GetTestParam(void)
 		sprintf(str_tmp, "%s%d",ScapCB_OFF_Max,(i+1));
 
 		valuelen = GetParamString(Section_SpecialSet, str_tmp, str_value);
-		printk("[FT5X46] ScapCB_OFF_Max%d gat len = %d \n", i, valuelen);
+		printk("[jacob] ScapCB_OFF_Max%d gat len = %d \n", i, valuelen);
 		if (valuelen > 0) 
 		{
 			index = 0;
@@ -1225,7 +1225,7 @@ static void GetRawData(short RawData[TX_NUM_MAX][RX_NUM_MAX])
 boolean StartTestTP(void) 
 {
 	bRawdataTest = true;
-	printk("[FT5X46] %s start \n", __func__);
+	printk("[focal] %s start \n", __func__);
 	TestTp();
 
 	return bRawdataTest;
@@ -1286,7 +1286,7 @@ boolean FT5X46_TestItem(void)
 	if(g_TestParam_FT5X46.SCAPRawDataTest)
 		bTestReuslt = bTestReuslt & TestItem_SCapRawDataTest();
 	
-	printk("[FT5X46] %s result = %d  \n", __func__, bTestReuslt);
+	printk("[focal] %s result = %d  \n", __func__, bTestReuslt);
 	focal_msleep(1000);
 
 	/*WeakShortTest for feature use*/
@@ -1330,7 +1330,7 @@ boolean TestItem_RawDataTest_FT5X46(void)
 		GetRawData(rawdata);
 		/////////////////Print RawData Start	
 /*
-		printk("[FT5X46]dump rawdata\n");
+		printk("[FocalTech]dump rawdata\n");
 		for(i = 0;i < iTxNum;i++)
 		{
 			printk("\n");
@@ -1340,7 +1340,7 @@ boolean TestItem_RawDataTest_FT5X46(void)
 				count += sprintf(buf + count, "%5d ", rawdata[i][j]);
 				printk("%5d  ", rawdata[i][j]);
 			}
-			printk("[FT5X46][testdata] TX%d = %s \n", i, buf);
+			printk("[Focal][testdata] TX%d = %s \n", i, buf);
 		}
 		printk("\n");
 		/////////////////Print RawData End
@@ -1384,11 +1384,12 @@ boolean TestItem_RawDataTest_FT5X46(void)
 				count += sprintf(buf + count, "%5d ", rawdata[i][j]);
 			printk("%5d  ", rawdata[i][j]);
 			}
-			printk("[FT5X46][testdata] TX%d = %s \n", i, buf);
+			printk("[Focal][testdata] TX%d = %s \n", i, buf);
 		}
 		printk("\n");
 */
 		/*Print RawData End*/
+
 
 		for(i = 0;i < iTxNum;i++)
 		{
@@ -1445,7 +1446,7 @@ boolean TestItem_RawDataTest_FT5X46(void)
 				count += sprintf(buf + count, "%5d ", rawdata[i][j]);
 				printk("%5d  ", rawdata[i][j]);
 			}
-			printk("[FT5X46][testdata] TX%d = %s \n", i, buf);
+			printk("[Focal][testdata] TX%d = %s \n", i, buf);
 		}
 		printk("\n");
 */
@@ -1482,6 +1483,7 @@ boolean TestItem_RawDataTest_FT5X46(void)
 		GetRawData(rawdata);
 
 		/*zax 20141116+++++++++++++++++++++++*/
+
 		for(i = 0;i < iTxNum;i++)
 		{
 //			printk("\n");
@@ -1492,7 +1494,7 @@ boolean TestItem_RawDataTest_FT5X46(void)
 //				printk("%5d  ", rawdata[i][j]);
 				Save_rawData[i][j]=rawdata[i][j];
 			}
-//			printk("[FT5X46][testdata] TX%d = %s \n", i, buf);
+//			printk("[Focal][testdata] TX%d = %s \n", i, buf);
 		}
 //		printk("\n");
 
@@ -2088,7 +2090,7 @@ boolean TestItem_SCapCbTest()
 	FTS_DBG("==============================Test Item: -----  TestItem_SCapCbTest_FT5X46\n");
 
 	ReCode = ReadReg( regAddr, &regData );
-	printk("[FT5X46] %s : Water_Channel_Select ReCode = %d regData = %d \n", __func__, ReCode, regData);
+	printk("[Focal] %s : Water_Channel_Select ReCode = %d regData = %d \n", __func__, ReCode, regData);
 	
 
 	btmpresult = SwitchToNoMapping();
@@ -2388,7 +2390,7 @@ boolean TestItem_SCapRawDataTest()
 	FTS_DBG("==============================Test Item: -----  Scap_RawData_Test_FT5X46\n");
 
    	 ReCode = ReadReg( regAddr, &regData );
-	printk("[FT5X46] %s : Water_Channel_Select ReCode = %d regData = %d \n", __func__, ReCode, regData);
+	printk("[Focal] %s : Water_Channel_Select ReCode = %d regData = %d \n", __func__, ReCode, regData);
 
 	btmpresult= SwitchToNoMapping();
 	if (!btmpresult)

@@ -1,5 +1,5 @@
 obj-y += IRsensor_GPIO.o
-obj-y += HALLsensor_GPIO.o
+#obj-y += HALLsensor_GPIO.o
 
 INTEL = n
 ifeq ($(INTEL),y)
@@ -10,4 +10,12 @@ endif
 
 ccflags-y += $(LOCAL_CFALG)
 
+DEBUG = n
+
+ifeq ($(DEBUG),y)
+	DEBFLAGS = -O -g -DASH_GPIO_DEBUG
+else
+	DEBFLAGS = -O -g
+endif
+ccflags-y += $(DEBFLAGS)
 

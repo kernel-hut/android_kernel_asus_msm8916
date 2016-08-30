@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014 - 2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -383,7 +383,8 @@ static int msm_ois_close(struct v4l2_subdev *sd,
 	int rc = 0;
 	struct msm_ois_ctrl_t *o_ctrl =  v4l2_get_subdevdata(sd);
 	CDBG("Enter\n");
-	if (!o_ctrl) {
+	if (!o_ctrl || !o_ctrl->i2c_client.i2c_func_tbl) {
+		/* check to make sure that init happens before release */
 		pr_err("failed\n");
 		return -EINVAL;
 	}
@@ -415,8 +416,12 @@ static long msm_ois_subdev_ioctl(struct v4l2_subdev *sd,
 	case VIDIOC_MSM_OIS_CFG:
 		return msm_ois_config(o_ctrl, argp);
 	case MSM_SD_SHUTDOWN:
-		msm_ois_close(sd, NULL);
-		return 0;
+		if (!o_ctrl->i2c_client.i2c_func_tbl) {
+			pr_err("o_ctrl->i2c_client.i2c_func_tbl NULL\n");
+			return -EINVAL;
+		} else {
+			return msm_ois_close(sd, NULL);
+		}
 	default:
 		return -ENOIOCTLCMD;
 	}
@@ -476,8 +481,7 @@ static int32_t msm_ois_i2c_probe(struct i2c_client *client,
 
 	if (client == NULL) {
 		pr_err("msm_ois_i2c_probe: client is null\n");
-		rc = -EINVAL;
-		goto probe_failure;
+		return -EINVAL;
 	}
 
 	ois_ctrl_t = kzalloc(sizeof(struct msm_ois_ctrl_t),
@@ -489,6 +493,7 @@ static int32_t msm_ois_i2c_probe(struct i2c_client *client,
 
 	if (!i2c_check_functionality(client->adapter, I2C_FUNC_I2C)) {
 		pr_err("i2c_check_functionality failed\n");
+		rc = -EINVAL;
 		goto probe_failure;
 	}
 
@@ -499,7 +504,7 @@ static int32_t msm_ois_i2c_probe(struct i2c_client *client,
 	CDBG("cell-index %d, rc %d\n", ois_ctrl_t->subdev_id, rc);
 	if (rc < 0) {
 		pr_err("failed rc %d\n", rc);
-		return rc;
+		goto probe_failure;
 	}
 
 	ois_ctrl_t->i2c_driver = &msm_ois_i2c_driver;
@@ -531,6 +536,7 @@ static int32_t msm_ois_i2c_probe(struct i2c_client *client,
 	CDBG("Exit\n");
 
 probe_failure:
+	kfree(ois_ctrl_t);
 	return rc;
 }
 

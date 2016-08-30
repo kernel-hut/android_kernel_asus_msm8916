@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -220,6 +220,7 @@ struct mdss_mdp_ctl {
 	struct mdss_mdp_mixer *mixer_left;
 	struct mdss_mdp_mixer *mixer_right;
 	struct mutex lock;
+	struct mutex offlock;
 	struct mutex *shared_lock;
 	spinlock_t spin_lock;
 
@@ -253,7 +254,7 @@ struct mdss_mdp_ctl {
 
 	void *priv_data;
 	u32 wb_type;
-	bool prg_fet;
+	u32 prg_fet;
 };
 
 struct mdss_mdp_mixer {
@@ -494,6 +495,7 @@ struct mdss_overlay_private {
 	struct mdss_mdp_data free_list[MAX_FREE_LIST_SIZE];
 	int free_list_size;
 	int ad_state;
+	int dyn_pu_state;
 
 	bool handoff;
 	u32 splash_mem_addr;
@@ -621,6 +623,15 @@ static inline int mdss_mdp_iommu_dyn_attach_supported(
 static inline int mdss_mdp_line_buffer_width(void)
 {
 	return MAX_LINE_BUFFER_WIDTH;
+}
+
+static inline bool mdss_mdp_req_init_restore_cfg(struct mdss_data_type *mdata)
+{
+	if ((mdata->mdp_rev == MDSS_MDP_HW_REV_106) ||
+                (mdata->mdp_rev == MDSS_MDP_HW_REV_108))
+		return true;
+
+	return false;
 }
 
 static inline int mdss_mdp_panic_signal_support_mode(
@@ -954,4 +965,6 @@ void mdss_mdp_ctl_restore(void);
 int  mdss_mdp_ctl_reset(struct mdss_mdp_ctl *ctl);
 #endif /* MDSS_MDP_H */
 
+//ASUS_BSP: Louis +++
 void mdss_set_mdp_max_clk(bool boostup);
+//ASUS_BSP: Louis ---

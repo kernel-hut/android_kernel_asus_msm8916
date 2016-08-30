@@ -51,7 +51,7 @@
 
 #include "irqchip.h"
 
-int gic_irq_cnt,gic_resume_irq[8];//[Power]Add for wakeup debug
+int gic_irq_cnt,gic_resume_irq[8];//ASUS_BSP [Power] jeff_gu Add for wakeup debug
 
 union gic_base {
 	void __iomem *common_base;
@@ -211,6 +211,9 @@ static void gic_unmask_irq(struct irq_data *d)
 
 static void gic_disable_irq(struct irq_data *d)
 {
+	/* don't lazy-disable PPIs */
+	if (gic_irq(d) < 32)
+		gic_mask_irq(d);
 	if (gic_arch_extn.irq_disable)
 		gic_arch_extn.irq_disable(d);
 }
@@ -305,12 +308,12 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 	u32 enabled;
 	u32 pending[32];
 	void __iomem *base = gic_data_dist_base(gic);
-	//[+++][Power]Add for wakeup debug
+//ASUS_BSP [+++][Power] jeff_gu Add for wakeup debug
 	int j;
 	for (j=0;j < 8; j++)
 		gic_resume_irq[j]=0;
 	gic_irq_cnt=0;
-	//[---][Power]Add for wakeup debug
+//ASUS_BSP [---][Power] jeff_gu Add for wakeup debug
 
 	if (!msm_show_resume_irq_mask)
 		return;
@@ -334,19 +337,19 @@ static void gic_show_resume_irq(struct gic_chip_data *gic)
 		else if (desc->action && desc->action->name)
 			name = desc->action->name;
 
-		//ASUS_BSP+++ "for wlan wakeup trace"
-		if( (i + gic->irq_offset) == g_wcnss_wlanrx_irq ){
-		    wcnss_irq_flag_rx = 1;
-		    wcnss_irq_flag_wdi = 1;
-		}
-		//ASUS_BSP--- "for wlan wakeup trace"
-
 		pr_warning("[PM]IRQ: %d triggered %s\n", i + gic->irq_offset, name);
 		//[+++][Power]Add for wakeup debug
 		if (gic_irq_cnt < 8)
 			gic_resume_irq[gic_irq_cnt]=i + gic->irq_offset;
 		gic_irq_cnt++;
 		//[---][Power]Add for wakeup debug
+
+		//ASUS_BSP+++ "for wlan wakeup trace"
+		if( (i + gic->irq_offset) == g_wcnss_wlanrx_irq ){
+		    wcnss_irq_flag_rx = 1;
+		    wcnss_irq_flag_wdi = 1;
+		}
+		//ASUS_BSP--- "for wlan wakeup trace"
 	}
 	//[+++][Power]Add for wakeup debug
 	if (gic_irq_cnt >= 8)

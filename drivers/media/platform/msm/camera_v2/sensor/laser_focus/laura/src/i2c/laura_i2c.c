@@ -77,12 +77,8 @@ int32_t Laura_write_seq(struct msm_camera_i2c_client *client,
 {
 	int32_t rc = -EFAULT;
 	uint8_t i = 0, j = 0;
-	int reg_conf_tbl_size = (num_word*2)+2;
-#if I2C_DEVICE
-	struct msm_camera_i2c_reg_setting i2c_reg_config;
-#else
+	int reg_conf_tbl_size = (num_word*2)+2; 
 	struct msm_camera_cci_ctrl cci_ctrl;
-#endif
 	struct msm_camera_i2c_reg_array reg_conf_tbl[reg_conf_tbl_size];
 
 	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
@@ -120,14 +116,7 @@ int32_t Laura_write_seq(struct msm_camera_i2c_client *client,
 		reg_conf_tbl[i+1].delay = 0;
 		j++;
 	}
-#if I2C_DEVICE
-	i2c_reg_config.reg_setting = reg_conf_tbl;
-	i2c_reg_config.addr_type = client->addr_type;
-	i2c_reg_config.data_type = MSM_CAMERA_I2C_BYTE_DATA;
-	i2c_reg_config.size = reg_conf_tbl_size;
-	rc = msm_camera_qup_i2c_write_table(client,&i2c_reg_config);
-
-#else
+	
 	cci_ctrl.cmd = MSM_CCI_I2C_WRITE;
 	cci_ctrl.cci_info = client->cci_client;
 	cci_ctrl.cfg.cci_i2c_write_cfg.reg_setting = reg_conf_tbl;
@@ -137,7 +126,8 @@ int32_t Laura_write_seq(struct msm_camera_i2c_client *client,
 	rc = v4l2_subdev_call(client->cci_client->cci_subdev, core, ioctl, VIDIOC_MSM_CCI_CFG, &cci_ctrl);
 	
 	rc = cci_ctrl.status;
-#endif
+
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
+	
 	return rc;
 }

@@ -1655,7 +1655,6 @@ SYSCALL_DEFINE3(syslog, int, type, char __user *, buf, int, len)
 	return do_syslog(type, buf, len, SYSLOG_FROM_READER);
 }
 
-
 /*
  * Call the console drivers, asking them to write out
  * log_buf[start] to log_buf[end - 1].
@@ -2074,6 +2073,9 @@ asmlinkage int printk_emit(int facility, int level,
 }
 EXPORT_SYMBOL(printk_emit);
 
+#ifndef ASUS_ZC550KL_PROJECT
+extern int g_user_dbg_mode;
+#endif
 extern unsigned int asusdebug_enable;
 /**
  * printk - print a kernel message
@@ -2103,13 +2105,13 @@ asmlinkage int printk(const char *fmt, ...)
 
 	if (asusdebug_enable==0x11223344)
 		return 0;
-// +++ ASUS_BSP : add for user build
-#ifdef ASUS_SHIP_BUILD
+#ifdef ASUS_ZC550KL_PROJECT
 	if ( g_user_klog_mode==0 )
 		return 0;
+#else
+	if (g_user_dbg_mode==0)
+		return 0;
 #endif
-// --- ASUS_BSP : add for user build
-
 #ifdef CONFIG_KGDB_KDB
 	if (unlikely(kdb_trap_printk)) {
 		va_start(args, fmt);
@@ -2320,7 +2322,7 @@ MODULE_PARM_DESC(console_suspend, "suspend console during suspend"
  */
 void suspend_console(void)
 {
-	ASUSEvtlog("[UTS] System Suspend");
+	ASUSEvtlog("[UTS] System Suspend\n");
 	nSuspendInProgress = 1;
 	if (!console_suspend_enabled)
 		return;
@@ -2334,26 +2336,26 @@ void resume_console(void)
 {
 	int i;
 	nSuspendInProgress = 0;
-	ASUSEvtlog("[UTS] System Resume");
+	ASUSEvtlog("[UTS] System Resume\n");
 
-	//[+++]Add GPIO wakeup information
+//ASUS_BSP [+++] jeff_gu Add GPIO wakeup information
 	if (pm_pwrcs_ret) {
 
-		ASUSEvtlog("[PM] Suspended for %d.%02d secs ", pwrcs_time/100,pwrcs_time%100);
+		ASUSEvtlog("[PM] Suspended for %d.%02d secs \n", pwrcs_time/100,pwrcs_time%100);
 
 		if (gpio_irq_cnt>0) {
 			for (i=0;i<gpio_irq_cnt;i++)
-				ASUSEvtlog("[PM] GPIO triggered: %d", gpio_resume_irq[i]);
+				ASUSEvtlog("[PM] GPIO triggered: %d\n", gpio_resume_irq[i]);
 			gpio_irq_cnt=0; //clear log count
 		}
 		if (gic_irq_cnt>0) {
 			for (i=0;i<gic_irq_cnt;i++)
-				ASUSEvtlog("[PM] IRQs triggered: %d", gic_resume_irq[i]);
+				ASUSEvtlog("[PM] IRQs triggered: %d\n", gic_resume_irq[i]);
 			gic_irq_cnt=0;  //clear log count
 		}
 		pm_pwrcs_ret=0;
 	}
-	//[---]Add GPIO wakeup information
+//ASUS_BSP [---] jeff_gu Add GPIO wakeup information
 
 	if (!console_suspend_enabled)
 		return;

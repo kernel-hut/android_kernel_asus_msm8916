@@ -351,6 +351,8 @@ ktime_t ktime_get(void)
 }
 EXPORT_SYMBOL_GPL(ktime_get);
 
+//ASUS_BSP +++ jeff_gu add for trace suspend time
+//fix nsec overflow during suspend in the original timekeeping_get_ns
 static inline s64 timekeeping_get_ns_v2(struct timekeeper *tk)
 {
 	cycle_t cycle_now, cycle_delta;
@@ -376,9 +378,9 @@ s64 get_ns_from_hw(void)
 	struct timekeeper *tk = &timekeeper;
 	s64 nsecs = timekeeping_get_ns_v2(tk);
 	return nsecs;
-
 }
 EXPORT_SYMBOL_GPL(get_ns_from_hw);
+//ASUS_BSP --- jeff_gu add for trace suspend time
 
 /**
  * ktime_get_ts - get the monotonic clock in timespec format

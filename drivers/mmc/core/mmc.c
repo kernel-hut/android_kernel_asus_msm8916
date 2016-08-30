@@ -19,6 +19,7 @@
 #include <linux/mmc/mmc.h>
 #include <linux/pm_runtime.h>
 #include <linux/reboot.h>
+#include <linux/proc_fs.h>
 
 #include "core.h"
 #include "bus.h"
@@ -26,6 +27,7 @@
 #include "sd_ops.h"
 #include "mmc_config.h"		//ASUS_BSP Deeo : eMMC porting
 static int mmc_can_poweroff_notify(const struct mmc_card *card);	//ASUS_BSP Deeo : eMMC porting
+static u8 life_time_B;
 
 static const unsigned int tran_exp[] = {
 	10000,		100000,		1000000,	10000000,
@@ -130,6 +132,11 @@ static char* asus_get_emmc_status(struct mmc_card *card)
 			memset(whole_name, 0, sizeof(whole_name));
 			if ( ext_csd_sector_count == 0xe90000 && card->cid.manfid == 0x15 )
 				strcpy(whole_name, "SAMSUNG_8G_MCP");
+			//ASUS_BSP lei_guo ATD for SAMSUNG_32G_MCP
+			else if ( ext_csd_sector_count == 0x3a3e000 && card->cid.manfid == 0x15 )
+				strcpy(whole_name, "SAMSUNG_32G_MCP");
+			else if ( ext_csd_sector_count == 0x3a3e000 && card->cid.manfid == 0x90 )
+				strcpy(whole_name, "HYNIX_32G_H9TQ26ADFTACUR");
 			else
 				strcpy(whole_name, emmc_stat_tbl[i].band_type);
 
@@ -137,9 +144,14 @@ static char* asus_get_emmc_status(struct mmc_card *card)
 				strcat(whole_name, "-v4.5");
 			else if (5 == card->ext_csd.rev)
 				strcat(whole_name, "-v4.41");
-			else if (7 == card->ext_csd.rev)
-			{
+			else if (7 == card->ext_csd.rev){
 				strcat(whole_name, "-v5.0");
+				//ASUS_BSP Lei_guo: add for DEVICE_LIFE_TIME_EST_TYP of eMMC
+				sprintf(whole_name + strlen(whole_name) , "-0x%02x",card->ext_csd.device_life_time[1]);
+			}
+			else if (8 == card->ext_csd.rev){
+				strcat(whole_name, "-v5.1");
+				//ASUS_BSP Lei_guo: add for DEVICE_LIFE_TIME_EST_TYP of eMMC
 				sprintf(whole_name + strlen(whole_name) , "-0x%02x",card->ext_csd.device_life_time[1]);
 			}
 			//printk("lei==>:emmc-status:%s\n",whole_name);
@@ -466,6 +478,11 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		}
 	}
 
+	/*
+	 * The EXT_CSD format is meant to be forward compatible. As long
+	 * as CSD_STRUCTURE does not change, all values for EXT_CSD_REV
+	 * are authorized, see JEDEC JESD84-B50 section B.8.
+	 */
 	card->ext_csd.rev = ext_csd[EXT_CSD_REV];
 	//ASUS_BSP lei_guo : make sure 8939 support eMMC 5.1
 	if (card->ext_csd.rev > 8) {
@@ -778,10 +795,12 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 	} else {
 		card->ext_csd.data_sector_size = 512;
 	}
+//ASUS_BSP Lei_guo: add for DEVICE_LIFE_TIME_EST_TYP of eMMC
 	if (card->ext_csd.rev >= 7) {
 		card->ext_csd.pre_device_eol = ext_csd[267];
 		card->ext_csd.device_life_time[0] = ext_csd[268];
 		card->ext_csd.device_life_time[1] = ext_csd[269];
+		life_time_B = ext_csd[269];
 		//printk("lei==>:ext_csd[268]=0x%02x，and ext_csd[269]=%x\n",ext_csd[268],ext_csd[269]);
 	}
 
@@ -1725,7 +1744,7 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 	 * If enhanced_area_en is TRUE, host needs to enable ERASE_GRP_DEF
 	 * bit.  This bit will be lost every time after a reset or power off.
 	 */
-//ASUS_BSP Gavin_Chang +++ turn off enhanced area 
+//ASUS_BSP Lei_Guo +++ config enhanced area
 #if MMC_CONFIG_SETTING_ENHANCED_AREA
 	if (card->ext_csd.enhanced_area_en ||
 	    (card->ext_csd.rev >= 3 && (host->caps2 & MMC_CAP2_HC_ERASE_SZ))) {
@@ -1759,7 +1778,8 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 		}
 	}
 #endif
-//ASUS_BSP Gavin_Chang --- turn off enhanced area 
+//ASUS_BSP Lei_Guo --- config enhanced area
+
 	/*
 	 * Ensure eMMC user default partition is enabled
 	 */
@@ -1965,6 +1985,7 @@ static int mmc_init_card(struct mmc_host *host, u32 ocr,
 	pr_info("[eMMC_LOG] --  CACHE         = %d --",card->ext_csd.cache_ctrl);
 	pr_info("[eMMC_LOG] --C HS200         = %d --",MMC_CONFIG_SETTING_HS200);
 	pr_info("[eMMC_LOG] --  HS200         = %d --",card->ext_csd.hs_max_dtr);
+	//ASUS_BSP Lei_guo: add for DEVICE_LIFE_TIME_EST_TYP of eMMC
 	pr_info("[eMMC_LOG] --  Health        = 0x%02x --",card->ext_csd.device_life_time[1]);
 	pr_info("[eMMC_LOG] eMMC CONFIG SETTING INFO END");
 	//ASUS_BSP Deeo : eMMC info ---
@@ -2367,3 +2388,36 @@ err:
 
 	return err;
 }
+//ASUS_BSP lei_guo : Add proc file node +++
+static int emmc_health_proc_read(struct seq_file *buf, void *v)
+{
+	u8 tmp;
+
+	if ( life_time_B == 0x0 || life_time_B > 0xB)
+		return seq_printf(buf, "Not support!! 0x%02x", life_time_B);
+
+	tmp = (life_time_B -1)*10;
+	return seq_printf(buf, "%d%%\n", tmp);
+}
+
+static int emmc_health_proc_open(struct inode *inode, struct  file *file)
+{
+    return single_open(file, emmc_health_proc_read, NULL);
+}
+
+void create_emmc_health_proc_file(void)
+{
+	static const struct file_operations proc_fops = {
+		.owner = THIS_MODULE,
+		.open =  emmc_health_proc_open,
+		.read = seq_read,
+	};
+	struct proc_dir_entry *proc_file = proc_create("emmc_health", 0444, NULL, &proc_fops);
+
+	if (!proc_file) {
+		printk("[eMMC]%s failed!\n", __FUNCTION__);
+	}
+	return;
+}
+EXPORT_SYMBOL(create_emmc_health_proc_file);
+//ASUS_BSP lei_guo : Add proc file node ---

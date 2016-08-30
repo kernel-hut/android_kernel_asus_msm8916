@@ -27,8 +27,8 @@ typedef enum {
  * usb_state should be one of the above
  *
  * return 0 means success */
-extern int asus_set_Charger(int usb_state);
-extern int set_otg_battery_current_limit(int value);
+extern int setSMB358Charger(int usb_state);
+
 #define HIGH_TEMPERATURE_TO_STOP_CHARGING  (550)
 #define LOW_TEMPERATURE_TO_STOP_CHARGING   (0)
 

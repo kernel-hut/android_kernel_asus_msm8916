@@ -1,5 +1,5 @@
 /* 
- * Copyright (C) 2014 ASUSTek Inc.
+ * Copyright (C) 2015 ASUSTek Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -84,9 +84,13 @@ extern int HALLsensor_ATTR_create(struct device_attribute *mhallsensor_attr);
 #define NAME_SIZE	(10)
 typedef struct{
 	char vendor[NAME_SIZE];
-	char version[NAME_SIZE];
 	char module_number[NAME_SIZE];
 }IRsensor_info_type;
+
+/**
+ * @LIGHT_GAIN_ACCURACY_CALVALUE : the accuracy of light sensor gain value.
+ */
+#define LIGHT_GAIN_ACCURACY_CALVALUE	(100000)
 
 /**
  * IRsensor_ATTR_Calibration - attributes for IRsensor calibration.
@@ -144,14 +148,16 @@ typedef struct{
 	int (*proximity_store_polling_mode)(bool bOn);
 	int (*light_show_sensitivity)(void);
 	int (*light_store_sensitivity)(int sensitivity);
+	int (*light_show_log_threshold)(void);
+	int (*light_store_log_threshold)(int log_threshold);
 }IRsensor_ATTR_Extension;
 
 /**
  * IRsensor_ATTR - attributes for IRsensor.
  */
 typedef struct{
-	IRsensor_info_type info_type;	
-	IRsensor_ATTR_Calibration *ATTR_Calibration;
+	IRsensor_info_type 			*info_type;	
+	IRsensor_ATTR_Calibration 	*ATTR_Calibration;
 	IRsensor_ATTR_BMMI 		*ATTR_BMMI;
 	IRsensor_ATTR_Hardware 	*ATTR_Hardware;
 	IRsensor_ATTR_HAL 		*ATTR_HAL;
@@ -300,14 +306,20 @@ extern bool lsensor_sysfs_write_1000lux(int calvalue);
 
 /**
  * IRsensor_gpio_register - register the GPIO setting and set the IRQ handler.
+ * Return the IRQ.
  */
-#include <linux/i2c.h>
-extern int IRsensor_gpio_register(struct i2c_client *client, IRsensor_GPIO *gpio_ist);
+extern int IRsensor_gpio_register(IRsensor_GPIO *gpio_ist);
 
 /**
  * IRsensor_gpio_unregister - unregister the GPIO setting.
  */
 extern int IRsensor_gpio_unregister(int irq);
+
+/**
+ * IRsensor_gpio_setI2cClient - set the i2c_client for of_get_named_gpio.
+ */
+ #include <linux/i2c.h>
+ extern int IRsensor_gpio_setI2cClient(struct i2c_client *client);
 
 /**
  * HALLsensor_GPIO
@@ -318,14 +330,95 @@ extern int IRsensor_gpio_unregister(int irq);
 
 /**
  * HALLsensor_gpio_register - register the GPIO setting and set the IRQ handler.
+ * Return the IRQ.
  */
-#include <linux/i2c.h>
-extern int HALLsensor_gpio_register(struct i2c_client *client, HALLsensor_GPIO *gpio_ist);
+#include <linux/platform_device.h>
+extern int HALLsensor_gpio_register(struct platform_device *pdev, HALLsensor_GPIO *gpio_ist);
 
 /**
  * HALLsensor_gpio_unregister - unregister the GPIO setting.
  */
 extern int HALLsensor_gpio_unregister(int irq);
+
+/**
+ * HALLsensor_gpio_value - return the gpio value.
+ */
+extern int HALLsensor_gpio_value(void);
+
+/**
+ * i2c_read_reg_u8 - 
+ * i2c_write_reg_u8 - read/write i2c for 1 Byte (8bits). These are functions for i2c read/write.
+ */
+extern uint8_t i2c_read_reg_u8(struct i2c_client* client, u8 reg);
+extern int 		i2c_write_reg_u8(struct i2c_client* client, u8 reg, uint8_t data);
+
+/**
+ * i2c_read_reg_u16 - 
+ * i2c_write_reg_u16 - read/write i2c for 2 Byte (16bits). These are functions for i2c read/write.
+ */
+extern int i2c_read_reg_u16(struct i2c_client* client, u8 reg, uint8_t* data);
+extern int i2c_write_reg_u16(struct i2c_client* client, u8 reg, uint8_t* data);
+
+/**
+ * IRsensor_I2C - We define functions for i2c driver.
+ * @IRsensor_probe : It will be run when "i2c_add_driver" has been called.
+ * @IRsensor_remove : Remove all Memory.
+ * @IRsensor_shutdown : Turn off all sensors.
+ * @IRsensor_suspend : Do what suspend should do.
+ * @IRsensor_resume : Do what resume should do.
+ */
+typedef struct IRsensor_I2C {
+	void (*IRsensor_probe)(struct i2c_client *client);
+	void (*IRsensor_remove)(void);
+	void (*IRsensor_shutdown)(void);
+	void (*IRsensor_suspend)(void);
+	void (*IRsensor_resume)(void);	
+}IRsensor_I2C;
+
+/**
+ * IRsensor_i2c_register - struct IRsensor_I2C wrapped by i2c driver.
+ */
+extern int IRsensor_i2c_register(IRsensor_I2C *ir_i2c);
+
+/**
+ * IRsensor_i2c_unregister - i2c_del_driver.
+ */
+extern int IRsensor_i2c_unregister(void);
+
+/**
+ * HALLsensor_Platform - We define functions for platform driver.
+ * @HALLsensor_probe : It will be run when "platform_driver_register" has been called.
+ * @HALLsensor_suspend : Do what suspend should do.
+ * @HALLsensor_resume : Do what resume should do.
+ */
+typedef struct HALLsensor_Platform {
+	void (*HALLsensor_probe)(struct platform_device *pdev);
+	void (*HALLsensor_suspend)(void);
+	void (*HALLsensor_resume)(void);	
+}HALLsensor_Platform;
+
+/**
+ * IRsensor_i2c_register - struct IRsensor_I2C wrapped by i2c driver.
+ */
+extern int HALLsensor_platform_register(HALLsensor_Platform *hall_platform);
+
+/**
+ * IRsensor_i2c_unregister - i2c_del_driver.
+ */
+extern int HALLsensor_platform_unregister(void);
+
+
+/**
+ * Define the return interrupt bits, which support proximity close/away and light sensor simultaneously.
+ * @IRSENSOR_INT_PS_CLOSE : [1:0] (0,1)
+ * @IRSENSOR_INT_PS_AWAY : [1:0] (1,0)
+ * @IRSENSOR_INT_ALS : [2] (1)
+ */
+#define IRSENSOR_INT_PS_CLOSE 				(1)
+#define IRSENSOR_INT_PS_AWAY     			(2) 
+#define IRSENSOR_INT_PS_MASK				(3<< 0)
+#define IRSENSOR_INT_ALS           				(4)
+#define IRSENSOR_INT_ALS_MASK				(1<< 2)
 
 /**
  * psensor_hw - the i2c control functions for proximity sensor.
@@ -356,7 +449,8 @@ typedef struct psensor_hw {
  */
 typedef struct lsensor_hw {
 	int light_max_threshold;
-	
+	int light_200lux_default;
+	int light_1000lux_default;
 	int (*light_hw_turn_onoff)(bool bOn);
 	int (*light_hw_get_adc)(void);
 	int (*light_hw_set_hi_threshold)(int hi_threshold);
@@ -383,17 +477,8 @@ typedef struct IRsensor_hw {
 }IRsensor_hw;
 
 /**
- * i2c_read_reg_u8 - 
- * i2c_write_reg_u8 - read/write i2c for 1 Byte (8bits).
+ * IRsensor_hw_getHardware - Before this function, you SHOULD execute IRsensor_i2c_register first.
  */
-extern uint8_t i2c_read_reg_u8(struct i2c_client* client, u8 reg);
-extern int 		i2c_write_reg_u8(struct i2c_client* client, u8 reg, uint8_t data);
-
-/**
- * i2c_read_reg_u16 - 
- * i2c_write_reg_u16 - read/write i2c for 2 Byte (16bits).
- */
-extern int i2c_read_reg_u16(struct i2c_client* client, u8 reg, uint8_t* data);
-extern int i2c_write_reg_u16(struct i2c_client* client, u8 reg, uint8_t* data);
+extern IRsensor_hw* IRsensor_hw_getHardware(void);
 
 #endif

@@ -546,12 +546,30 @@ config MSM_PACMAN
 	  This driver allows reconfiguration of the Bus Access Manager
 	  Low Speed Peripheral (BLSP) ownership.
 
+config MSM_CORE_CTL_HELPER
+	tristate "Core control helper functions for dynamically hotplug CPUs"
+	help
+	  Provide helper functions for core control driver. Core control
+	  driver dynamicatlly hotplugs CPUs from kernel based on current
+	  system load and state. It also supports limiting min and
+	  max online CPUs from userspace.
+
 config MSM_PERFORMANCE
 	tristate "Core control driver to support userspace hotplug requests"
 	help
 	  This driver is used to provide CPU hotplug support to userspace.
 	  It ensures that no more than a user specified number of CPUs stay
 	  online at any given point in time.
+
+config MSM_PERFORMANCE_HOTPLUG_ON
+        bool "Hotplug functionality through msm_performance turned on"
+        depends on MSM_PERFORMANCE
+        default y
+        help
+	  If some other core-control driver is present turn off the core-control
+	  capability of msm_performance driver. Setting this flag to false will
+          compile out the nodes needed for core-control functionality through
+          msm_performance.
 
 source "drivers/soc/qcom/memshare/Kconfig"
 

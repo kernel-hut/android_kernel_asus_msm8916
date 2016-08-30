@@ -20,13 +20,16 @@
 #include <asm/io.h>
 #include <linux/export.h>
 #include <linux/slab.h>
-#include <linux/oom.h>
+//+++ [ZC550KL] ASUS_BSP suri_gu@asus.com for screen off in factory mode when sys.screentimeout=1
 #include <linux/switch.h>
-#include <linux/fs.h>
-#include <asm/uaccess.h>
+//---
 #include <linux/err.h>
 #include <linux/oem_functions.h>
+#ifdef ASUS_ZC550KL_PROJECT
+extern int g_uart_dbg_mode;
+#else
 extern int g_user_dbg_mode;
+#endif
 
 #include <linux/rtc.h>
 #include "rtmutex_common.h"
@@ -66,6 +69,74 @@ EXPORT_SYMBOL(ASUSDebugMsg_workQueue);
 //                             all thread information
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
+//+++ [ZC550KL] ASUS_BSP suri_gu@asus.com for screen off in factory mode when sys.screentimeout=1
+static int screenofftimeout = 0;//0 not timeout , 1 timeout
+struct switch_dev asus_screenofftimeout_switch;
+static ssize_t asus_screenofftimeout_switch_name(struct switch_dev *sdev, char *buf)
+{
+	return sprintf(buf, "screenofftimeout\n");
+}
+
+static ssize_t asus_screenofftimeout_switch_state(struct switch_dev *sdev, char *buf)
+{
+	return sprintf(buf, "%d\n", screenofftimeout);
+}
+
+static int AsusscreenofftimeoutSwitchInitialize(void)
+{
+	int ret = 0;
+	printk(" %s: register switch dev! %d\n", __FUNCTION__, ret);
+	asus_screenofftimeout_switch.name = "screenofftimeout";
+	asus_screenofftimeout_switch.print_state = asus_screenofftimeout_switch_state;
+	asus_screenofftimeout_switch.print_name = asus_screenofftimeout_switch_name;
+	ret = switch_dev_register(&asus_screenofftimeout_switch);
+	if (ret < 0) {
+		printk(" %s: Unable to register screenofftimeout dev! %d\n", __FUNCTION__, ret);
+		return -1;
+	}
+	return 0;
+}
+
+
+
+static ssize_t asus_screenofftimeout_switch_show(struct file *dev, char *buffer, size_t count, loff_t *ppos)
+{
+	return sprintf(buffer, "%d\n", screenofftimeout);
+}
+
+static ssize_t asus_screenofftimeout_switch_store(struct file *dev, const char *buff, size_t count, loff_t *loff)
+{
+	int set_val = -1;
+	int real_set_system_mode = -1;
+	char messages[8];
+	if (count > 8) {
+		count = 8;
+	}
+	if (copy_from_user(messages, buff, count)) {
+		pr_err("copy_from_user fail !!\n");
+		return -EFAULT;
+	}
+	sscanf(messages, "%d",&set_val);
+	if(set_val<=0)
+	{
+		real_set_system_mode = 0;
+	}
+	else
+	{
+		real_set_system_mode = 1;
+	}
+	printk(" %s:  %d\n", __FUNCTION__, real_set_system_mode);
+	screenofftimeout = real_set_system_mode;
+	switch_set_state(&asus_screenofftimeout_switch, screenofftimeout);
+	return count;
+}
+
+
+static const struct file_operations asus_screenofftimeout_switch_proc_fops = {
+	.read = asus_screenofftimeout_switch_show,
+	.write = asus_screenofftimeout_switch_store,
+};
+//---
 
 /*
  * memset for non cached memory
@@ -760,7 +831,17 @@ void delta_all_thread_info(void)
     struct task_struct *pts;
     int ret = 0, ret2 = 0;
 
-    save_log("\r\nDELTA INFO----------------------------------------------------------------------------------------------\r\n");
+    struct rtc_time tm;
+    asus_rtc_read_time(&tm);
+    #if 1
+    g_phonehang_log = (char*)PHONE_HANG_LOG_BUFFER;//phys_to_virt(PHONE_HANG_LOG_BUFFER);
+    g_iPtr = 0;
+    memset_nc(g_phonehang_log, 0, PHONE_HANG_LOG_SIZE);
+    #endif
+
+    save_log("ASUSSlowg-%04d%02d%02d-%02d%02d%02d-delta.txt  ---  ASUS_SW_VER : %s----------------------------------------------\r\n", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec, ASUS_SW_VER);
+
+    save_log("DELTA INFO----------------------------------------------------------------------------------------------\r\n");
     save_log(" pID----ppID----NAME----------------SumTime---vruntime--SPri-NPri-State----------PmpCnt----Waiting\r\n");
     for_each_process(pts)
     {
@@ -798,37 +879,8 @@ static void deinitKernelEnv(void)
     set_fs(oldfs);
 }
 
-
-//ASUS_BSP+++  "[ZC550KL][TRACE][Na] add rule to trige trace"
-int asus_trace_trige_state = 0;
-struct switch_dev asus_trace_trige_switch;
-static ssize_t asus_trace_trige_name(struct switch_dev *sdev, char *buf)
-{
-	return sprintf(buf, "trace_trige\n");
-}
-
-static ssize_t asus_trace_trige_switch_state(struct switch_dev *sdev, char *buf)
-{
-	return sprintf(buf, "%d\n", asus_trace_trige_state);
-}
-
-static int AsusTraceTrigeInitialize(void)
-{
-	int ret = 0;
-	printk("[TRACE] %s: register switch dev! %d\n", __FUNCTION__, ret);
-	asus_trace_trige_switch.name = "tracetrige";
-	asus_trace_trige_switch.print_state = asus_trace_trige_switch_state;
-	asus_trace_trige_switch.print_name = asus_trace_trige_name;
-	ret = switch_dev_register(&asus_trace_trige_switch);
-	if (ret < 0) {
-	    printk("[TRACE] %s: Unable to register switch dev! %d\n", __FUNCTION__, ret);
-	    return -1;
-	}
-	return 0;
-}
-//ASUS_BSP--- "[ZC550KL][TRACE][Na] add rule to trige trace"
 char messages[256];
-void save_phone_hang_log(void)
+void save_phone_hang_log(int delta)
 {
     int file_handle;
     int ret;
@@ -841,7 +893,10 @@ void save_phone_hang_log(void)
         initKernelEnv();
         memset(messages, 0, sizeof(messages));
         strcpy(messages, ASUS_ASDF_BASE_DIR);
-        strncat(messages, g_phonehang_log, 29);
+        if(delta)
+        	strncat(messages, g_phonehang_log, 29+6);
+        else
+        	strncat(messages, g_phonehang_log, 29);
         file_handle = sys_open(messages, O_CREAT|O_WRONLY|O_SYNC, 0);
         printk("save_phone_hang_log-2 file_handle %d, name=%s\n", file_handle, messages);
         if(!IS_ERR((const void *)(ulong)file_handle))
@@ -857,9 +912,6 @@ void save_phone_hang_log(void)
         g_phonehang_log[0] = 0;
         //iounmap(g_phonehang_log);
     }
-	printk("triger trace %d\n", asus_trace_trige_state);
-	asus_trace_trige_state = !asus_trace_trige_state;
-	switch_set_state(&asus_trace_trige_switch, asus_trace_trige_state);
 }
 EXPORT_SYMBOL(save_phone_hang_log);
 void save_last_shutdown_log(char* filename)
@@ -1071,7 +1123,7 @@ void ASUSEvtlog(const char *fmt, ...)
 		va_start(args, fmt);
 		vscnprintf(buffer + strlen(buffer), ASUS_EVTLOG_STR_MAXLEN - strlen(buffer), fmt, args);
 		va_end(args);
-		printk(buffer);
+		printk("%s",buffer);
 		queue_work(ASUSEvtlog_workQueue, &eventLog_Work);
 	} else {
 		printk("ASUSEvtlog buffer cannot be allocated\n");
@@ -1095,22 +1147,6 @@ static ssize_t evtlogswitch_write(struct file *file, const char __user *buf, siz
 
 	return count;
 }
-void replace_special_string(char *m,char c){
-	char tmp[ASUS_EVTLOG_STR_MAXLEN];
-	char *s = tmp;
-	char *t = m;
-	int t_len=0;
-	strncpy(tmp,m,ASUS_EVTLOG_STR_MAXLEN);
-	while(*s&& t_len < (ASUS_EVTLOG_STR_MAXLEN - 2)){
-		if(*s == c )
-			*t++=' ';
-		else
-			*t++=*s;
-		s++;
-		t_len++;
-	}
-	*t=(*s==c)?'\0':*s;
-}
 static ssize_t asusevtlog_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
 	if (count > 256)
@@ -1119,8 +1155,7 @@ static ssize_t asusevtlog_write(struct file *file, const char __user *buf, size_
 	memset(messages, 0, sizeof(messages));
 	if (copy_from_user(messages, buf, count))
 		return -EFAULT;
-	replace_special_string(messages,'%');
-	ASUSEvtlog(messages);
+	ASUSEvtlog("%s",messages);
 
 	return count;
 }
@@ -1143,7 +1178,9 @@ static ssize_t asusdebug_read(struct file *file, char __user *buf,
 
 #include <linux/reboot.h>
 extern int rtc_ready;
+#ifdef ASUS_ZC550KL_PROJECT
 int watchdog_test = 0;
+#endif
 int asus_asdf_set = 0;
 static ssize_t asusdebug_write(struct file *file, const char __user *buf, size_t count, loff_t *ppos)
 {
@@ -1156,12 +1193,21 @@ static ssize_t asusdebug_write(struct file *file, const char __user *buf, size_t
 
 	if (strncmp(messages, "panic", strlen("panic")) == 0) {
 		panic("panic test");
+#ifdef ASUS_ZC550KL_PROJECT
+	} else if (strncmp(messages, "enuart", strlen("enuart")) == 0) {
+		g_uart_dbg_mode = 1;
+		printk("Kernel  uart dbg mode = %d\n", g_uart_dbg_mode);
+	} else if(strncmp(messages, "disuart", strlen("disuart")) == 0) {
+		g_uart_dbg_mode = 0;
+		printk("Kernel uart dbg mode = %d\n", g_uart_dbg_mode);
+#else
 	} else if (strncmp(messages, "dbg", strlen("dbg")) == 0) {
 		g_user_dbg_mode = 1;
 		printk("Kernel dbg mode = %d\n", g_user_dbg_mode);
 	} else if(strncmp(messages, "ndbg", strlen("ndbg")) == 0) {
 		g_user_dbg_mode = 0;
 		printk("Kernel dbg mode = %d\n", g_user_dbg_mode);
+#endif
 	} else if(strncmp(messages, "get_asdf_log",
 				strlen("get_asdf_log")) == 0) {
 #ifdef CONFIG_MSM_RTB
@@ -1174,7 +1220,7 @@ static ssize_t asusdebug_write(struct file *file, const char __user *buf, size_t
 
 		if(!asus_asdf_set) {
 			asus_asdf_set = 1;
-			save_phone_hang_log();
+			save_phone_hang_log(1);
 			get_last_shutdown_log();
 			printk("[ASDF] get_last_shutdown_log: printk_buffer_slot2_addr=%p, value=0x%lx\n", printk_buffer_slot2_addr, *printk_buffer_slot2_addr);
 #ifdef CONFIG_MSM_RTB
@@ -1195,17 +1241,19 @@ static ssize_t asusdebug_write(struct file *file, const char __user *buf, size_t
 	} else if(strncmp(messages, "slowlog", strlen("slowlog")) == 0) {
 		printk("start to gi chk\n");
 		save_all_thread_info();
-
+		save_phone_hang_log(0);
 		msleep(5 * 1000);
 
 		printk("start to gi delta\n");
 		delta_all_thread_info();
-		save_phone_hang_log();
+		save_phone_hang_log(1);
 		return count;
+#ifdef ASUS_ZC550KL_PROJECT		
 	} else if(strncmp(messages, "watchdog_test", 13) == 0)
     {
 		printk("start watchdog test...\r\n");
 		watchdog_test = 1;
+#endif
 	}    
 
 	return count;
@@ -1280,6 +1328,61 @@ static struct file_operations turnon_asusdebug_proc_ops = {
 	.read = turnon_asusdebug_proc_read,
 	.write = turnon_asusdebug_proc_write,
  };
+static int gKmsgconfig = 0;
+static int Kmsgconfig_proc_show(struct seq_file *m, void *v)
+{
+       seq_printf(m, "%d", gKmsgconfig);
+       return 0;
+}
+
+static int Kmsgconfig_proc_open(struct inode *inode, struct file *file)
+{
+       return single_open(file, Kmsgconfig_proc_show, NULL);
+}
+
+static ssize_t Kmsgconfig_proc_write(struct file *file, const char __user *buf,
+	size_t count, loff_t *ppos)
+{
+       char num[10];
+       memset(num, 0, sizeof(num));
+
+       /* no data be written */
+       if (!count) {
+	       return 0;
+	}
+
+       /* Input size is too large to write our buffer(num) */
+       if (count > (sizeof(num) - 1)) {
+       return -EINVAL;
+       }
+
+       if (copy_from_user(num, buf, count)) {
+       return -EFAULT;
+	}
+
+       if (strncmp(num, "0", 1) == 0) {
+       		gKmsgconfig = 0;
+       } else if (strncmp(num, "1", 1) == 0) {
+		gKmsgconfig = 1;
+	} else {
+		printk("gKmsgconfig unknown data!!\n");
+	}
+
+       return count;
+}
+
+int get_Kmsgconfig(void)
+{
+       return gKmsgconfig;
+}
+EXPORT_SYMBOL(get_Kmsgconfig);
+
+static const struct file_operations proc_kmsgconfig_operations = {
+       .open = Kmsgconfig_proc_open,
+       .read = seq_read,
+       .write = Kmsgconfig_proc_write,
+};
+#ifdef ASUS_ZC550KL_PROJECT
 ///////////////////////////////////////////////////////////////////////
 //
 // printk controller
@@ -1328,13 +1431,20 @@ static const struct file_operations klog_proc_fops = {
 	.release	= single_release,
 	.write		= klog_proc_write,
 };
+#endif
 static int __init proc_asusdebug_init(void)
 {
 	proc_create("asusdebug", S_IALLUGO, NULL, &proc_asusdebug_operations);
 	proc_create("asusevtlog", S_IRWXUGO, NULL, &proc_asusevtlog_operations);
 	proc_create("asusevtlog-switch", S_IRWXUGO, NULL, &proc_evtlogswitch_operations);
 	proc_create("asusdebug-switch", S_IRWXUGO, NULL, &turnon_asusdebug_proc_ops);
-         proc_create_data("asusklog", S_IRWXUGO, NULL, &klog_proc_fops, NULL);
+	 proc_create("kmsgconfig", S_IRUGO | S_IWUSR, NULL,&proc_kmsgconfig_operations);
+	//+++ [ZC550KL] ASUS_BSP suri_gu@asus.com for screen off in factory mode when sys.screentimeout=1
+	proc_create_data("driver/screenofftimeout", 0666, NULL, &asus_screenofftimeout_switch_proc_fops, NULL);
+	//---
+#ifdef ASUS_ZC550KL_PROJECT
+     proc_create_data("asusklog", S_IRWXUGO, NULL, &klog_proc_fops, NULL);
+#endif
 	PRINTK_BUFFER_VA = ioremap(PRINTK_BUFFER_PA, PRINTK_BUFFER_SIZE);
 	mutex_init(&mA);
 	fake_mutex.owner = current;
@@ -1347,8 +1457,9 @@ static int __init proc_asusdebug_init(void)
 #ifdef CONFIG_HAS_EARLYSUSPEND
 	register_early_suspend(&asusdebug_early_suspend_handler);
 #endif
-
-	AsusTraceTrigeInitialize();
+	//+++ [ZC550KL] ASUS_BSP suri_gu@asus.com for screen off in factory mode when sys.screentimeout=1
+	AsusscreenofftimeoutSwitchInitialize();
+	//---
 	return 0;
 }
 module_init(proc_asusdebug_init);

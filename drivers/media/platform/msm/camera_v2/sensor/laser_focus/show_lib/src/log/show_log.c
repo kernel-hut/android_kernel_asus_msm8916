@@ -9,9 +9,9 @@
 
 /* Log status */
 static bool DEBUG_CDEB = true;	/* Major debug log */
-static bool DEBUG_DBG = true;	/* General debug log */
+static bool DEBUG_DBG = false;	/* General debug log */
 static bool DEBUG_REG = false;	/* I2C register debug log */
-static bool DEBUG_API = true;	/* API debug log */
+static bool DEBUG_API = false;	/* API debug log */
 static bool DEBUG_FUN = false;	/* Function debug log */
 static bool DEBUG_ERR = true;	/* Error debug log */
 
@@ -117,7 +117,7 @@ void LOG_Handler(int log_type, const char* fmt, ...){
 */
 ssize_t Laser_Focus_log_contorl(const char __user *num, size_t len){
 	int ctrl = 0;
-	char messages[8]="";
+	char messages[8];
 
 	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
 

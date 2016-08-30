@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -37,8 +37,8 @@ const unsigned int a4xx_registers[] = {
 	0x0028, 0x002B, 0x002E, 0x0034, 0x0037, 0x0044, 0x0047, 0x0066,
 	0x0068, 0x0095, 0x009C, 0x0170, 0x0174, 0x01AF,
 	/* CP */
-	0x0200, 0x0233, 0x0240, 0x0250, 0x04C0, 0x04DD, 0x0500, 0x050B,
-	0x0578, 0x058F,
+	0x0200, 0x0226, 0x0228, 0x0233, 0x0240, 0x0250, 0x04C0, 0x04D0,
+	0x04D2, 0x04DD, 0x0500, 0x050B, 0x0578, 0x058F,
 	/* VSC */
 	0x0C00, 0x0C03, 0x0C08, 0x0C41, 0x0C50, 0x0C51,
 	/* GRAS */
@@ -559,10 +559,6 @@ static void a4xx_enable_hwcg(struct kgsl_device *device)
 	else
 		kgsl_regwrite(device, A4XX_RBBM_CLOCK_CTL, 0xAAAAAAAA);
 	kgsl_regwrite(device, A4XX_RBBM_CLOCK_CTL2, 0);
-
-	/* Disable dynamic gmem clock gating for A405 */
-	if (adreno_is_a405(adreno_dev))
-		kgsl_regwrite(device, A4XX_RBBM_GPR0_CTL, 0x000000C0);
 }
 
 /**
@@ -999,6 +995,10 @@ static unsigned int a4xx_register_offsets[ADRENO_REG_REGISTER_MAX] = {
 				A4XX_RBBM_SECVID_TRUST_CONTROL),
 	ADRENO_REG_DEFINE(ADRENO_REG_RBBM_ALWAYSON_COUNTER_LO,
 				A4XX_RBBM_ALWAYSON_COUNTER_LO),
+	ADRENO_REG_DEFINE(ADRENO_REG_VBIF_XIN_HALT_CTRL0,
+				A4XX_VBIF_XIN_HALT_CTRL0),
+	ADRENO_REG_DEFINE(ADRENO_REG_VBIF_XIN_HALT_CTRL1,
+				A4XX_VBIF_XIN_HALT_CTRL1),
 };
 
 const struct adreno_reg_offsets a4xx_reg_offsets = {
@@ -1736,6 +1736,7 @@ static struct adreno_coresight a4xx_coresight = {
 	 (1 << A4XX_INT_CP_IB1_INT) |			\
 	 (1 << A4XX_INT_CP_IB2_INT) |			\
 	 (1 << A4XX_INT_CP_RB_INT) |			\
+	 (1 << A4XX_INT_CACHE_FLUSH_TS) |		\
 	 (1 << A4XX_INT_CP_REG_PROTECT_FAULT) |		\
 	 (1 << A4XX_INT_CP_AHB_ERROR_HALT) |		\
 	 (1 << A4XX_INT_RBBM_ATB_BUS_OVERFLOW) |	\
@@ -1772,7 +1773,7 @@ static struct adreno_irq_funcs a4xx_irq_funcs[] = {
 	ADRENO_IRQ_CALLBACK(NULL), /* 17 - CP_RB_DONE_TS */
 	ADRENO_IRQ_CALLBACK(NULL), /* 18 - CP_VS_DONE_TS */
 	ADRENO_IRQ_CALLBACK(NULL), /* 19 - CP_PS_DONE_TS */
-	ADRENO_IRQ_CALLBACK(NULL), /* 20 - CP_CACHE_FLUSH_TS */
+	ADRENO_IRQ_CALLBACK(adreno_cp_callback), /* 20 - CP_CACHE_FLUSH_TS */
 	/* 21 - CP_AHB_ERROR_FAULT */
 	ADRENO_IRQ_CALLBACK(a4xx_err_callback),
 	ADRENO_IRQ_CALLBACK(a4xx_err_callback), /* 22 - RBBM_ATB_BUS_OVERFLOW */
@@ -1809,6 +1810,7 @@ struct adreno_gpudev adreno_a4xx_gpudev = {
 	.irq_trace = trace_kgsl_a4xx_irq_status,
 	.snapshot_data = &a4xx_snapshot_data,
 	.num_prio_levels = 1,
+	.vbif_xin_halt_ctrl0_mask = A4XX_VBIF_XIN_HALT_CTRL0_MASK,
 
 	.perfcounter_init = a4xx_perfcounter_init,
 	.rb_init = a3xx_rb_init,

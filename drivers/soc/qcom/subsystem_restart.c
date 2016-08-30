@@ -230,6 +230,38 @@ static ssize_t restart_level_store(struct device *dev,
 	return -EPERM;
 }
 
+static ssize_t system_debug_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct subsys_device *subsys = to_subsys(dev);
+	char p[6] = "set";
+
+	if (!subsys->desc->system_debug)
+		strlcpy(p, "reset", sizeof(p));
+
+	return snprintf(buf, PAGE_SIZE, "%s\n", p);
+}
+
+static ssize_t system_debug_store(struct device *dev,
+				struct device_attribute *attr, const char *buf,
+				size_t count)
+{
+	struct subsys_device *subsys = to_subsys(dev);
+	const char *p;
+
+	p = memchr(buf, '\n', count);
+	if (p)
+		count = p - buf;
+
+	if (!strncasecmp(buf, "set", count))
+		subsys->desc->system_debug = true;
+	else if (!strncasecmp(buf, "reset", count))
+		subsys->desc->system_debug = false;
+	else
+		return -EPERM;
+	return count;
+}
+
 int subsys_get_restart_level(struct subsys_device *dev)
 {
 	return dev->restart_level;
@@ -270,6 +302,7 @@ static struct device_attribute subsys_attrs[] = {
 	__ATTR_RO(state),
 	__ATTR_RO(crash_count),
 	__ATTR(restart_level, 0644, restart_level_show, restart_level_store),
+	__ATTR(system_debug, 0644, system_debug_show, system_debug_store),
 	__ATTR_NULL,
 };
 
@@ -293,16 +326,18 @@ module_param(ssr_panic, charp, 0644);
 /*ASUS-BBSP Skip ramdump or panic in a specific reason---*/
 
 /*ASUS-BBSP Save SSR reason+++*/
+#define MAX_SSR_REASON_LEN (128)
+static char *ssr_reason = NULL;
+
+#if defined(ASUS_ZC550KL8916_PROJECT)
 #define REASON_EXCEPTION_A "0: task Exception detected"
 #define REASON_EXCEPTION_B "##3424*9"
-#define MAX_SSR_REASON_LEN (128)
 #define DEFAULT_TURBO_TARGET_COUNT 2
 #define DEFAULT_TURBO_REQUIRE_RESET_TIME 14*24*60*60 //14 days
-
-static char *ssr_reason = NULL;
 static uint32_t modem_exception0_flag = 0;
 static unsigned long first_exception0_time = 0;
 static int get_current_time(unsigned long *now_tm_sec);
+#endif
 
 module_param(ssr_reason, charp, 0444);
 
@@ -583,8 +618,8 @@ static void subsystem_ramdump(struct subsys_device *dev, void *data)
 
 static void subsystem_free_memory(struct subsys_device *dev, void *data)
 {
- 	if (dev->desc->free_memory)
- 		dev->desc->free_memory(dev->desc);
+	if (dev->desc->free_memory)
+		dev->desc->free_memory(dev->desc);
 }
 
 static void subsystem_powerup(struct subsys_device *dev, void *data)
@@ -769,7 +804,6 @@ void subsystem_put(void *subsystem)
 		return;
 
 	track = subsys_get_track(subsys);
-	
 	mutex_lock(&track->lock);
 	if (WARN(!subsys->count, "%s: %s: Reference count mismatch\n",
 			subsys->desc->name, __func__))
@@ -780,7 +814,7 @@ void subsystem_put(void *subsystem)
 			subsystem_ramdump(subsys, NULL);
 	}
 	mutex_unlock(&track->lock);
-	
+
 	subsystem_free_memory(subsys, NULL);
 
 	subsys_d = find_subsys(subsys->desc->depends_on);
@@ -850,7 +884,7 @@ static void subsystem_restart_wq_func(struct work_struct *work)
 
 	/* Collect ram dumps for all subsystems in order here */
 	for_each_subsys_device(list, count, NULL, subsystem_ramdump);
-	
+
 	for_each_subsys_device(list, count, NULL, subsystem_free_memory);
 
 	notify_each_subsys_device(list, count, SUBSYS_BEFORE_POWERUP, NULL);
@@ -908,6 +942,7 @@ static void device_restart_work_hdlr(struct work_struct *work)
 	struct subsys_device *dev = container_of(work, struct subsys_device,
 							device_restart_work);
 
+#if defined(ASUS_ZC550KL8916_PROJECT)
 	uint32_t turbo_require_count;
 	uint32_t turbo_require_reset_time;
 	uint32_t turbo_target_count;
@@ -970,6 +1005,7 @@ static void device_restart_work_hdlr(struct work_struct *work)
 		machine_restart(NULL);
 		return;
 	}
+#endif
 
 	notify_each_subsys_device(&dev, 1, SUBSYS_SOC_RESET, NULL);
 	panic("subsys-restart: Resetting the SoC - %s crashed.",
@@ -1016,6 +1052,7 @@ int subsystem_restart_dev(struct subsys_device *dev)
 * 1.Record crash count.
 * 2.Reboot device directly.
 * */
+#if defined(ASUS_ZC550KL8916_PROJECT)
 	if (strstr(ssr_reason, REASON_EXCEPTION_A) != NULL ||
 			strstr(ssr_reason, REASON_EXCEPTION_B) != NULL)
 	{
@@ -1025,9 +1062,11 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		//schedule_work(&dev->device_restart_work);
 		//return 0;
 	}
+#endif
 //ASUS_BSP Ken_Gan --- [ZC550KL][SSR][N/A][MODIFY]workaround for Exception 0
 
 	switch (dev->restart_level) {
+
 	case RESET_SUBSYS_COUPLED:
 		__subsystem_restart_dev(dev);
 		break;
@@ -1172,6 +1211,7 @@ static const struct file_operations subsys_debugfs_fops = {
 };
 
 //ASUS_BSP +++ jeff_gu [ZC550KL][SSR][N/A][MODIFY]workaround for Exception 0
+#if defined(ASUS_ZC550KL8916_PROJECT)
 static ssize_t modem_crash_count_debugfs_read(struct file *filp, char __user *ubuf,
 		size_t cnt, loff_t *ppos)
 {
@@ -1346,7 +1386,7 @@ close_time:
 	rtc_class_close(rtc);
 	return rc;
 }
-
+#endif
 //ASUS_BSP --- jeff_gu [ZC550KL][SSR][N/A][MODIFY]workaround for Exception 0
 
 static struct dentry *subsys_base_dir;
@@ -1355,6 +1395,7 @@ static int __init subsys_debugfs_init(void)
 {
 	subsys_base_dir = debugfs_create_dir("msm_subsys", NULL);
 	//ASUS_BSP +++ jeff_gu [ZC550KL][SSR][N/A][MODIFY]workaround for Exception 0
+#if defined(ASUS_ZC550KL8916_PROJECT)
 	if(subsys_base_dir)
 	{
 		debugfs_create_file("modem_crash_count",
@@ -1370,6 +1411,7 @@ static int __init subsys_debugfs_init(void)
 				S_IRUSR|S_IRGRP|S_IWUSR, subsys_base_dir, NULL,
 				&rpm_turbo_target_count_debugfs_fops);
 	}
+#endif
 	//ASUS_BSP --- jeff_gu [ZC550KL][SSR][N/A][MODIFY]workaround for Exception 0
 	return !subsys_base_dir ? -ENOMEM : 0;
 }
@@ -1628,15 +1670,15 @@ static int __get_gpio(struct subsys_desc *desc, const char *prop,
 }
 
 static int __get_irq(struct subsys_desc *desc, const char *prop,
-		unsigned int *irq)
+		unsigned int *irq, int *gpio)
 {
-	int ret, gpio, irql;
+	int ret, gpiol, irql;
 
-	ret = __get_gpio(desc, prop, &gpio);
+	ret = __get_gpio(desc, prop, &gpiol);
 	if (ret)
 		return ret;
 
-	irql = gpio_to_irq(gpio);
+	irql = gpio_to_irq(gpiol);
 
 	if (irql == -ENOENT)
 		irql = -ENXIO;
@@ -1646,6 +1688,8 @@ static int __get_irq(struct subsys_desc *desc, const char *prop,
 				prop);
 		return irql;
 	} else {
+		if (gpio)
+			*gpio = gpiol;
 		*irq = irql;
 	}
 
@@ -1660,15 +1704,17 @@ static int subsys_parse_devicetree(struct subsys_desc *desc)
 	struct platform_device *pdev = container_of(desc->dev,
 					struct platform_device, dev);
 
-	ret = __get_irq(desc, "qcom,gpio-err-fatal", &desc->err_fatal_irq);
+	ret = __get_irq(desc, "qcom,gpio-err-fatal", &desc->err_fatal_irq,
+							&desc->err_fatal_gpio);
 	if (ret && ret != -ENOENT)
 		return ret;
 
-	ret = __get_irq(desc, "qcom,gpio-err-ready", &desc->err_ready_irq);
+	ret = __get_irq(desc, "qcom,gpio-err-ready", &desc->err_ready_irq,
+							NULL);
 	if (ret && ret != -ENOENT)
 		return ret;
 
-	ret = __get_irq(desc, "qcom,gpio-stop-ack", &desc->stop_ack_irq);
+	ret = __get_irq(desc, "qcom,gpio-stop-ack", &desc->stop_ack_irq, NULL);
 	if (ret && ret != -ENOENT)
 		return ret;
 

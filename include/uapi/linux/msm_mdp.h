@@ -69,9 +69,6 @@
 						struct mdp_overlay_list)
 #define MSMFB_LPM_ENABLE	_IOWR(MSMFB_IOCTL_MAGIC, 170, unsigned int)
 
-//ASUS_BSP: Louis +++
-#define MSMFB_CABC_CTRL _IOW(MSMFB_IOCTL_MAGIC, 171, unsigned int)
-//ASUS_BSP: Louis ---
 
 #define FB_TYPE_3D_PANEL 0x10101010
 #define MDP_IMGTYPE2_START 0x10000
@@ -117,6 +114,8 @@ enum {
 //ASUS_BSP: Louis, cabc mode ---
 
 enum {
+	NOTIFY_UPDATE_INIT,
+	NOTIFY_UPDATE_DEINIT,
 	NOTIFY_UPDATE_START,
 	NOTIFY_UPDATE_STOP,
 	NOTIFY_UPDATE_POWER_OFF,
@@ -238,6 +237,12 @@ enum {
 #define MDP_TRANSP_NOP 0xffffffff
 #define MDP_ALPHA_NOP 0xff
 
+/*
+ * MDP_DEINTERLACE & MDP_SHARPENING Flags are not valid for MDP3
+ * so using them together for MDP_SMART_BLIT.
+ */
+#define MDP_SMART_BLIT			0xC0000000
+
 #define MDP_FB_PAGE_PROTECTION_NONCACHED         (0)
 #define MDP_FB_PAGE_PROTECTION_WRITECOMBINE      (1)
 #define MDP_FB_PAGE_PROTECTION_WRITETHROUGHCACHE (2)
@@ -314,6 +319,7 @@ struct mdp_blit_req {
 	uint32_t flags;
 	int sharpening_strength;  /* -127 <--> 127, default 64 */
 	uint8_t color_space;
+	uint32_t fps;
 };
 
 struct mdp_blit_req_list {
@@ -786,6 +792,7 @@ enum {
 	mdp_lut_igc,
 	mdp_lut_pgc,
 	mdp_lut_hist,
+	mdp_lut_rgb,
 	mdp_lut_max,
 };
 
@@ -806,6 +813,20 @@ struct mdp_pgc_lut_data {
 	struct mdp_ar_gc_lut_data *b_data;
 };
 
+/*
+ * mdp_rgb_lut_data is used to provide parameters for configuring the
+ * generic RGB lut in case of gamma correction or other LUT updation usecases
+ */
+struct mdp_rgb_lut_data {
+	uint32_t flags;
+	uint32_t lut_type;
+	struct fb_cmap cmap;
+};
+
+enum {
+	mdp_rgb_lut_gc,
+	mdp_rgb_lut_hist,
+};
 
 struct mdp_lut_cfg_data {
 	uint32_t lut_type;
@@ -813,6 +834,7 @@ struct mdp_lut_cfg_data {
 		struct mdp_igc_lut_data igc_lut_data;
 		struct mdp_pgc_lut_data pgc_lut_data;
 		struct mdp_hist_lut_data hist_lut_data;
+		struct mdp_rgb_lut_data rgb_lut_data;
 	} data;
 };
 

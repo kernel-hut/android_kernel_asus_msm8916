@@ -1,5 +1,5 @@
 /* 
- * Copyright (C) 2014 ASUSTek Inc.
+ * Copyright (C) 2015 ASUSTek Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -20,7 +20,21 @@
 #include <linux/fs.h>
 #include <asm/uaccess.h>
 #include <linux/input/ASH.h>
-#include "../ASH_log.h"
+
+/**************************/
+/* Debug and Log System */
+/************************/
+#define MODULE_NAME			"ASH_Sysfs"
+#define SENSOR_TYPE_NAME		"IRsensor"
+
+#undef dbg
+#ifdef ASH_SYSFS_DEBUG
+	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#else
+	#define dbg(fmt, args...)
+#endif
+#define log(fmt, args...) printk(KERN_INFO "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 /***************************************/
 /* Proximity read/write Calibration File*/
@@ -57,10 +71,10 @@ int psensor_sysfs_read_high(void)
 
 	sscanf(buf, "%d", &cal_val);
 	if(cal_val < 0) {
-		err("Proximity read High Calibration is NEGATIVE. (%d)\n", cal_val);
+		err("Proximity read High Calibration is FAIL. (%d)\n", cal_val);
 		return -EINVAL;	/*Invalid argument*/
 	} else {
-		log("Proximity read High Calibration : %d\n", cal_val);
+		dbg("Proximity read High Calibration : %d\n", cal_val);
 	}
 	
 	return cal_val;
@@ -99,10 +113,10 @@ int psensor_sysfs_read_low(void)
 
 	sscanf(buf, "%d", &cal_val);	
 	if(cal_val < 0) {
-		err("Proximity read Low Calibration is NEGATIVE. (%d)\n", cal_val);
+		err("Proximity read Low Calibration is FAIL. (%d)\n", cal_val);
 		return -EINVAL;	/*Invalid argument*/
 	} else {
-		log("Proximity read Low Calibration : %d\n", cal_val);
+		dbg("Proximity read Low Calibration : %d\n", cal_val);
 	}	
 	
 	return cal_val;
@@ -213,10 +227,10 @@ int lsensor_sysfs_read_200lux(void)
 
 	sscanf(buf, "%d", &cal_val);	
 	if(cal_val < 0) {
-		err("Light Sensor read 200lux Calibration is NEGATIVE. (%d)\n", cal_val);
+		err("Light Sensor read 200lux Calibration is FAIL. (%d)\n", cal_val);
 		return -EINVAL;	/*Invalid argument*/
 	} else {
-		log("Light Sensor read 200lux Calibration: Cal: %d\n", cal_val);
+		dbg("Light Sensor read 200lux Calibration: Cal: %d\n", cal_val);
 	}	
 	
 	return cal_val;
@@ -254,10 +268,10 @@ int lsensor_sysfs_read_1000lux(void)
 
 	sscanf(buf, "%d", &cal_val);	
 	if(cal_val < 0) {
-		err("Light Sensor read 1000lux Calibration is NEGATIVE. (%d)\n", cal_val);
+		err("Light Sensor read 1000lux Calibration is FAIL. (%d)\n", cal_val);
 		return -EINVAL;	/*Invalid argument*/
 	} else {
-		log("Light Sensor read 1000lux Calibration: Cal: %d\n", cal_val);
+		dbg("Light Sensor read 1000lux Calibration: Cal: %d\n", cal_val);
 	}	
 	
 	return cal_val;

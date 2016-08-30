@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -2341,6 +2341,9 @@ static int cpr_get_corner_quot_adjustment(struct cpr_regulator *cpr_vreg,
 		scaling[i] = 1000 * (cpr_vreg->cpr_fuse_target_quot[i]
 			      - cpr_vreg->cpr_fuse_target_quot[i - 1])
 			  / (freq_max[i] - freq_max[i - 1]);
+		if (cpr_vreg->cpr_fuse_target_quot[i]
+			< cpr_vreg->cpr_fuse_target_quot[i - 1])
+			scaling[i] = 0;
 		scaling[i] = min(scaling[i], max_factor[i]);
 		cpr_info(cpr_vreg, "fuse corner %d quotient adjustment scaling factor: %d.%03d\n",
 			i, scaling[i] / 1000, scaling[i] % 1000);
@@ -2597,6 +2600,87 @@ done:
 	return rc;
 }
 
+static int cpr_minimum_quot_difference_adjustment(struct platform_device *pdev,
+					struct cpr_regulator *cpr_vreg)
+{
+	struct device_node *of_node = pdev->dev.of_node;
+	int tuple_count, tuple_match;
+	int rc, i, len = 0;
+	u32 index, adjust_quot = 0;
+	u32 *min_diff_quot;
+
+	if (!of_find_property(of_node, "qcom,cpr-fuse-min-quot-diff", NULL))
+		/* No conditional adjustment needed on revised quotients. */
+		return 0;
+
+	if (!of_find_property(of_node, "qcom,cpr-min-quot-diff-adjustment",
+						&len)) {
+		cpr_err(cpr_vreg, "qcom,cpr-min-quot-diff-adjustment not specified\n");
+		return -ENODEV;
+	}
+
+	if (cpr_vreg->cpr_fuse_map_count) {
+		if (cpr_vreg->cpr_fuse_map_match == FUSE_MAP_NO_MATCH)
+			/* No matching index to use for quotient adjustment. */
+			return 0;
+		tuple_count = cpr_vreg->cpr_fuse_map_count;
+		tuple_match = cpr_vreg->cpr_fuse_map_match;
+	} else {
+		tuple_count = 1;
+		tuple_match = 0;
+	}
+
+	if (len != cpr_vreg->num_fuse_corners * tuple_count * sizeof(u32)) {
+		cpr_err(cpr_vreg, "qcom,cpr-min-quot-diff-adjustment length=%d is invalid\n",
+					len);
+		return -EINVAL;
+	}
+
+	min_diff_quot = kzalloc(cpr_vreg->num_fuse_corners * sizeof(u32),
+							GFP_KERNEL);
+	if (!min_diff_quot) {
+		cpr_err(cpr_vreg, "memory alloc failed\n");
+		return -ENOMEM;
+	}
+
+	rc = of_property_read_u32_array(of_node, "qcom,cpr-fuse-min-quot-diff",
+						min_diff_quot,
+						cpr_vreg->num_fuse_corners);
+	if (rc < 0) {
+		cpr_err(cpr_vreg, "qcom,cpr-fuse-min-quot-diff reading failed, rc = %d\n",
+							rc);
+		goto error;
+	}
+
+	for (i = CPR_FUSE_CORNER_MIN + 1;
+				i <= cpr_vreg->num_fuse_corners; i++) {
+		if ((cpr_vreg->cpr_fuse_target_quot[i]
+			- cpr_vreg->cpr_fuse_target_quot[i - 1])
+		    <= (int)min_diff_quot[i - CPR_FUSE_CORNER_MIN]) {
+			index = tuple_match * cpr_vreg->num_fuse_corners
+					+ i - CPR_FUSE_CORNER_MIN;
+			rc = of_property_read_u32_index(of_node,
+						"qcom,cpr-min-quot-diff-adjustment",
+						index, &adjust_quot);
+			if (rc) {
+				cpr_err(cpr_vreg, "could not read qcom,cpr-min-quot-diff-adjustment index %u, rc=%d\n",
+							index, rc);
+				goto error;
+			}
+
+			cpr_vreg->cpr_fuse_target_quot[i]
+				= cpr_vreg->cpr_fuse_target_quot[i - 1]
+					+ adjust_quot;
+			cpr_info(cpr_vreg, "Corner[%d]: revised adjusted quotient = %d\n",
+					i, cpr_vreg->cpr_fuse_target_quot[i]);
+		};
+	}
+
+error:
+	kfree(min_diff_quot);
+	return rc;
+}
+
 static int cpr_adjust_target_quots(struct platform_device *pdev,
 					struct cpr_regulator *cpr_vreg)
 {
@@ -2647,6 +2731,62 @@ static int cpr_adjust_target_quots(struct platform_device *pdev,
 				i, cpr_vreg->cpr_fuse_target_quot[i]);
 		}
 	}
+
+	rc = cpr_minimum_quot_difference_adjustment(pdev, cpr_vreg);
+	if (rc)
+		cpr_err(cpr_vreg, "failed to apply minimum quot difference rc=%d\n",
+					rc);
+
+	return rc;
+}
+
+static int cpr_check_allowed(struct platform_device *pdev,
+					struct cpr_regulator *cpr_vreg)
+{
+	struct device_node *of_node = pdev->dev.of_node;
+	char *allow_str = "qcom,cpr-allowed";
+	int rc = 0, count;
+	int tuple_count, tuple_match;
+	u32 allow_status;
+
+	if (!of_find_property(of_node, allow_str, &count))
+		/* CPR is allowed for all fuse revisions. */
+		return 0;
+
+	count /= sizeof(u32);
+	if (cpr_vreg->cpr_fuse_map_count) {
+		if (cpr_vreg->cpr_fuse_map_match == FUSE_MAP_NO_MATCH)
+			/* No matching index to use for CPR allowed. */
+			return 0;
+		tuple_count = cpr_vreg->cpr_fuse_map_count;
+		tuple_match = cpr_vreg->cpr_fuse_map_match;
+	} else {
+		tuple_count = 1;
+		tuple_match = 0;
+	}
+
+	if (count != tuple_count) {
+		cpr_err(cpr_vreg, "%s count=%d is invalid\n", allow_str,
+			count);
+		return -EINVAL;
+	}
+
+	rc = of_property_read_u32_index(of_node, allow_str, tuple_match,
+		&allow_status);
+	if (rc) {
+		cpr_err(cpr_vreg, "could not read %s index %u, rc=%d\n",
+			allow_str, tuple_match, rc);
+		return rc;
+	}
+
+	if (allow_status && !cpr_vreg->cpr_fuse_disable)
+		cpr_vreg->cpr_fuse_disable = false;
+	else
+		cpr_vreg->cpr_fuse_disable = true;
+
+	cpr_info(cpr_vreg, "CPR closed loop is %s for fuse revision %d\n",
+		cpr_vreg->cpr_fuse_disable ? "disabled" : "enabled",
+		cpr_vreg->cpr_fuse_revision);
 
 	return rc;
 }
@@ -2859,6 +2999,17 @@ static int cpr_init_cpr_efuse(struct platform_device *pdev,
 	if (rc)
 		goto error;
 
+	for (i = CPR_FUSE_CORNER_MIN + 1;
+				i <= cpr_vreg->num_fuse_corners; i++) {
+		if (cpr_vreg->cpr_fuse_target_quot[i]
+				< cpr_vreg->cpr_fuse_target_quot[i - 1] &&
+			cpr_vreg->cpr_fuse_ro_sel[i] ==
+				cpr_vreg->cpr_fuse_ro_sel[i - 1]) {
+			cpr_vreg->cpr_fuse_disable = true;
+			cpr_err(cpr_vreg, "invalid quotient values; permanently disabling CPR\n");
+		}
+	}
+
 	if (cpr_vreg->flags & FLAGS_UPLIFT_QUOT_VOLT) {
 		cpr_voltage_uplift_wa_inc_quot(cpr_vreg, of_node);
 		for (i = CPR_FUSE_CORNER_MIN; i <= cpr_vreg->num_fuse_corners;
@@ -2906,7 +3057,7 @@ static int cpr_init_cpr_efuse(struct platform_device *pdev,
 			cpr_err(cpr_vreg, "invalid quotient values; permanently disabling CPR\n");
 		}
 	}
-
+	rc = cpr_check_allowed(pdev, cpr_vreg);
 
 error:
 	kfree(bp_target_quot);

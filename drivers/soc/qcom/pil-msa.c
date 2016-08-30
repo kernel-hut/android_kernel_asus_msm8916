@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -50,14 +50,18 @@
 #define RMB_PMI_META_DATA		0x10
 #define RMB_PMI_CODE_START		0x14
 #define RMB_PMI_CODE_LENGTH		0x18
+#define RMB_PROTOCOL_VERSION		0x1C
+#define RMB_MBA_DEBUG_INFORMATION	0x20
 
 #define POLL_INTERVAL_US		50
 
 #define CMD_META_DATA_READY		0x1
 #define CMD_LOAD_READY			0x2
+#define CMD_PILFAIL_NFY_MBA		0xffffdead
 
 #define STATUS_META_DATA_AUTH_SUCCESS	0x3
 #define STATUS_AUTH_COMPLETE		0x4
+#define STATUS_MBA_UNLOCKED		0x6
 
 /* External BHS */
 #define EXTERNAL_BHS_ON			BIT(0)
@@ -67,11 +71,17 @@
 #define MSS_RESTART_PARAM_ID		0x2
 #define MSS_RESTART_ID			0xA
 
+#define MSS_MAGIC			0XAABADEAD
+
 static int pbl_mba_boot_timeout_ms = 1000;
 module_param(pbl_mba_boot_timeout_ms, int, S_IRUGO | S_IWUSR);
 
 static int modem_auth_timeout_ms = 10000;
 module_param(modem_auth_timeout_ms, int, S_IRUGO | S_IWUSR);
+
+/* If set to 0xAABADEAD, MBA failures trigger a kernel panic */
+static uint modem_trigger_panic;
+module_param(modem_trigger_panic, uint, S_IRUGO | S_IWUSR);
 
 static void modem_log_rmb_regs(void __iomem *base)
 {
@@ -86,7 +96,13 @@ static void modem_log_rmb_regs(void __iomem *base)
 				readl_relaxed(base + RMB_PMI_CODE_START));
 	pr_err("RMB_PMI_CODE_LENGTH: %08x\n",
 				readl_relaxed(base + RMB_PMI_CODE_LENGTH));
+	pr_err("RMB_PROTOCOL_VERSION: %08x\n",
+				readl_relaxed(base + RMB_PROTOCOL_VERSION));
+	pr_err("RMB_MBA_DEBUG_INFORMATION: %08x\n",
+			readl_relaxed(base + RMB_MBA_DEBUG_INFORMATION));
 
+	if (modem_trigger_panic == MSS_MAGIC)
+		panic("%s: System ramdump is needed!!!\n", __func__);
 }
 
 static int pil_mss_power_up(struct q6v5_data *drv)
@@ -263,11 +279,25 @@ int pil_mss_shutdown(struct pil_desc *pil)
 	return ret;
 }
 
-int pil_mss_deinit_image(struct pil_desc *pil)
+int __pil_mss_deinit_image(struct pil_desc *pil, bool err_path)
 {
 	struct modem_data *drv = dev_get_drvdata(pil->dev);
 	struct q6v5_data *q6_drv = container_of(pil, struct q6v5_data, desc);
 	int ret = 0;
+	s32 status;
+
+	if (err_path) {
+		writel_relaxed(CMD_PILFAIL_NFY_MBA,
+				drv->rmb_base + RMB_MBA_COMMAND);
+		ret = readl_poll_timeout(drv->rmb_base + RMB_MBA_STATUS, status,
+			status == STATUS_MBA_UNLOCKED || status < 0,
+			POLL_INTERVAL_US, pbl_mba_boot_timeout_ms * 1000);
+		if (ret)
+			dev_err(pil->dev, "MBA region unlock timed out\n");
+		else if (status < 0)
+			dev_err(pil->dev, "MBA unlock returned err status: %d\n",
+						status);
+	}
 
 	ret = pil_mss_shutdown(pil);
 
@@ -281,6 +311,11 @@ int pil_mss_deinit_image(struct pil_desc *pil)
 				drv->q6->mba_virt, drv->q6->mba_phys,
 				&drv->attrs_dma);
 	return ret;
+}
+
+int pil_mss_deinit_image(struct pil_desc *pil)
+{
+	return __pil_mss_deinit_image(pil, true);
 }
 
 int pil_mss_make_proxy_votes(struct pil_desc *pil)
@@ -417,10 +452,11 @@ int pil_mss_reset_load_mba(struct pil_desc *pil)
 
 	drv->mba_size = SZ_1M;
 
- if (md->mba_mem_dev_fixed)
- 		md->mba_mem_dev = *md->mba_mem_dev_fixed;
- else
- 		md->mba_mem_dev.coherent_dma_mask = DMA_BIT_MASK(sizeof(dma_addr_t) * 8);
+	if (md->mba_mem_dev_fixed)
+		md->mba_mem_dev = *md->mba_mem_dev_fixed;
+	else
+		md->mba_mem_dev.coherent_dma_mask =
+			DMA_BIT_MASK(sizeof(dma_addr_t) * 8);
 
 	init_dma_attrs(&md->attrs_dma);
 	dma_set_attr(DMA_ATTR_STRONGLY_ORDERED, &md->attrs_dma);
@@ -462,6 +498,7 @@ int pil_mss_reset_load_mba(struct pil_desc *pil)
 err_mss_reset:
 	dma_free_attrs(&md->mba_mem_dev, drv->mba_size, drv->mba_virt,
 				drv->mba_phys, &md->attrs_dma);
+	drv->mba_virt = NULL;
 err_dma_alloc:
 	release_firmware(fw);
 	return ret;
@@ -477,10 +514,11 @@ static int pil_msa_auth_modem_mdt(struct pil_desc *pil, const u8 *metadata,
 	int ret;
 	DEFINE_DMA_ATTRS(attrs);
 
- 	if (drv->mba_mem_dev_fixed)
+	if (drv->mba_mem_dev_fixed)
 		drv->mba_mem_dev = *drv->mba_mem_dev_fixed;
- 	else
- 		drv->mba_mem_dev.coherent_dma_mask = DMA_BIT_MASK(sizeof(dma_addr_t) * 8);
+	else
+		drv->mba_mem_dev.coherent_dma_mask =
+			DMA_BIT_MASK(sizeof(dma_addr_t) * 8);
 
 	dma_set_attr(DMA_ATTR_STRONGLY_ORDERED, &attrs);
 	/* Make metadata physically contiguous and 4K aligned. */
@@ -488,7 +526,8 @@ static int pil_msa_auth_modem_mdt(struct pil_desc *pil, const u8 *metadata,
 					GFP_KERNEL, &attrs);
 	if (!mdata_virt) {
 		dev_err(pil->dev, "MBA metadata buffer allocation failed\n");
-		return -ENOMEM;
+		ret = -ENOMEM;
+		goto fail;
 	}
 	memcpy(mdata_virt, metadata, size);
 	/* wmb() ensures copy completes prior to starting authentication. */
@@ -513,10 +552,17 @@ static int pil_msa_auth_modem_mdt(struct pil_desc *pil, const u8 *metadata,
 
 	dma_free_attrs(&drv->mba_mem_dev, size, mdata_virt, mdata_phys, &attrs);
 
-	if (ret) {
-		modem_log_rmb_regs(drv->rmb_base);
-		if (drv->q6)
-			pil_mss_shutdown(pil);
+	if (!ret)
+		return ret;
+
+fail:
+	modem_log_rmb_regs(drv->rmb_base);
+	if (drv->q6) {
+		pil_mss_shutdown(pil);
+		dma_free_attrs(&drv->mba_mem_dev, drv->q6->mba_size,
+				drv->q6->mba_virt, drv->q6->mba_phys,
+				&drv->attrs_dma);
+		drv->q6->mba_virt = NULL;
 	}
 	return ret;
 }

@@ -21,15 +21,30 @@
 #include <linux/interrupt.h>
 #include <linux/gpio.h>
 #include <linux/input/ASH.h>
-#include "../ASH_log.h"
 
 #define IR_INTEL_NAME 	"ALS_INT#"
-#define IR_QCOM_NAME 	"qcom,alsp-gpio"
+#define IR_QCOM_NAME 	"qcom,psals-gpio"
 #define IR_IRQ_NAME		"IR_SENSOR_IRQ"
 #define IR_INT_NAME		"IR_SENSOR_INT"
 
 static int ASUS_IR_SENSOR_GPIO;
 static IRsensor_GPIO * mIRsensor_GPIO;
+static struct i2c_client *g_i2c_client;
+
+/**************************/
+/* Debug and Log System */
+/************************/
+#define MODULE_NAME			"ASH_GPIO"
+#define SENSOR_TYPE_NAME		"IRsensor"
+
+#undef dbg
+#ifdef ASH_GPIO_DEBUG
+	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#else
+	#define dbg(fmt, args...)
+#endif
+#define log(fmt, args...) printk(KERN_INFO "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
 
 static irqreturn_t IRsensor_irq_handler(int irq, void *dev_id);
 
@@ -39,7 +54,7 @@ static irqreturn_t IRsensor_irq_handler(int irq, void *dev_id);
 
 #ifdef GPIO_QCOM
 #include <linux/of_gpio.h>
-#define GPIO_LOOKUP_STATE	"cm36686_gpio_high"
+#define GPIO_LOOKUP_STATE	"psals_gpio_high"
 
 static void set_pinctrl(struct i2c_client *client)
 {
@@ -50,7 +65,8 @@ static void set_pinctrl(struct i2c_client *client)
 	key_pinctrl = devm_pinctrl_get(&client->dev);
 	set_state = pinctrl_lookup_state(key_pinctrl, GPIO_LOOKUP_STATE);
 	ret = pinctrl_select_state(key_pinctrl, set_state);
-	log("%s: pinctrl_select_state = %d\n", __FUNCTION__, ret);
+	if(ret < 0)
+		err("%s: pinctrl_select_state ERROR(%d).\n", __FUNCTION__, ret);
 }
 #endif
 static int init_irq (void)
@@ -61,7 +77,7 @@ static int init_irq (void)
 	/* GPIO to IRQ */
 	irq = gpio_to_irq(ASUS_IR_SENSOR_GPIO);
 	if (irq < 0) {
-		err("gpio_to_irq ERROR, irq=%d.\n", irq);
+		err("%s: gpio_to_irq ERROR(%d). \n", __FUNCTION__, irq);
 		return irq;
 	}else {
 		log("gpio_to_irq IRQ %d successed on GPIO:%d\n", irq, ASUS_IR_SENSOR_GPIO);
@@ -78,10 +94,10 @@ static int init_irq (void)
 	#endif
 	
 	if (ret < 0) {
-		err("request_irq() ERROR %d.\n", ret);
+		err("%s: request_irq/request_threaded_irq ERROR(%d).\n", __FUNCTION__, ret);
 		return ret;
 	}else {		
-		log("Disable irq !! \n");
+		dbg("Disable irq !! \n");
 		disable_irq(irq);
 	}
 
@@ -94,7 +110,7 @@ irqreturn_t IRsensor_irq_handler(int irq, void *dev_id)
 	return IRQ_HANDLED;
 }
 
-int IRsensor_gpio_register(struct i2c_client *client, IRsensor_GPIO *gpio_ist)
+int IRsensor_gpio_register(IRsensor_GPIO *gpio_ist)
 {
 	int ret = 0;
 	int irq = 0;
@@ -109,21 +125,25 @@ int IRsensor_gpio_register(struct i2c_client *client, IRsensor_GPIO *gpio_ist)
 	
 	#ifdef GPIO_QCOM
 	log("Qcom GPIO \n");
-	set_pinctrl(client);
-	ASUS_IR_SENSOR_GPIO = of_get_named_gpio(client->dev.of_node, IR_QCOM_NAME, 0);	
+	if(g_i2c_client == NULL){
+		err("g_i2c_client is NULL, Please set I2c Client first. \n");
+		return -1;
+	}		
+	set_pinctrl(g_i2c_client);
+	ASUS_IR_SENSOR_GPIO = of_get_named_gpio(g_i2c_client->dev.of_node, IR_QCOM_NAME, 0);	
 	#endif
 		
-	log("[GPIO] GPIO =%d(%d)\n", ASUS_IR_SENSOR_GPIO, gpio_get_value(ASUS_IR_SENSOR_GPIO));	
+	dbg("GPIO =%d(%d)\n", ASUS_IR_SENSOR_GPIO, gpio_get_value(ASUS_IR_SENSOR_GPIO));	
 	/* GPIO Request */
 	ret = gpio_request(ASUS_IR_SENSOR_GPIO, IR_IRQ_NAME);
 	if (ret) {
-		err("Unable to request gpio %s(%d)\n", IR_IRQ_NAME, ASUS_IR_SENSOR_GPIO);
+		err("%s: gpio_request ERROR(%d). \n", __FUNCTION__, ret);
 		return ret;
 	}
 	/* GPIO Direction */
 	ret = gpio_direction_input(ASUS_IR_SENSOR_GPIO);
 	if (ret < 0) {
-		err("Unable to set the direction of gpio %d\n", ASUS_IR_SENSOR_GPIO);
+		err("%s: gpio_direction_input ERROR(%d). \n", __FUNCTION__, ret);
 		return ret;
 	}
 	/*IRQ*/
@@ -142,3 +162,17 @@ int IRsensor_gpio_unregister(int irq)
 	return 0;
 }
 EXPORT_SYMBOL(IRsensor_gpio_unregister);
+
+int IRsensor_gpio_setI2cClient(struct i2c_client *client)
+{
+	if(client != NULL){
+		g_i2c_client=client;
+		dbg("IRsensor_gpio_getI2cClient Success. \n");
+	}else{
+		err("%s: i2c_client is NULL. \n", __FUNCTION__);
+		return -1;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(IRsensor_gpio_setI2cClient);

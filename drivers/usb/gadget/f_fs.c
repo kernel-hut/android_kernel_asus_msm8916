@@ -824,15 +824,28 @@ first_try:
 			}
 		}
 
-		buffer_len = !read ? len : round_up(len,
+		spin_lock_irq(&epfile->ffs->eps_lock);
+		/*
+		 * While we were acquiring lock endpoint got disabled
+		 * (disconnect) or changed (composition switch) ?
+		 */
+		if (epfile->ep == ep) {
+			buffer_len = !read ? len : round_up(len,
 						ep->ep->desc->wMaxPacketSize);
+		} else {
+			spin_unlock_irq(&epfile->ffs->eps_lock);
+			ret = -ENODEV;
+			goto error;
+		}
 
 		/* Do we halt? */
 		halt = !read == !epfile->in;
 		if (halt && epfile->isoc) {
+			spin_unlock_irq(&epfile->ffs->eps_lock);
 			ret = -EINVAL;
 			goto error;
 		}
+		spin_unlock_irq(&epfile->ffs->eps_lock);
 
 		/* Allocate & copy */
 		if (!halt && !data) {
@@ -919,7 +932,7 @@ first_try:
 					pr_err("less data(%zd) recieved than intended length(%zu)\n",
 								ret, len);
 				if (ret > len) {
-					//
+					// ASUS BSP +++ Add log for monitoring endpoint buffer overflow
 					#if defined(CONFIG_ASUS_EVT_LOG)
 						ASUSEvtlog("[USB] FFS OVERFLOW (%zd %zu)\n",ret , len);
 						if (ep->ep)
@@ -929,7 +942,7 @@ first_try:
 					if (ep->ep)
 							pr_err("[USB] FFS EP (%s %d)",ep->ep->name, ep->ep->address);
 					dump_stack();
-					//
+					// ASUS BSP --- Add log for monitoring endpoint buffer overflow
 					ret = -EOVERFLOW;
 					pr_err("More data(%zd) recieved than intended length(%zu)\n",
 								ret, len);
@@ -1690,14 +1703,6 @@ static int ffs_func_eps_enable(struct ffs_function *func)
 
 		ep->ep->driver_data = ep;
 		ep->ep->desc = ds;
-		// ASUS_BSP +++ Add code aurora patch: Use config_ep_by_speed() for ADB endpoints
-		ret = config_ep_by_speed(func->gadget, &func->function, ep->ep);
-		if (ret) {
-			pr_err("%s(): config_ep_by_speed(%d) err for %s\n",
-						__func__, ret, ep->ep->name);
-			break;
-		}
-		// ASUS_BSP --- Add code aurora patch: Use config_ep_by_speed() for ADB endpoints
 		ret = usb_ep_enable(ep->ep);
 		if (likely(!ret)) {
 			epfile->ep = ep;

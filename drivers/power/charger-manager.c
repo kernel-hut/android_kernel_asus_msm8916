@@ -1458,7 +1458,7 @@ static int charger_manager_probe(struct platform_device *pdev)
 	int ret = 0, i = 0;
 	int j = 0;
 	union power_supply_propval val;
-	printk("wy_charger_manager_here\n");
+
 	if (g_desc && !rtc_dev && g_desc->rtc_name) {
 		rtc_dev = rtc_class_open(g_desc->rtc_name);
 		if (IS_ERR_OR_NULL(rtc_dev)) {

@@ -4,9 +4,9 @@
 #define	DEVICE_GET_CALIBRATION_INPUT_DATA		"driver/LaserFocus_CalGetInputData" /* Get Calibration input data */
 
 #ifdef ASUS_FACTORY_BUILD
-#define DEVICE_GET_CALIBRATION_INPUT_DATA_MODE 0776     /* Calibration get input data right */
+#define	DEVICE_GET_CALIBRATION_INPUT_DATA_MODE 0776	/* Calibration get input data right */
 #else
-#define	DEVICE_GET_CALIBRATION_INPUT_DATA_MODE 0664	/* Calibration get input data right */
+#define DEVICE_GET_CALIBRATION_INPUT_DATA_MODE 0664     /* Calibration get input data right */
 #endif
 
 struct msm_laser_focus_ctrl_t *get_laura_ctrl(void);

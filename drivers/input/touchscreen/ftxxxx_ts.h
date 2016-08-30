@@ -84,6 +84,16 @@
 #define TOUCH_FW_UPGRADE_INIT		"3"
 /*************IO control setting***************/
 
+/* +++ asus jacob add 20150130 +++ */
+#define TP_TM 0x31
+#define TP_TM_old 0x3b
+#define TP_GIS_AUO 0x63
+#define TP_GIS_BOE 0x64
+#define TP_TOT_AUO 0x43
+#define TP_TOT_BOE 0x44
+
+/* --- asus jacob add 20150130 --- */
+
 #ifdef CONFIG_TOUCHSCREEN_FT5X46
 #define FOCAL_TS_NAME	"Ft5x46"
 #endif
@@ -115,6 +125,7 @@ u8 get_focal_tp_fw(void);
 void focal_glove_switch(bool plugin);
 void focal_cover_switch(bool plugin);
 void ftxxxx_Enable_IRQ(struct i2c_client *client, int enable);
+// int focal_get_HW_ID(void); not support in Android M branch
 void ftxxxx_nosync_irq_disable(struct i2c_client *client);
 void ftxxxx_irq_disable(struct i2c_client *client);
 void ftxxxx_irq_enable(struct i2c_client *client);
@@ -131,7 +142,6 @@ struct ts_event {
 	u8 pressure[CFG_MAX_TOUCH_POINTS];
 	u8 area[CFG_MAX_TOUCH_POINTS];
 	u8 touch_point;
-	u8 touch_point_num;
 };
 
 struct ftxxxx_ts_data {
@@ -168,7 +178,7 @@ struct ftxxxx_ts_data {
 	struct delayed_work init_check_ic_work;
 	struct delayed_work glove_mode_switch_work;
 	struct delayed_work cover_mode_switch_work;
-	int touchs;
+	
 	/* Wakelock Protect */
 	struct wake_lock wake_lock;
 	/* Wakelock Protect */

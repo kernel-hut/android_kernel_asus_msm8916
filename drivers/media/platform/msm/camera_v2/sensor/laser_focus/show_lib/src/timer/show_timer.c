@@ -11,9 +11,6 @@
 /** @brief Display current time
 *	
 */
-void O_get_current_time(struct timeval* now){
-	do_gettimeofday(now);
-}
 struct timeval get_current_time(void){
 	struct timeval now;
 

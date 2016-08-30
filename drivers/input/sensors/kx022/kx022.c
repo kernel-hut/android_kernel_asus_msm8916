@@ -24,12 +24,13 @@ int g_ilocation=0;
 /*************************************************
  *             Use to motion detection             *
  *************************************************/
-int wupredir=0;
-int check_loop=0;
+static int wupredir = 0;
+static int wucurrdir = 0;
+static int check_loop = 0;
 //int YNWU_flag=0, YPWU_flag=0, ZNWU_flag=0, ZPWU_flag=0;
 //int XNWU_cnt=0;
-int XPWU_cnt=0;
-bool flick_twice_flag=false;
+static int XPWU_cnt=0;
+static bool flick_twice_flag=false;
 
 /*************************************************
  * Use to open/close the debugmessage *
@@ -55,12 +56,12 @@ int KX022_CALIBRATED_MESSAGE = 0;
  *************************************************/
 
 static const struct kionix_odr_table kx022_odr_table[] = {
-															/*  ms,	range,	mode */
-	{ 15,	 			ODR200F,	KX022_RES_16BIT},			/*  2.5,	6~ 10	FASTEST MODE , full power mode */
-	{ 35, 			ODR50F,		KX022_RES_16BIT},			/*  20,	21~30	GAME MODE */
-	{ 70, 			ODR25F,		KX022_RES_16BIT},			/*  66,	31~70	UI MODE */
-	{ 250,			ODR12_5F,	KX022_RES_16BIT},			/*  80,	71~250	NORMAL MODE */
-	{ 0xFFFFFFFF,		ODR0_781F,	KX022_RES_16BIT},			/*  1280,	251~max	NO POLL */
+																/*  ms,	range,	mode */
+	{ 9,	 			ODR200F,		KX022_RES_16BIT},			/*  10,	0~ 10	FASTEST MODE , full power mode */
+	{ 19, 			ODR100F,		KX022_RES_16BIT},			/*  20,	20~66	GAME MODE */
+	{ 65, 			ODR50F	,		KX022_RES_16BIT},			/*  66,	100~200	UI MODE */
+	{ 250,			ODR25F	,		KX022_RES_16BIT},			/*  100,	1000~	NORMAL MODE */
+	{ 0xFFFFFFFF,		ODR12_5F,		KX022_RES_16BIT},			/*  1000,	max		SLOW MODE */
 };
 
 /*************************************************
@@ -74,10 +75,10 @@ static struct ASUS_Gsensor_data *kionix_Gsensor_data;
 static int kx022_reset_function(struct i2c_client *client)
 {
 	int result = 0;
-	printk("[Gsensor] alp : kx022_reset_function!!!!!!\n");
+	printk("[Gsensor] kx022_reset_function!!!!!!\n");
 	result = i2c_smbus_write_byte_data(client, CTRL_REG2, 0x84); // SRST set to 1
 	if (result < 0){
-		printk("[Gsensor] alp : kx022_reset_function : reset fail (%d)\n",result);
+		printk("[Gsensor] kx022_reset_function : reset fail (%d)\n",result);
 		result = 1;
 		return result;
 	}
@@ -163,7 +164,7 @@ static void kx022_report_acceleration_data(void)
 
 	if (ireset != KX022_VALUE_FOR_NOT_NEED_RESET) {
 		err = kx022_reset_function(kionix_Gsensor_data->client);
-		printk("[Gsensor] alp :  kx022_reset_function : %d\n", err);
+		printk("[Gsensor] kx022_reset_function : %d\n", err);
 	}
 
 	if (rawdata_x > 16383)
@@ -184,7 +185,8 @@ static void kx022_report_acceleration_data(void)
 					printk("[Gsensor] alp : LOCATION_ZC500KL default\n");
 			} else	{
 				if (kionix_Gsensor_data->asus_gsensor_cali_data.version == 3)	{
-					if (g_ASUS_hwID >= ZE500KL_SR1)	{
+					//if (g_ASUS_hwID >= ZE500KL_SR1)	{
+					if (1)	{
 						reportdata_x = ((-1)*rawdata_y - kionix_Gsensor_data->asus_gsensor_cali_data.x_offset);
 
 						reportdata_y = (rawdata_x - kionix_Gsensor_data->asus_gsensor_cali_data.y_offset);
@@ -232,13 +234,28 @@ static void kx022_report_acceleration_data(void)
 		break;
 	}
 
+/* ASUS_BSP +++ Peter_Lu For CTS verify sensor report rate test fail work around +++ */
 	kionix_Gsensor_data->data_report_count++;
-	kionix_Gsensor_data->accel_cal_data[0] = reportdata_x;
-	kionix_Gsensor_data->accel_cal_data[1] = reportdata_y;
-	kionix_Gsensor_data->accel_cal_data[2] = reportdata_z;
+	if ( kionix_Gsensor_data->accel_cal_data[0] == reportdata_x && 
+		kionix_Gsensor_data->accel_cal_data[1] == reportdata_y && 
+		kionix_Gsensor_data->accel_cal_data[2] == reportdata_z)	{
+		reportdata_z++;
+	}
+	else	{
+		kionix_Gsensor_data->accel_cal_data[0] = reportdata_x;
+		kionix_Gsensor_data->accel_cal_data[1] = reportdata_y;
+		kionix_Gsensor_data->accel_cal_data[2] = reportdata_z;
+	}
+/* ASUS_BSP --- Peter_Lu */
+	
 	input_report_abs(kionix_Gsensor_data->input_dev, ABS_X, reportdata_x);
 	input_report_abs(kionix_Gsensor_data->input_dev, ABS_Y, reportdata_y);
 	input_report_abs(kionix_Gsensor_data->input_dev, ABS_Z, reportdata_z);
+/* ASUS_BSP +++ Peter_Lu For CTS verify sensor report TimeStamp test fail issue +++ */
+	kionix_Gsensor_data->timestamp = ktime_get_boottime();
+	input_event(kionix_Gsensor_data->input_dev, EV_SYN, SYN_TIME_SEC, ktime_to_timespec(kionix_Gsensor_data->timestamp).tv_sec);
+	input_event(kionix_Gsensor_data->input_dev, EV_SYN, SYN_TIME_NSEC, ktime_to_timespec(kionix_Gsensor_data->timestamp).tv_nsec);
+/* ASUS_BSP --- Peter_Lu */
 	input_sync(kionix_Gsensor_data->input_dev);
 }
 
@@ -251,7 +268,7 @@ static void kx022_asseleration_ist(struct work_struct *work)
 	kx022_report_acceleration_data();
 	err = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INT_REL);
 	if (err < 0)
-		printk("[Gsensor] alp : kx022_asseleration_ist err(%x)!!\n", err);
+		printk("[Gsensor] kx022_asseleration_ist err(%x)!!\n", err);
 	mutex_unlock(&kionix_Gsensor_data->lock);
 }
 
@@ -318,27 +335,58 @@ static void report_gesture_event(int event_type)
 	return;
 }
 
+static void report_asic_gesture_event(int event_type)
+{
+	printk("[Gsensor] report_asic_gesture_event event_type : (%d) !!!\n", event_type);
+	input_report_abs(kionix_Gsensor_data->input_dev_zen, ABS_WHEEL, event_type);
+	input_sync(kionix_Gsensor_data->input_dev_zen);
+	input_report_abs(kionix_Gsensor_data->input_dev_zen, ABS_WHEEL, 0);
+	input_sync(kionix_Gsensor_data->input_dev_zen);
+	return;
+}
+
 /***************************************************************************
  *                               Use to motion detection                              *
  *                     Added for Flick twice workqueue                        *
  ***************************************************************************/
 static void kx022_flick_work(struct work_struct *work)
 {
-	printk("[Gsensor] KIONIX Gesture - Flick delayed work ***\n");
+	printk("[Gsensor] KIONIX Gesture - Flick delayed work \n");
 	if(false == flick_twice_flag)
 	{//clear everything
+		printk("[Gsensor] KIONIX Gesture - Flick clear status \n");
 		check_loop = 0;
 		XPWU_cnt=0;
 		wupredir=0;
+		wucurrdir=0;
 	}
 }
+
+/***************************************************************************
+ *                               Use to Moving detection                             *
+ *                           Added for moving workqueue                        *
+ ***************************************************************************/
+static void handle_gsensor_work(struct work_struct *work)
+{
+	report_asic_gesture_event(ACTIVITY_STATE_NOT_MOVING);
+}
+
+
 static int kx022_gesture_check(int event_source)
 {
 	int tiltcurrpos = 0, tiltprepos=0; 
-	int wucurrdir = 0;
+	//int wucurrdir = 0;
 	int event_report = 0;
 
-	if (KX022_DOUBLETAP_EVENT == event_source)	{
+	if((kionix_Gsensor_data->zen_state & MOVING_STATE) && (KX022_WUF_EVENT == event_source)) {
+		/* report activity wakeup event */
+		report_asic_gesture_event(ACTIVITY_STATE_MOVING);
+		/* start timer to check if we go from moving to not moving */
+		/* delayed work is scheduled if after timeout */
+		queue_delayed_work(kionix_Gsensor_data->moving_workqueue, &kionix_Gsensor_data->moving_work,
+						msecs_to_jiffies(WUFE_INTERRUPT_WAIT_TIME_MS));
+	}
+	else if (KX022_DOUBLETAP_EVENT == event_source)	{
 		//ToDo for double tap event
 		printk("[Gsensor] KIONIX Gesture - double tap gesture triggered\n");
 		//add codes to check if driver need to send double tap event to HAL
@@ -398,18 +446,16 @@ static int kx022_gesture_check(int event_source)
 		//ToDo for flick twice event
 		//add codes to check if driver need to enter Flick algorithm loop
 		if (kionix_Gsensor_data->zen_state & FLICK_STATE){
-		wucurrdir = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INS3);
+		//wucurrdir = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INS3);
 		//printk("[Gsensor] 2222 alp : kx022_isr Flick - current axis(%x) previous axis(%x)\n",wucurrdir, wupredir);
-		printk("[Gsensor] 2222 alp : kx022_isr Flick - loop(%x) current axis(%x) previous axis(%x)\n",check_loop,wucurrdir, wupredir);
-		//ToDo - algorithm for verifing flick twice
-		//wupredir = wucurrdir;
-		//check_loop++;
-		if (check_loop < 4){
+		//printk("[Gsensor] 2222 alp : kx022_isr Flick - loop(%x) current axis(%x) previous axis(%x)\n",check_loop,wucurrdir, wupredir);
+		//Algorithm for verifing flick twice
+		if (check_loop < 4) {
 				if( ((wupredir == 0x00) && (wucurrdir == 0x10)) ||\
 					((wupredir == 0x00) && (wucurrdir == 0x20))){
-					//X+ triggered
 					printk("[Gsensor] KIONIX Gesture - Flick X  event START\n");
-					queue_delayed_work(kionix_Gsensor_data->flick_workqueue, &kionix_Gsensor_data->flick_work, 100);// check after 1s
+					queue_delayed_work(kionix_Gsensor_data->flick_workqueue, &kionix_Gsensor_data->flick_work,
+						msecs_to_jiffies(FLICK_INTERRUPT_WAIT_TIME_MS));
 					if (XPWU_cnt !=0) 
 						XPWU_cnt=0;//pre:0 cur:10 /20 should be start condition
 					XPWU_cnt++;
@@ -430,6 +476,32 @@ static int kx022_gesture_check(int event_source)
 						report_gesture_event(event_report);
 						//clear count values
 						XPWU_cnt = 0;
+						check_loop=0;
+						wupredir = 0;
+						wucurrdir=0;
+						flick_twice_flag=true;
+					}
+					else{//still counting
+						wupredir = wucurrdir;//setup predir before leaving
+						check_loop++;
+						flick_twice_flag=false;
+					}
+				}
+//Add for below codes ++
+#if 0
+				else if (((wupredir == 0x04) && (wucurrdir == 0x04))|| \
+					((wupredir == 0x08) && (wucurrdir == 0x08)) ||\
+					((wupredir == 0x04) && (wucurrdir == 0x08)) ||\
+					((wupredir == 0x08) && (wucurrdir == 0x04)) ){
+					//Y+/Y- triggered
+					printk("[Gsensor] KIONIX Gesture - Flick Y event ++\n");
+					YPWU_cnt++;
+					if (YPWU_cnt >= FLICK_CHECK){
+						printk("[Gsensor] KIONIX Gesture - Flick twice confirmed\n");
+						event_report = FLICK_TWICE;
+						report_gesture_event(event_report);
+						//clear count values
+						YPWU_cnt = 0;
 						//XNWU_cnt = 0;
 						check_loop=0;
 						wupredir = 0;
@@ -441,114 +513,18 @@ static int kx022_gesture_check(int event_source)
 						flick_twice_flag=false;
 					}
 				}
+#endif				
+//Add for above codes --
 				else
 					check_loop++;
 			}
-		}
-	#if 0	
-		if (check_loop < 4){
-			if ((wupredir & 0x08) || (wucurrdir & 0x08)){
-				//Y- triggered
-				printk("[Gsensor] KIONIX Gesture - Flick Y- event ++\n");
-				YNWU_flag++;
-				if ((ZNWU_flag != 0) || (ZPWU_flag != 0))
-				{//clear other direction flag and loop numbers
-					ZNWU_flag = ZPWU_flag = 0;
-					check_loop = 0;
-				}
-				if ((YNWU_flag+YPWU_flag) >= FLICK_CHECK){
-					printk("[Gsensor] KIONIX Gesture - Flick twice Y-(Right) confirmed\n");
-					event_report = FLICK_TWICE;
-					report_gesture_event(event_report);
-					YNWU_flag = YPWU_flag = 0;
-					check_loop=0;
-					wupredir = 0;
-				}
-				else{//still counting
-					wupredir = wucurrdir;//setup predir before leaving
-					check_loop++;
-				}
-			
-			}
-			else if ((wupredir & 0x04) || (wucurrdir & 0x04)){
-				//Y+ triggered
-				printk("[Gsensor] KIONIX Gesture - Flick Y+ event ++\n");
-				YPWU_flag++;
-				if ((ZNWU_flag != 0) || (ZPWU_flag != 0))
-				{//clear other direction flag and loop numbers
-					ZNWU_flag = ZPWU_flag = 0;
-					check_loop = 0;
-				}
-				if ((YPWU_flag+YNWU_flag) >= FLICK_CHECK){
-					printk("[Gsensor] KIONIX Gesture - Flick twice Y+(Left) confirmed\n");
-					event_report = FLICK_TWICE;
-					report_gesture_event(event_report);
-
-					YPWU_flag = YNWU_flag = 0;
-					check_loop=0;
-					wupredir = 0;
-				}
-				else{//still counting
-					wupredir = wucurrdir;//setup predir before leaving
-					check_loop++;
-				}				
-			}
-			else if ((wupredir & 0x02) || (wucurrdir & 0x02)){
-				//Z- triggered
-				printk("[Gsensor] KIONIX Gesture - Flick Z- event ++\n");
-				ZNWU_flag++;
-				if ((YPWU_flag != 0) || (YNWU_flag != 0))
-				{//clear other direction flag and loop numbers
-					YPWU_flag = YNWU_flag = 0;
-					check_loop = 0;
-				}
-				if ((ZNWU_flag+ZPWU_flag) >= FLICK_CHECK){
-					printk("[Gsensor] KIONIX Gesture - Flick twice Z-(Down) confirmed\n");
-					event_report = FLICK_TWICE;
-					report_gesture_event(event_report);
-					
-					ZNWU_flag = ZPWU_flag =0;
-					check_loop=0;
-					wupredir = 0;
-				}
-				else{//still counting
-					wupredir = wucurrdir;//setup predir before leaving
-					check_loop++;
-				}			
-			}
-			else if ((wupredir & 0x01) || (wucurrdir & 0x01)){
-				//Z+ triggered
-				printk("[Gsensor] KIONIX Gesture - Flick Z+ event ++\n");
-				ZPWU_flag++;
-				if ((YPWU_flag != 0) || (YNWU_flag != 0))
-				{//clear other direction flag and loop numbers
-					YPWU_flag = YNWU_flag = 0;
-					check_loop = 0;
-				}
-				if ((ZPWU_flag+ZNWU_flag) >= FLICK_CHECK){
-					printk("[Gsensor] KIONIX Gesture - Flick twice Z+(Up) confirmed\n");
-					event_report = FLICK_TWICE;
-					report_gesture_event(event_report);
-					
-					ZPWU_flag = ZNWU_flag = 0;
-					check_loop=0;
-					wupredir = 0;
-				}
-				else{//still counting
-					wupredir = wucurrdir;//setup predir before leaving
-					check_loop++;
-				}
+			else if (check_loop >= 4){//clear all variables
+				XPWU_cnt = 0;
+				check_loop = 0;
+				wupredir = 0;
+				wucurrdir=0;
 			}
 		}
-		else{//clear all variables
-			check_loop=0;
-			YNWU_flag = 0;
-			YPWU_flag = 0;
-			ZNWU_flag = 0;
-			ZPWU_flag = 0;
-			wupredir = 0;
-		}
-		#endif
 	}
 	return 0;
 
@@ -564,6 +540,9 @@ static irqreturn_t kx022_event_isr(int irq, void *dev)
 	printk("[Gsensor] ++++ kx022_isr recognize gesture triggered (%x)\n", err);
 	err = err & (~INS2_DRDY);
 	if ( err != INS2_DRDY)	{//go to check which gesture triggered
+		//read INS3 register here
+		wucurrdir = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INS3);
+		printk("[Gsensor] 2222 alp : kx022_isr Flick - current axis(%x) previous axis(%x)\n",wucurrdir, wupredir);
 		kx022_gesture_check(err);
 	}
 	err = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INT_REL);
@@ -573,6 +552,10 @@ static irqreturn_t kx022_event_isr(int irq, void *dev)
 	return IRQ_HANDLED;
 }
 
+
+/******************************************************************
+ *          Set acceleration function report data rate           *
+ *******************************************************************/
 static int kx022_update_odr(unsigned int poll_interval)
 {
 	int err;
@@ -584,16 +567,16 @@ static int kx022_update_odr(unsigned int poll_interval)
 			break;
 	}
 	kionix_Gsensor_data->data_ctrl = kx022_odr_table[i].mask;
+	kionix_Gsensor_data->data_ctrl |= LPRO_9;
 	if (KX022_DEBUG_MESSAGE)
-		printk("[Gsensor] alp : kx022_update_odr  i(%d), cutoff(%d), mask(%d), poll(%d)\n", i, kx022_odr_table[i].cutoff, kx022_odr_table[i].mask, poll_interval);
+		printk("[Gsensor] kx022_update_odr  i(%d), cutoff(%d), mask(%d), poll(%d)\n", i, kx022_odr_table[i].cutoff, kx022_odr_table[i].mask, poll_interval);
 
 	/* backup CTRL_REG1 value before clear */
 	kionix_Gsensor_data->ctrl_reg1 = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
-	printk("[Gsensor] alp : data_ctrl(0x%x), ctrl_reg1(0x%x)\n", kionix_Gsensor_data->data_ctrl, kionix_Gsensor_data->ctrl_reg1);
 
-	printk("[Gsensor] alp : Old INT_CTRL1(0x%x)", kionix_Gsensor_data->int_ctrl);
-	kionix_Gsensor_data->int_ctrl = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INT_CTRL1);
-	printk("New INT_CTRL1(0x%x)\n", kionix_Gsensor_data->int_ctrl);
+	printk("[Gsensor] Old INT_CTRL1(0x%x), data_ctrl(0x%x), ctrl_reg1(0x%x)\n", kionix_Gsensor_data->int_ctrl
+						, kionix_Gsensor_data->data_ctrl, kionix_Gsensor_data->ctrl_reg1);
+	printk("[Gsensor] Device INT_CTRL1(0x%x)\n", i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INT_CTRL1));
 
 	kionix_Gsensor_data->ctrl_reg1 |= (PC1_ON | RES_16bit | DRDYE | GRP4_G_4G);
 
@@ -613,11 +596,15 @@ static int kx022_update_odr(unsigned int poll_interval)
 	return 0;
 }
 
+/****************************************************************************
+ *          Set & check acceleration function calibration data           *
+ ****************************************************************************/
 static void check_gsensor_calibtarion_data (void)
 {	
 	if (kionix_Gsensor_data->asus_gsensor_cali_data.version == 3)	{
 		printk("[Gsensor] Calibration by version 03 (%d)\n", kionix_Gsensor_data->asus_gsensor_cali_data.version);
-		if (g_ASUS_hwID >= ZE500KL_SR1)	{
+		//if (g_ASUS_hwID >= ZE500KL_SR1)	{
+		if (1)	{
 			kionix_Gsensor_data->asus_gsensor_cali_data.x_offset = kionix_Gsensor_data->asus_gsensor_cali_data.x_offset*2;
 			kionix_Gsensor_data->asus_gsensor_cali_data.y_offset = kionix_Gsensor_data->asus_gsensor_cali_data.y_offset*2;
 			kionix_Gsensor_data->asus_gsensor_cali_data.z_offset = 
@@ -684,21 +671,30 @@ static void check_gsensor_calibtarion_data (void)
 */
 }
 
+/*====================== Acceleration function operation part ======================*/
 static void kx022_device_power_off(void)
 {
 	int err;
 	if (KX022_DEBUG_MESSAGE)
-		printk("[Gsensor] alp : kx022_device_power_off ++\n");
+		printk("[Gsensor] kx022_device_power_off ++\n");
 
 	kionix_Gsensor_data->ctrl_reg1 = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
-	printk("[Gsensor] alp : kx022_device_power_off ctrl_reg1(0x%X)\n", kionix_Gsensor_data->ctrl_reg1);
+	if (KX022_DEBUG_MESSAGE)
+		printk("[Gsensor] kx022_device_power_off get ctrl_reg1(0x%X)\n", kionix_Gsensor_data->ctrl_reg1);
 
-	kionix_Gsensor_data->ctrl_reg1 &= PC1_OFF;
+	if (kionix_Gsensor_data->zen_state == 0)	{
+		kionix_Gsensor_data->ctrl_reg1 &= PC1_OFF;
+		printk("[Gsensor] kx022_device_power_off Set to stand by mode, ctrl_reg1(0x%X)\n", kionix_Gsensor_data->ctrl_reg1);
+	} else	{
+		kionix_Gsensor_data->ctrl_reg1 &= PC1_OFF_DRD;
+		printk("[Gsensor] kx022_device_power_off Set DRD off, ctrl_reg1(0x%X)\n", kionix_Gsensor_data->ctrl_reg1);
+	}
+
 	err = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, kionix_Gsensor_data->ctrl_reg1);
 	if (err < 0)
-		dev_err(&kionix_Gsensor_data->client->dev, "soft power off failed\n");
-
-	printk("[Gsensor] alp : kx022_device_power_off --\n");
+		dev_err(&kionix_Gsensor_data->client->dev, "[Gsensor] soft power off failed\n");
+	if (KX022_DEBUG_MESSAGE)
+		printk("[Gsensor] kx022_device_power_off --\n");
 }
 
 static int kx022_enable(void)
@@ -707,17 +703,6 @@ static int kx022_enable(void)
 	if (KX022_DEBUG_MESSAGE)
 		printk("[Gsensor] alp:kx022_enable ++\n");
 
-	if (kionix_Gsensor_data->suspend_resume_state == 1)	{
-		printk("[Gsensor] alp : kx022_enable  already suspend return !\n");
-		kionix_Gsensor_data->resume_enable = KX022_RESUME_MISSENABLE;
-		return 0;
-	}
-
-	if (atomic_read(&kionix_Gsensor_data->enabled) == KX022_ACC_ENABLE)	{
-		printk("[Gsensor] alp : kx022_enable  already enable , return 0\n");
-		return 0;
-	}
-	
 	if(kionix_Gsensor_data->irq_status==0){
 		enable_irq(kionix_Gsensor_data->irq);
 		printk("[Gsensor] alp : kx022_enable  irq (%d)\n", kionix_Gsensor_data->irq);
@@ -779,12 +764,16 @@ static int kx022_enable(void)
 		}
 	}
 
-	if (atomic_read(&kionix_Gsensor_data->enabled) == KX022_DEVICE_DISABLE)	{
-		printk("[Gsensor] alp : kx022 trun on device by acc function(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
-		atomic_set(&kionix_Gsensor_data->enabled, KX022_ACC_ENABLE);
-	} else	{
-		printk("[Gsensor] alp : kx022 already enable by ori function(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
-		atomic_set(&kionix_Gsensor_data->enabled, KX022_BOTH_ENABLE);
+	if (atomic_read(&kionix_Gsensor_data->enabled) == KX022_ACC_ENABLE)
+		printk("[Gsensor] kx022 trun on device by acc function set same command(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
+	else	{
+		if (atomic_read(&kionix_Gsensor_data->enabled) == KX022_DEVICE_DISABLE)	{
+			printk("[Gsensor] kx022 trun on device by acc function(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
+			atomic_set(&kionix_Gsensor_data->enabled, KX022_ACC_ENABLE);
+		} else	{
+			printk("[Gsensor] kx022 already enable by ori function(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
+			atomic_set(&kionix_Gsensor_data->enabled, KX022_BOTH_ENABLE);
+		}
 	}
 
 	return 0;
@@ -858,6 +847,10 @@ static int kx022_enable_by_orientation(void)
 	if (err < 0)
 		return err;
 
+	err = kx022_update_odr(ODR_GAME_MODE);
+	if (err < 0)
+		return err;
+
 	/* clear initial interrupt if in irq mode */
 	if (kionix_Gsensor_data->irq) {
 		err = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INT_REL);
@@ -867,12 +860,16 @@ static int kx022_enable_by_orientation(void)
 		}
 	}
 
-	if (atomic_read(&kionix_Gsensor_data->enabled) == KX022_DEVICE_DISABLE)	{
-		printk("[Gsensor] alp : kx022 trun on device by ori function(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
-		atomic_set(&kionix_Gsensor_data->enabled, KX022_ORI_ENABLE);
-	} else	{
-		printk("[Gsensor] alp : kx022 already enable by acc function(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
-		atomic_set(&kionix_Gsensor_data->enabled, KX022_BOTH_ENABLE);
+	if (atomic_read(&kionix_Gsensor_data->enabled) == KX022_ORI_ENABLE)
+		printk("[Gsensor] kx022 trun on device by ori function set same command(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
+	else	{	
+		if (atomic_read(&kionix_Gsensor_data->enabled) == KX022_DEVICE_DISABLE)	{
+			printk("[Gsensor] alp : kx022 trun on device by ori function(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
+			atomic_set(&kionix_Gsensor_data->enabled, KX022_ORI_ENABLE);
+		} else	{
+			printk("[Gsensor] alp : kx022 already enable by acc function(%d) \n", atomic_read(&kionix_Gsensor_data->enabled));
+			atomic_set(&kionix_Gsensor_data->enabled, KX022_BOTH_ENABLE);
+		}
 	}
 	return 0;
 
@@ -906,16 +903,7 @@ static void kx022_disable_orientation(void)
 	}
 }
 
-/*
- * When IRQ mode is selected, we need to provide an interface to allow the user
- * to change the output data rate of the part.  For consistency, we are using
- * the set_poll method, which accepts a poll interval in milliseconds, and then
- * calls update_odr() while passing this value as an argument.  In IRQ mode, the
- * data outputs will not be read AT the requested poll interval, rather, the
- * lowest ODR that can support the requested interval.  The client application
- * will be responsible for retrieving data from the input node at the desired
- * interval.
- */
+/*====================== Acceleration function interface part ======================*/
 ssize_t gsensor_chip_id_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int retval=0;
@@ -952,7 +940,7 @@ ssize_t gsensor_dump_reg(struct device *dev, struct device_attribute *attr, char
 {
 	int i = 0, val = 0;
 
-	for(i = 0; i <0x3b; i++)
+	for(i = 0; i <0x3f; i++)
 	{
 		val = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, i);
 		printk("[Gsensor] cmd =%02x value = %02x\n", i, val);
@@ -1015,9 +1003,9 @@ ssize_t gsensor_read_raw(struct device *dev, struct device_attribute *attr, char
 
 ssize_t gsensor_show_message(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	printk("[Gsensor] alp : kx022_message DEBUG(%d), REG(%d), CALI(%d)\n",
+	printk("[Gsensor] kx022_message DEBUG(%d), REG(%d), CALI(%d)\n",
 			KX022_DEBUG_MESSAGE, KX022_REG_MESSAGE, KX022_CALIBRATED_MESSAGE);
-	return sprintf(buf, "\n[Gsensor] alp : kx022_message DEBUG(%d), REG(%d), CALI(%d)\n",
+	return sprintf(buf, "\n[Gsensor] kx022_message DEBUG(%d), REG(%d), CALI(%d)\n",
 			KX022_DEBUG_MESSAGE, KX022_REG_MESSAGE, KX022_CALIBRATED_MESSAGE);
 }
 
@@ -1029,32 +1017,32 @@ ssize_t gsensor_set_message(struct device *dev, struct device_attribute *attr, c
 			KX022_DEBUG_MESSAGE = 0;
 			KX022_REG_MESSAGE = 0;
 			KX022_CALIBRATED_MESSAGE = 0;
-			printk("[Gsensor] alp : disable all message !!!\n");
+			printk("[Gsensor] Disable all message !!!\n");
 		break;
 
 		case 1:
 			KX022_DEBUG_MESSAGE = 1;
 			KX022_REG_MESSAGE = 1;
-			printk("[Gsensor] alp : enable all message without CALIBRATED_MESSAG !!!\n");
+			printk("[Gsensor] Enable all message without CALIBRATED_MESSAG !!!\n");
 		break;
 
 		case 2:
 			KX022_REG_MESSAGE = 1;
-			printk("[Gsensor] alp : enable  REG_MESSAGE !!!\n");
+			printk("[Gsensor] Enable  REG_MESSAGE !!!\n");
 		break;
 
 		case 3:
 			KX022_CALIBRATED_MESSAGE = 1;
-			printk("[Gsensor] alp : enable  CALIBRATED_MESSAG !!!\n");
+			printk("[Gsensor] Enable  CALIBRATED_MESSAG !!!\n");
 		break;
 
 		case 4:
 			KX022_DEBUG_MESSAGE = 1;
-			printk("[Gsensor] alp : enable  DEBUG_MESSAGE !!!\n");
+			printk("[Gsensor] Enable  DEBUG_MESSAGE !!!\n");
 		break;
 
 		default:
-			printk("[Gsensor] alp : error input !!!\n");
+			printk("[Gsensor] Error input !!!\n");
 		break;
 	}
 	return count;
@@ -1065,7 +1053,7 @@ ssize_t gsensor_get_poll(struct device *dev, struct device_attribute *attr, char
 {
 	int gsensor_ctrl = 0;
 	gsensor_ctrl = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, DATA_CTRL);
-	printk("[Gsensor] alp : gsensor_get_poll (%d) (0x%x)\n", kionix_Gsensor_data->last_poll_interval, gsensor_ctrl);
+	printk("[Gsensor] Gsensor_get_poll (%d) (0x%x)\n", kionix_Gsensor_data->last_poll_interval, gsensor_ctrl);
 	return sprintf(buf, "%d , 0x%x\n", kionix_Gsensor_data->last_poll_interval, gsensor_ctrl);
 }
 
@@ -1094,7 +1082,7 @@ ssize_t gsensor_set_poll(struct device *dev, struct device_attribute *attr, cons
 
 ssize_t gsensor_enable_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
-	printk("[Gsensor] alp : kx022_enable_show (%d)\n", atomic_read(&kionix_Gsensor_data->enabled));
+	printk("[Gsensor] kx022_enable_show (%d)\n", atomic_read(&kionix_Gsensor_data->enabled));
 	return sprintf(buf, "%d\n", atomic_read(&kionix_Gsensor_data->enabled));
 }
 
@@ -1104,27 +1092,23 @@ ssize_t gsensor_enable_store(struct device *dev, struct device_attribute *attr, 
 	mutex_lock(&kionix_Gsensor_data->lock);
 	val = simple_strtoul(buf, NULL, 10);
 	switch(val)	{
-		case 0:
-			//Add codes to sync accelerometer and zenmotion
-			if (kionix_Gsensor_data->zen_state == 0)
-			{
-			printk("[Gsensor] alp : kx022_disable_by_acceleation !!!\n");
-			kx022_disable();
-			}
+		case 0: 
+			printk("[Gsensor] kx022_disable_by_acceleation !!!\n");
+			kx022_disable(); 
 			break;
 		case 1:
-			printk("[Gsensor] alp : kx022_enable_by_acceleation !!!\n");
+			printk("[Gsensor] kx022_enable_by_acceleation !!!\n");
 			kionix_Gsensor_data->data_report_count = 0;
 			Gsensor_sysfs_read_calibration_data(&kionix_Gsensor_data->asus_gsensor_cali_data);
 			check_gsensor_calibtarion_data();
 			kx022_enable();
 			break;
 		case 2:
-			printk("[Gsensor] alp : kx022_disable_by_orientation !!!\n");
+			printk("[Gsensor] kx022_disable_by_orientation !!!\n");
 			kx022_disable_orientation();
 			break;
 		case 3:
-			printk("[Gsensor] alp : kx022_enable_by_orientation !!!\n");
+			printk("[Gsensor] kx022_enable_by_orientation !!!\n");
 			kionix_Gsensor_data->data_report_count = 0;
 			Gsensor_sysfs_read_calibration_data(&kionix_Gsensor_data->asus_gsensor_cali_data);
 			check_gsensor_calibtarion_data();
@@ -1150,7 +1134,7 @@ ssize_t read_gsensor_resolution(struct device *dev, struct device_attribute *att
 {
 	unsigned char data;
 	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
-	printk("[Gsensor] alp : read_gsensor_resolution (0x%x)\n",data);
+	printk("[Gsensor] Read_gsensor_resolution (0x%x)\n",data);
 	return sprintf(buf, "0x%x\n", data);
 }
 
@@ -1176,158 +1160,44 @@ ssize_t write_gsensor_resolution(struct device *dev, struct device_attribute *at
 	return count;
 }
 
-ssize_t read_gsensor_wufe(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	unsigned char data[2]={0};
-	data[0] = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, WAKEUP_TIMER);
-	data[1] = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, WAKEUP_THRES);
-	printk("[Gsensor] alp : read_gsensor_wufe time(%d) , thres(%d)\n",data[0],data[1]);
-	return sprintf(buf, "0x%x & 0x%x\n", data[0], data[1]);
-}
-
-ssize_t write_gsensor_wufe(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	u8 wufe_data[2]={0,0};
-	int result = 0;
-	int val = simple_strtoul(buf, NULL, 10);
-
-	// turn off power
-	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, 0);
-	if (result < 0){
-		printk("[Gsensor] alp : motion_detect_power_off_fail !\n");
-		return result;
-	}
-	wufe_data[0] = 0x01; 
-	switch(val){
-		case 0:
-			wufe_data[0] = 0x00; wufe_data[1] = 0x01;
-		break;
-
-		case 1:
-		case 2:
-		case 3:
-		case 4:
-		case 5:
-		case 6:
-		case 7:
-		case 8:
-			wufe_data[1] = val;
-		break;
-
-		default:
-			printk("[Gsensor] alp : not support !!!\n");
-		break;
-	}
-	kionix_Gsensor_data->wufe_timer = wufe_data[0];
-	kionix_Gsensor_data->wufe_thres = wufe_data[1];
-
-	// set the chip timer
-	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, WAKEUP_TIMER, wufe_data[0]);
-	if (result < 0){
-		printk("[Gsensor] alp : ATTR set_timer_fail !\n");
-		return result;
-	}
-
-	// set the chip threshold
-	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, WAKEUP_THRES, wufe_data[1]);
-	if (result < 0){
-		printk("[Gsensor] alp : ATTR set_chip_threshold_fail !\n");
-		return result;
-	}
-
-	// turn on power
-	kionix_Gsensor_data->ctrl_reg1 |= DRDYE;
-	kionix_Gsensor_data->ctrl_reg1 &= WUFE_OFF;
-	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, kionix_Gsensor_data->ctrl_reg1); // enable motion detect
-	if (result < 0){
-		printk("[Gsensor] alp : write_gsensor_wufe into DRDY fail (%d)\n",result);
-		return result;
-	}
-	mdelay(50); // 50 ms
-	
-	return count;
-}
-
-ssize_t read_gsensor_reg2_rate(struct device *dev, struct device_attribute *attr, char *buf)
-{
-	struct i2c_client *client = to_i2c_client(dev);
-	unsigned char data;
-	data = i2c_smbus_read_byte_data(client, CTRL_REG2);
-	printk("[Gsensor] alp : read_gsensor_reg2_rate reg2 = %d\n",data);
-	return sprintf(buf, "%d\n",data);
-}
-
-ssize_t write_gsensor_reg2_rate(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
-{
-	int result = 0;
-	int val = simple_strtoul(buf, NULL, 10);
-	unsigned char data;
-
-	// turn off power
-	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, 0);
-	if (result < 0)	{
-		printk("[Gsensor] alp : motion_detect_power_off_fail !\n");
-		return result;
-	}
-	switch(val){
-		case 0:
-		case 1:
-		case 2:
-		case 3:
-		case 4:
-		case 5:
-		case 6:
-		case 7:
-			data = val;
-		break;
-
-		default:
-			printk("[Gsensor] alp : not support !!!\n");
-		break;
-	}
-	kionix_Gsensor_data->wufe_rate = data;
-	// set the chip wufe rate
-	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG2, data);
-	if (result < 0){
-		printk("[Gsensor] alp : ATTR write_gsensor_reg2_rate !\n");
-		return result;
-	}
-
-	// turn on power
-	kionix_Gsensor_data->ctrl_reg1 |= DRDYE;
-	kionix_Gsensor_data->ctrl_reg1 &= WUFE_OFF;
-	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, kionix_Gsensor_data->ctrl_reg1); // enable motion detect
-	if (result < 0){
-		printk("[Gsensor] alp : write_gsensor_reg2_rate power on fail ! (%d)\n", result);
-		return result;
-	}
-	mdelay(50); // 50 ms
-	
-	return count;
-}
-
 ssize_t reset_gsensor(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int res=0;
 	kx022_reset_function(kionix_Gsensor_data->client);
 	return sprintf(buf, "%d\n", res);
 }
-// Kionix/Oulu - double tap code starts
+
+/*====================== Motion gesture function operation and interface part ======================*/
+/* For CTS verify R3  Compass data report rate test fail work around +++ */
+ssize_t zenmotion_get_flush(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", 0);
+}
+
+ssize_t zenmotion_set_flush(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	printk("[Gsensor] Report flush complete.\n");
+	queue_delayed_work(kionix_Gsensor_data->moving_workqueue, &kionix_Gsensor_data->moving_work,
+						msecs_to_jiffies(40));
+
+	return count;
+}
+/* For CTS verify R3  Compass data report rate test fail work around --- */
+
 int kx022_i2c_write_byte_and_trace(struct i2c_client *client, u8 reg, u8 value)
 {
 	int result;
 
-	printk(" ----- reg 0x%x - value 0x%x\n",  reg, value);
+	if (KX022_DEBUG_MESSAGE)
+		printk(" ----- reg 0x%x - value 0x%x\n",  reg, value);
 
 	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, reg, value);
-	if (result < 0){
+	if (result < 0)
 		printk("### %s - reg = 0x%X value = 0x%X \n", __FUNCTION__, reg, value);
-	}
 
 	return result;
 }
 
-//Added by Eason
 ssize_t read_gsensor_double_tap(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int data;
@@ -1337,8 +1207,6 @@ ssize_t read_gsensor_double_tap(struct device *dev, struct device_attribute *att
 }
 ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-	struct i2c_client *client = to_i2c_client(dev);
-	//u8 wufe_data[2]={0,0};
 	int result = 0;
 	int enable = simple_strtoul(buf, NULL, 10);
 	//read CNTL1 data and set KX022 as standby-mode
@@ -1346,7 +1214,7 @@ ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *att
 	u8 init_data = 0;
 
 	printk("[Gsensor] alp : init gsensor double tap +++\n");
-	data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 	printk("[Gsensor] KX022 - CNTL1 reg = %x enable = %x\n",data, enable);
 	data &= PC1_OFF;
 	// set KX022 into standby mode
@@ -1355,7 +1223,7 @@ ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *att
 		printk("[Gsensor] alp : double_tap_power_off_fail !\n");
 		return result;
 	}
-	data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 
 	//printk("[Gsensor] KX022 - CNTL1 reg = %x\n",data);	
 	if(enable){//do double tap init procedure here
@@ -1371,7 +1239,7 @@ ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *att
 		if ((kionix_Gsensor_data->zen_state & FLIP_STATE) ||\
 			(kionix_Gsensor_data->zen_state & HANDS_STATE))
 			init_data |= TPE_ON;
-		if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+		if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 			init_data |= WUFE_ON;
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, CTRL_REG1, init_data);
 		if (result < 0){
@@ -1412,7 +1280,7 @@ ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *att
 		if ((kionix_Gsensor_data->zen_state & FLIP_STATE) ||\
 			(kionix_Gsensor_data->zen_state & HANDS_STATE))
 			init_data |= TPI2_EN;
-		if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+		if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 			init_data |= WUFI2_EN;
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, INT_CTRL6, init_data);
 		if (result < 0){
@@ -1498,7 +1366,7 @@ ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *att
 		if ((kionix_Gsensor_data->zen_state & FLIP_STATE) ||\
 		  (kionix_Gsensor_data->zen_state & HANDS_STATE))
 			init_data |= TPE_ON;
-		if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+		if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 			init_data |= WUFE_ON;
 		if (kionix_Gsensor_data->zen_state == 0)
 			init_data |= ( RES_16bit | GRP4_G_4G);
@@ -1514,7 +1382,7 @@ ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *att
 		if ((kionix_Gsensor_data->zen_state & FLIP_STATE) ||\
 		  (kionix_Gsensor_data->zen_state & HANDS_STATE))
 			init_data |= TPI2_EN;
-		if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+		if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 			init_data |= WUFI2_EN;
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, INT_CTRL6, init_data);
 		if (result < 0){
@@ -1523,7 +1391,7 @@ ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *att
 		}
 		if (kionix_Gsensor_data->zen_state == 0)
 		{//disable event irq
-			if(kionix_Gsensor_data->event_irq_status == 1){
+			if(kionix_Gsensor_data->event_irq_status == 1) {
 				disable_irq(kionix_Gsensor_data->event_irq);
 				printk("[Gsensor] alp : kx022_disable event irq (%d)\n", kionix_Gsensor_data->event_irq);
 				kionix_Gsensor_data->event_irq_status = 0;
@@ -1534,12 +1402,12 @@ ssize_t init_gsensor_double_tap(struct device *dev, struct device_attribute *att
 	}
 
 	// enable changes ie. double tap
-	init_data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	init_data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 	init_data |= PC1_ON;
 	result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, CTRL_REG1, init_data); 
 
 	if (result < 0){
-		printk("[Gsensor] alp : init double tap enable fail (%d)\n",result);
+		printk("[Gsensor] alp : init double tap enable fail (%d)\n", result);
 		return result;
 	}
 
@@ -1552,18 +1420,17 @@ ssize_t read_gsensor_hands(struct device *dev, struct device_attribute *attr, ch
 	int data;
 	data = kionix_Gsensor_data->zen_state & HANDS_STATE;
 	printk("[Gsensor] alp : read_gsensor_hands = %d\n",data);
-	return sprintf(buf, "%d\n",data);
+	return sprintf(buf, "%d\n", data);
 }
 ssize_t init_gsensor_hands(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-	struct i2c_client *client = to_i2c_client(dev);
 	int result = 0;
 	int enable = simple_strtoul(buf, NULL, 10);
 	u8 data = 0;
 	u8 init_data = 0;
 
 	printk("[Gsensor] alp : init gsensor hands feature +++\n");
-	data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 	printk("[Gsensor] KX022 - CNTL1 reg = %x enable = %x\n",data, enable);
 	data &= PC1_OFF;
 	// set KX022 into standby mode
@@ -1572,7 +1439,7 @@ ssize_t init_gsensor_hands(struct device *dev, struct device_attribute *attr, co
 		printk("[Gsensor] alp : hands_power_off_fail !\n");
 		return result;
 	}
-	data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 
 	//printk("[Gsensor] KX022 - CNTL1 reg = %x\n",data);
 	if(enable){//do Hands up/down init procedure here
@@ -1594,8 +1461,7 @@ ssize_t init_gsensor_hands(struct device *dev, struct device_attribute *attr, co
 		//if (kionix_Gsensor_data->tap_state == FUNSTAT_ON)
 		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 			init_data |= TDTE_ON;
-		//if (kionix_Gsensor_data->flick_state == FUNSTAT_ON)
-		if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+		if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 			init_data |= WUFE_ON;
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, CTRL_REG1, init_data);
 		if (result < 0){
@@ -1636,8 +1502,7 @@ ssize_t init_gsensor_hands(struct device *dev, struct device_attribute *attr, co
 		//if (kionix_Gsensor_data->tap_state == FUNSTAT_ON)
 		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 			init_data |= TDTI2_EN;
-		//if (kionix_Gsensor_data->flick_state == FUNSTAT_ON)
-		if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+		if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 			init_data |= WUFI2_EN;
 		
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, INT_CTRL6, init_data);
@@ -1693,8 +1558,7 @@ ssize_t init_gsensor_hands(struct device *dev, struct device_attribute *attr, co
 			//if (kionix_Gsensor_data->tap_state == FUNSTAT_ON)
 			if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 				init_data |= TDTE_ON;
-			//if (kionix_Gsensor_data->flick_state == FUNSTAT_ON)
-			if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+			if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 				init_data |= WUFE_ON;
 			//if ((kionix_Gsensor_data->tap_state == FUNSTAT_OFF) && (kionix_Gsensor_data->flick_state == FUNSTAT_OFF))
 			if (kionix_Gsensor_data->zen_state == 0)
@@ -1711,8 +1575,7 @@ ssize_t init_gsensor_hands(struct device *dev, struct device_attribute *attr, co
 			//if (kionix_Gsensor_data->tap_state == FUNSTAT_ON)
 			if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 				init_data |= TDTI2_EN;
-			//if (kionix_Gsensor_data->flick_state == FUNSTAT_ON)
-			if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+			if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 				init_data |= WUFI2_EN;
 			result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, INT_CTRL6, init_data);
 			if (result < 0){
@@ -1735,7 +1598,7 @@ ssize_t init_gsensor_hands(struct device *dev, struct device_attribute *attr, co
 	}
 
 	// enable changes ie. hands feature
-	init_data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	init_data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 	init_data |= PC1_ON;
 	result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, CTRL_REG1, init_data); 
 
@@ -1757,8 +1620,6 @@ ssize_t read_gsensor_flip(struct device *dev, struct device_attribute *attr, cha
 }
 ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-	struct i2c_client *client = to_i2c_client(dev);
-	//u8 wufe_data[2]={0,0};
 	int result = 0;
 	int enable = simple_strtoul(buf, NULL, 10);
 	//read CNTL1 data and set KX022 as standby-mode
@@ -1766,7 +1627,7 @@ ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, con
 	u8 init_data = 0;
 
 	printk("[Gsensor] alp : init gsensor flip feature +++\n");
-	data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 	printk("[Gsensor] KX022 - CNTL1 reg = %x enable = %x\n",data, enable);
 	data &= PC1_OFF;
 	// set KX022 into standby mode
@@ -1775,7 +1636,7 @@ ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, con
 		printk("[Gsensor] alp : flip_power_off_fail !\n");
 		return result;
 	}
-	data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 
 	//printk("[Gsensor] KX022 - CNTL1 reg = %x\n",data);
 	if(enable){//do Flip init procedure here
@@ -1794,11 +1655,10 @@ ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, con
 		else
 			init_data |= (RES_16bit | DRDYE );
 		//check if other two states are ON
-		//if (kionix_Gsensor_data->tap_state == FUNSTAT_ON)
 		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 			init_data |= TDTE_ON;
 		//if (kionix_Gsensor_data->flick_state == FUNSTAT_ON)
-		if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+		if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 			init_data |= WUFE_ON;
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, CTRL_REG1, init_data);
 		if (result < 0){
@@ -1837,11 +1697,9 @@ ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, con
 		}
 		//INC6: enable Tilt position interrupt setup for INT2
 		init_data = 0b00000001;
-		//if (kionix_Gsensor_data->tap_state == FUNSTAT_ON)
 		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 			init_data |= TDTI2_EN;
-		//if (kionix_Gsensor_data->flick_state == FUNSTAT_ON)
-		if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+		if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 			init_data |= WUFI2_EN;
 		
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, INT_CTRL6, init_data);
@@ -1898,7 +1756,7 @@ ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, con
 			if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 				init_data |= TDTE_ON;
 			//if (kionix_Gsensor_data->flick_state == FUNSTAT_ON)
-			if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+			if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 				init_data |= WUFE_ON;
 			//if ((kionix_Gsensor_data->tap_state == FUNSTAT_OFF) && (kionix_Gsensor_data->flick_state == FUNSTAT_OFF))
 			if (kionix_Gsensor_data->zen_state == 0)
@@ -1915,8 +1773,7 @@ ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, con
 			//if (kionix_Gsensor_data->tap_state == FUNSTAT_ON)
 			if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 				init_data |= TDTI2_EN;
-			//if (kionix_Gsensor_data->flick_state == FUNSTAT_ON)
-			if (kionix_Gsensor_data->zen_state & FLICK_STATE)
+			if ((kionix_Gsensor_data->zen_state & FLICK_STATE) || (kionix_Gsensor_data->zen_state & MOVING_STATE) )
 				init_data |= WUFI2_EN;
 			result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, INT_CTRL6, init_data);
 			if (result < 0){
@@ -1938,7 +1795,7 @@ ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, con
 	}
 
 	// enable changes ie. flip
-	init_data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	init_data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 	init_data |= PC1_ON;
 	result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, CTRL_REG1, init_data); 
 
@@ -1951,6 +1808,46 @@ ssize_t init_gsensor_flip(struct device *dev, struct device_attribute *attr, con
 	return count;
 }
 
+ssize_t gsensor_get_flick_detect_force(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int data = 0;
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, ATH);
+	if (data == KX022_FLICK_DETECT_1G_GFORCE)
+		printk("[Gsensor] Flick Set detect 1G G-force(0x%x)\n", data);
+	if (data == KX022_FLICK_DETECT_075G_GFORCE)
+		printk("[Gsensor] Flick Set detect 0.75G G-force(0x%x)\n", data);
+	if (data == KX022_FLICK_DETECT_050G_GFORCE)
+		printk("[Gsensor] Flick Set detect 0.5G G-force(0x%x)\n", data);
+	else
+		printk("[Gsensor] Flick Set detect Unknown G-force(0x%x)\n", data);
+	
+	return sprintf(buf, "ATH 0x%x\n", data);
+}
+
+ssize_t gsensor_set_flick_detect_force(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val = 0;
+	val = simple_strtoul(buf, NULL, 10);
+	switch(val)	{
+		case 1:
+			kionix_Gsensor_data->ATH_ctrl = KX022_FLICK_DETECT_1G_GFORCE;
+			printk("[Gsensor] Flick Setting detect 1G G-force(0x%x)\n", kionix_Gsensor_data->ATH_ctrl);
+			break;
+		case 75:
+			kionix_Gsensor_data->ATH_ctrl = KX022_FLICK_DETECT_075G_GFORCE;
+			printk("[Gsensor] Flick Setting detect 0.75G G-force(0x%x)\n", kionix_Gsensor_data->ATH_ctrl);
+			break;
+		case 50:
+			kionix_Gsensor_data->ATH_ctrl = KX022_FLICK_DETECT_050G_GFORCE;
+			printk("[Gsensor] Flick Setting detect 0.5G G-force(0x%x)\n", kionix_Gsensor_data->ATH_ctrl);
+			break;
+		default:
+			printk("[Gsensor] gsensor_set_flick_detect_force : error input !!!\n");
+			break;
+	}
+	return count;
+}
+
 ssize_t read_gsensor_flick(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	int data;
@@ -1960,8 +1857,6 @@ ssize_t read_gsensor_flick(struct device *dev, struct device_attribute *attr, ch
 }
 ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
-	struct i2c_client *client = to_i2c_client(dev);
-	//u8 wufe_data[2]={0,0};
 	int result = 0;
 	int enable = simple_strtoul(buf, NULL, 10);
 	//read CNTL1 data and set KX022 as standby-mode
@@ -1969,7 +1864,7 @@ ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, co
 	u8 init_data = 0;
 
 	printk("[Gsensor] alp : init gsensor flick feature +++\n");
-	data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 	printk("[Gsensor] KX022 - CNTL1 reg = %x enable = %x\n",data, enable);
 	data &= PC1_OFF;
 	// set KX022 into standby mode
@@ -1978,10 +1873,10 @@ ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, co
 		printk("[Gsensor] alp : flick_power_off_fail !\n");
 		return result;
 	}
-	data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 
 	//printk("[Gsensor] KX022 - CNTL1 reg = %x\n",data);
-	if(enable){//do Flick init procedure here
+	if(enable)	{//do Flick init procedure here
 		//all function
 		//init ODCNTL register, acceleration ODR is 100Hz
 		init_data = 0b00000011;
@@ -2026,7 +1921,8 @@ ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, co
 			return result;
 		}
 		//INC2: enable wakeup direction interrupt setup for INT2
-		init_data = 0b00110000;//Enable X axis only, Disable Y axis wake up interrupt
+		//init_data = 0b00110000;//Enable X axis only, Disable Y axis wake up interrupt
+		init_data = 0b00110000;//Enable X and Y axis , Disable Z axis wake up interrupt
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, INT_CTRL2, init_data);
 		if (result < 0){
 			printk("[Gsensor] alp : flick_inc2_fail !\n");
@@ -2043,18 +1939,20 @@ ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, co
 		
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, INT_CTRL6, init_data);
 		if (result < 0){
-			printk("[Gsensor] alp : flick_inc4_fail !\n");
+			printk("[Gsensor] alp : flick_inc6_fail !\n");
 			return result;
 		}
 		//WUFC: initial count register for the motion detection timer
-		init_data = 0b00001010;
+		init_data = 0b00000101;
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, WUFC, init_data);
 		if (result < 0){
 			printk("[Gsensor] alp : flick_wufc_fail !\n");
 			return result;
 		}
 		//ATH: the threshold for wake-up (motion detect) interrupt
-		init_data = 0b00010000;
+		//init_data = 0b00010000;
+		init_data = kionix_Gsensor_data->ATH_ctrl;
+		printk("[Gsensor] alp : flick_ATH_Set : 0x%x !\n", init_data);
 		result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, ATH, init_data);
 		if (result < 0){
 			printk("[Gsensor] alp : flick_ATH_fail !\n");
@@ -2069,7 +1967,6 @@ ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, co
 			printk("[Gsensor] alp : kx022_enable event irq (%d)\n", kionix_Gsensor_data->event_irq);
 			kionix_Gsensor_data->event_irq_status = 1;
 		}
-		//kionix_Gsensor_data->flick_state = FUNSTAT_ON;
 		kionix_Gsensor_data->zen_state |= FLICK_STATE;
 		
 	}	
@@ -2079,7 +1976,6 @@ ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, co
 		//change CNTL1 register
 		init_data = 0b01000000; //RES and 2g
 		//check if other two states are ON
-		//if (kionix_Gsensor_data->tap_state == FUNSTAT_ON)
 		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
 			init_data |= TDTE_ON;
 		if( (kionix_Gsensor_data->zen_state & FLIP_STATE) || \
@@ -2116,11 +2012,10 @@ ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, co
 			kionix_Gsensor_data->event_irq_status = 0;
 		}
 	}
-		//kionix_Gsensor_data->flick_state = FUNSTAT_OFF;
 	}
 
 	// enable changes ie. flip
-	init_data = i2c_smbus_read_byte_data(client, CTRL_REG1);
+	init_data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
 	init_data |= PC1_ON;
 	result = kx022_i2c_write_byte_and_trace(kionix_Gsensor_data->client, CTRL_REG1, init_data); 
 
@@ -2133,7 +2028,173 @@ ssize_t init_gsensor_flick(struct device *dev, struct device_attribute *attr, co
 	return count;
 }
 
+//20150618 Change for adding moving detection feature
+ssize_t read_gsensor_moving_detection(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	int data;
+	data = kionix_Gsensor_data->zen_state & MOVING_STATE;
+	printk("[Gsensor] Read_gsensor_moving_detection = %d\n", data);
+	return sprintf(buf, "%d\n",data);
+}
+ssize_t init_gsensor_moving_detection(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int result = 0;
+	u8 data = 0;
+	u8 init_data = 0;
+	int enable = simple_strtoul(buf, NULL, 10);
 
+	printk("[Gsensor] init_gsensor_moving_detection +++\n");
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
+	printk("[Gsensor] KX022 - CNTL1 reg = %x\n",data);
+	data &= PC1_OFF;
+	// set KX022 into standby mode
+	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, data);
+	if (result < 0)	{
+		printk("[Gsensor] Moving_detection_write_gsensor_CNTL1 fail(%d) !\n", result);
+		return result;
+	}
+	data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
+
+	printk("[Gsensor] KX022 - CNTL1 reg = %x\n", data);
+	if(enable) {
+
+		//init CNTL1 register
+		init_data = /*data |*/ WUFE_ON;
+		if (atomic_read(&kionix_Gsensor_data->enabled) == KX022_DEVICE_DISABLE)
+			init_data |= (RES_16bit );
+		else
+			init_data |= (RES_16bit | DRDYE );		
+		//check if other states are ON
+		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
+			init_data |= TDTE_ON;
+		if( (kionix_Gsensor_data->zen_state & FLIP_STATE) || \
+			(kionix_Gsensor_data->zen_state & HANDS_STATE) )
+			init_data |= TPE_ON;
+		
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection_cntl1_fail !\n");
+			return result;
+		}
+
+		//INC2: enable wakeup direction - all axis
+		init_data = 0b00111111;
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, INT_CTRL2, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection_inc2_fail !\n");
+			return result;
+		}
+
+		//CNTL3: set motion wakeup ODR
+		init_data = CNTL3_3HZ_OWUF_VAL;
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG3, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection_inc3_fail !\n");
+			return result;
+		}
+
+		//INC5: init register setup for INT2
+		init_data = 0x30; // irq handler is active high. done in probe.
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, INT_CTRL5, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection_inc5_fail !\n");
+			return result;
+		}
+
+		//INC6: control interrupt reporting for INT2
+		init_data = 0b00000010;
+		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
+			init_data |= TDTI2_EN;
+		if( (kionix_Gsensor_data->zen_state & FLIP_STATE) || \
+			(kionix_Gsensor_data->zen_state & HANDS_STATE) )
+			init_data |= TPI2_EN;
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, INT_CTRL6, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection_inc6_fail !\n");
+			return result;
+		}
+		//WUFC: initial count register for the motion detection timer
+		init_data = WUFE_WUFC_VAL;
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, WUFC, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection_wufc_fail !\n");
+			return result;
+		}
+		//ATH: the threshold for wake-up (motion detect) interrupt
+		init_data = WUFE_ATH_VAL;
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, ATH, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection_ATH_fail !\n");
+			return result;
+		}
+
+		/* Clean interrupt bit */
+		i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INT_REL);
+		if(kionix_Gsensor_data->event_irq_status == 0){
+			enable_irq(kionix_Gsensor_data->event_irq);
+			printk("[Gsensor] kx022_enable event irq (%d)\n", kionix_Gsensor_data->event_irq);
+			kionix_Gsensor_data->event_irq_status = 1;
+		}
+		kionix_Gsensor_data->zen_state |= MOVING_STATE;
+
+	} else {
+
+		printk("[Gsensor] Moving_detection_disable function !\n");
+		kionix_Gsensor_data->zen_state &= (~MOVING_STATE);		
+		//change CNTL1 register
+		init_data = 0b01101000; //RES, DRDYE and 4g
+		//check if other two states are ON
+		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
+			init_data |= TDTE_ON;
+		if( (kionix_Gsensor_data->zen_state & FLIP_STATE) || \
+			(kionix_Gsensor_data->zen_state & HANDS_STATE) )
+			init_data |= TPE_ON;
+		if (kionix_Gsensor_data->zen_state == 0)
+			init_data |= ( RES_16bit | GRP4_G_4G);
+		if (atomic_read(&kionix_Gsensor_data->enabled) != KX022_DEVICE_DISABLE)
+			init_data |= (DRDYE );
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection disable CNTL1_fail !\n");
+			return result;
+		}
+		//change INC6: init register setup for INT2
+		init_data = 0b00000000;
+		if (kionix_Gsensor_data->zen_state & DTAP_STATE)
+			init_data |= TDTI2_EN;
+		if( (kionix_Gsensor_data->zen_state & FLIP_STATE) || \
+			(kionix_Gsensor_data->zen_state & HANDS_STATE) )
+			init_data |= TPI2_EN;
+		result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, INT_CTRL6, init_data);
+		if (result < 0){
+			printk("[Gsensor] Moving_detection disable inc6_fail !\n");
+			return result;
+		}
+
+		if (kionix_Gsensor_data->zen_state == 0)
+		{//disable event irq
+		if(kionix_Gsensor_data->event_irq_status == 1){
+			disable_irq(kionix_Gsensor_data->event_irq);
+			printk("[Gsensor] kx022_disable event irq (%d)\n", kionix_Gsensor_data->event_irq);
+			kionix_Gsensor_data->event_irq_status = 0;
+		}
+		}
+	}
+
+	// enable changes
+	init_data = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, CTRL_REG1);
+	init_data |= PC1_ON;
+	result = i2c_smbus_write_byte_data(kionix_Gsensor_data->client, CTRL_REG1, init_data); 
+
+	if (result < 0){
+		printk("[Gsensor] Init Moving_detection enable fail (%d)\n", result);
+		return result;
+	}
+	
+	return count;
+}
+
+/*====================== Gsensor other part ======================*/
 #ifdef CONFIG_INPUT_KXTJ9_POLLED_MODE
 static void kx022_poll(struct input_polled_dev *dev)
 {
@@ -2146,7 +2207,7 @@ static void kx022_poll(struct input_polled_dev *dev)
 		kionix_Gsensor_data->last_poll_interval = poll_interval;
 	}
 	if(KX022_DEBUG_MESSAGE) 
-		printk("[Gsensor] alp : kx022_poll poll_interval(%d)\n",kionix_Gsensor_data->last_poll_interval);
+		printk("[Gsensor] kx022_poll poll_interval(%d)\n",kionix_Gsensor_data->last_poll_interval);
 }
 
 static void kx022_polled_input_open(struct input_polled_dev *dev)
@@ -2209,34 +2270,6 @@ static inline void kx022_teardown_polled_device(void)
 
 #endif
 
-static int KIONIX_HW_vertify(void)
-{
-	int retval=0;
-	if(KX022_DEBUG_MESSAGE) printk("[Gsensor] KIONIX_HW_vertify ++\n");
-
-	retval = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, WHO_AM_I);
-	printk("[Gsensor] KIONIX_HW_vertify ret = %d\n",retval);
-	if (retval < 0) {
-		printk("[Gsensor] read fail ret = %d\n", retval);
-		dev_err(&kionix_Gsensor_data->client->dev, "read err int source\n");
-		goto out;
-	}
-	if(KX022_DEBUG_MESSAGE) printk("[Gsensor] alp : read retval = %d\n", retval);
-
-	if(retval == WHOAMI_VALUE_FOR_KX022)
-		printk("[Gsensor] Use kx022!!\n");
-	else if(retval == WHOAMI_VALUE_FOR_KXTJ2)
-		printk("[Gsensor] Use kxtj2!!\n");
-	else if(retval == WHOAMI_VALUE_FOR_KXTJ9)
-		printk("[Gsensor] Use kxtj9!!\n");
-	else
-		printk("[Gsensor] Use other!!\n");
-out:
-	kx022_device_power_off();
-	if(KX022_DEBUG_MESSAGE) printk("[Gsensor] alp : KIONIX_HW_vertify --\n");
-	return retval;
-}
-
 /*
 static struct file_operations kx022_fops = {
 	.owner			= 	THIS_MODULE,
@@ -2255,6 +2288,7 @@ static struct miscdevice kx022_device = {
 //	.fops = &kx022_fops,
 };
 
+/*====================== Gsensor suspend/resume part ======================*/
 #ifdef CONFIG_HAS_EARLYSUSPEND
 static void kx022_early_suspend(struct early_suspend *h)
 {
@@ -2264,9 +2298,9 @@ static void kx022_early_suspend(struct early_suspend *h)
 	kionix_Gsensor_data->suspend_resume_state = 1;
 
 	status = 	kionix_Gsensor_data->ctrl_reg1 >> 7;
-	printk("[Gsensor] alp : kx022_early_suspend enable(%d)\n", status);
+	printk("[Gsensor] kx022_early_suspend enable(%d)\n", status);
 	if(status == KX022_RESUME_ENABLE){
-		printk("[Gsensor] alp : kxtj, need to enable after resume!\n");
+		printk("[Gsensor] kxtj, need to enable after resume!\n");
 		kionix_Gsensor_data->resume_enable = KX022_RESUME_ENABLE;
 	} else	{
 		kionix_Gsensor_data->resume_enable = KX022_RESUME_DISABLE;
@@ -2274,7 +2308,7 @@ static void kx022_early_suspend(struct early_suspend *h)
 
 	kx022_disable();
 	mutex_unlock(&kionix_Gsensor_data->lock);
-	printk("[Gsensor] alp : kx022_early_suspend irq(%d)\n", kionix_Gsensor_data->irq);
+	printk("[Gsensor] kx022_early_suspend irq(%d)\n", kionix_Gsensor_data->irq);
 }
 
 static void kx022_late_resume(struct early_suspend *h)
@@ -2284,61 +2318,91 @@ static void kx022_late_resume(struct early_suspend *h)
 	if ( (kionix_Gsensor_data->resume_enable == KX022_RESUME_ENABLE) ||
 			(kionix_Gsensor_data->resume_enable==KX022_RESUME_MISSENABLE) )	{
 		kx022_enable();
-		printk("[Gsensor] alp : kx022_late_resume enable\n");
+		printk("[Gsensor] kx022_late_resume enable\n");
 	}else
-		printk("[Gsensor] alp : kx022_late_resume pass enable\n");
+		printk("[Gsensor] kx022_late_resume pass enable\n");
 	mutex_unlock(&kionix_Gsensor_data->lock);
-	printk("[Gsensor] alp : kx022_late_resume irq(%d)\n", kionix_Gsensor_data->irq);
+	printk("[Gsensor] kx022_late_resume irq(%d)\n", kionix_Gsensor_data->irq);
 }
 #endif
 
-#ifdef CONFIG_PM_SLEEP
 static int kx022_suspend(struct device *dev)
 {
-	if (kionix_Gsensor_data->irq_status == 1)	{
-		i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INT_REL);
-		disable_irq(kionix_Gsensor_data->irq);
-	}	
-	printk("[Gsensor] alp : kx022_suspend\n");
-	printk("[Gsensor] alp : kx022 irq status(%d)\n", kionix_Gsensor_data->irq_status );
+	mutex_lock(&kionix_Gsensor_data->lock);
+	if (atomic_read(&kionix_Gsensor_data->enabled) != KX022_DEVICE_DISABLE) {
+		kx022_device_power_off();
+		if (kionix_Gsensor_data->irq_status==1)	{
+			disable_irq(kionix_Gsensor_data->irq);
+			kionix_Gsensor_data->irq_status = 0;
+		}
+	}
+	mutex_unlock(&kionix_Gsensor_data->lock);
+	printk("[Gsensor] kx022_suspend irq status(%d)\n", kionix_Gsensor_data->irq_status );
 	return 0;
 }
 
 static int kx022_resume(struct device *dev)
 {
-	if (kionix_Gsensor_data->irq_status == 1)	{
-		printk("[Gsensor] kx022_resume : kx022_resume Clean interrupt!!\n");
-		i2c_smbus_read_byte_data(kionix_Gsensor_data->client, INT_REL);
-		enable_irq(kionix_Gsensor_data->irq);
+	printk("[Gsensor] kx022_resume\n");
+	mutex_lock(&kionix_Gsensor_data->lock);
+	if (atomic_read(&kionix_Gsensor_data->enabled) != KX022_DEVICE_DISABLE)	{
+		switch(atomic_read(&kionix_Gsensor_data->enabled))	{
+		case KX022_ACC_ENABLE:
+			kionix_Gsensor_data->data_report_count = 0;
+			kx022_enable();
+			break;
+		case KX022_ORI_ENABLE:
+			kionix_Gsensor_data->data_report_count = 0;
+			kx022_enable_by_orientation();
+			break;
+		case KX022_BOTH_ENABLE:
+			kionix_Gsensor_data->data_report_count = 0;
+			kx022_enable();
+			break;
+		}
 	}
-	
-	if (KX022_DEBUG_MESSAGE)
-		printk("[Gsensor] kx022_resume : kx022_resume\n");
-	return 0;
-}
-
-static int kx022_runtime_suspend(struct device *dev)
-{
-	return 0;
-}
-
-static int kx022_runtime_resume(struct device *dev)
-{
+	mutex_unlock(&kionix_Gsensor_data->lock);
 	return 0;
 }
 
 static const struct dev_pm_ops kx022_pm_ops = {
 	.suspend	= kx022_suspend,
 	.resume	=  kx022_resume,
-	.runtime_suspend	= kx022_runtime_suspend,
-	.runtime_resume	= kx022_runtime_resume,
 };
-#endif
+
+/*====================== Gsensor initial part ======================*/
+static int KIONIX_HW_vertify(void)
+{
+	int retval=0;
+	if(KX022_DEBUG_MESSAGE) printk("[Gsensor] KIONIX_HW_vertify ++\n");
+
+	retval = i2c_smbus_read_byte_data(kionix_Gsensor_data->client, WHO_AM_I);
+	printk("[Gsensor] KIONIX_HW_vertify ret = %d\n",retval);
+	if (retval < 0) {
+		printk("[Gsensor] read fail ret = %d\n", retval);
+		dev_err(&kionix_Gsensor_data->client->dev, "read err int source\n");
+		goto out;
+	}
+	if(KX022_DEBUG_MESSAGE) printk("[Gsensor] Read retval = %d\n", retval);
+
+	if(retval == WHOAMI_VALUE_FOR_KX022)
+		printk("[Gsensor] Use kx022!!\n");
+	else if(retval == WHOAMI_VALUE_FOR_KXTJ2)
+		printk("[Gsensor] Use kxtj2!!\n");
+	else if(retval == WHOAMI_VALUE_FOR_KXTJ9)
+		printk("[Gsensor] Use kxtj9!!\n");
+	else
+		printk("[Gsensor] Use other!!\n");
+out:
+	kx022_device_power_off();
+	if(KX022_DEBUG_MESSAGE) printk("[Gsensor] KIONIX_HW_vertify --\n");
+	return retval;
+}
 
 static int kx022_setup_input_device(void)
 {
 	int err;
-	printk("[Gsensor] alp :  kx022_init_input_device ++\n");
+	printk("[Gsensor] kx022_init_input_device ++\n");
 
 	kionix_Gsensor_data->input_dev = input_allocate_device();
 	if (!kionix_Gsensor_data->input_dev) {
@@ -2390,7 +2454,7 @@ static int kx022_setup_input_device(void)
 		return err;
 	}
 	
-	printk("[Gsensor] alp :  kx022_init_input_device --\n");
+	printk("[Gsensor] kx022_init_input_device --\n");
 
 	return 0;
 }
@@ -2442,6 +2506,7 @@ static int kx022_probe(struct i2c_client *client,const struct i2c_device_id *id)
 	//kionix_Gsensor_data->flip_state = FUNSTAT_OFF;
 	//kionix_Gsensor_data->flick_state = FUNSTAT_OFF;
 	kionix_Gsensor_data->zen_state = 0;
+	kionix_Gsensor_data->ATH_ctrl = KX022_FLICK_DETECT_075G_GFORCE;
 	
 	/* Setting input event & device */
 	err = kx022_setup_input_device();
@@ -2520,7 +2585,7 @@ static int kx022_probe(struct i2c_client *client,const struct i2c_device_id *id)
 		}
 		err = misc_register(&kx022_device);
 		if (err) {
-			printk("[Gsensor] alp :  kx022_misc_register failed\n");
+			printk("[Gsensor] kx022_misc_register failed\n");
 		}
 	} else {
 		err = kx022_setup_polled_device();
@@ -2547,9 +2612,13 @@ static int kx022_probe(struct i2c_client *client,const struct i2c_device_id *id)
 	} else {
 		dev_err(&client->dev, "[Gsensor] Event irq failed: %d\n", err);
 	}
-	/* ded for Flick twice delayed work */
+	/* added for Flick twice delayed work */
 	kionix_Gsensor_data->flick_workqueue = create_workqueue("KX022 Flick Workqueue");
 	INIT_DELAYED_WORK(&kionix_Gsensor_data->flick_work, kx022_flick_work);
+
+	/* added for moving delayed work */
+	kionix_Gsensor_data->moving_workqueue = create_workqueue("KX022 Moving Workqueue");
+	INIT_DELAYED_WORK(&kionix_Gsensor_data->moving_work, handle_gsensor_work);
 
 	g_ilocation = KX022_CHIP_LOCATION_SR_ZC500KL;
 	

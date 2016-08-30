@@ -127,6 +127,8 @@ struct mmc_blk_data {
 #define MMC_BLK_WRITE		BIT(1)
 #define MMC_BLK_DISCARD		BIT(2)
 #define MMC_BLK_SECDISCARD	BIT(3)
+#define MMC_BLK_FLUSH		BIT(4)
+
 
 	/*
 	 * Only set in main mmc_blk_data associated
@@ -1137,18 +1139,21 @@ static int mmc_blk_cmd_error(struct request *req, const char *name, int error,
 	switch (error) {
 	case -EILSEQ:
 		/* response crc error, retry the r/w cmd */
-		pr_err("%s: %s sending %s command, card status %#x\n",
-			req->rq_disk->disk_name, "response CRC error",
+		pr_err_ratelimited(
+			"%s: response CRC error sending %s command, card status %#x\n",
+			req->rq_disk->disk_name,
 			name, status);
 		return ERR_RETRY;
 
 	case -ETIMEDOUT:
-		pr_err("%s: %s sending %s command, card status %#x\n",
-			req->rq_disk->disk_name, "timed out", name, status);
+		pr_err_ratelimited(
+			"%s: timed out sending %s command, card status %#x\n",
+			req->rq_disk->disk_name, name, status);
 
 		/* If the status cmd initially failed, retry the r/w cmd */
 		if (!status_valid) {
-			pr_err("%s: status not valid, retrying timeout\n", req->rq_disk->disk_name);
+			pr_err_ratelimited("%s: status not valid, retrying timeout\n",
+				req->rq_disk->disk_name);
 			return ERR_RETRY;
 		}
 		/*
@@ -1157,17 +1162,22 @@ static int mmc_blk_cmd_error(struct request *req, const char *name, int error,
 		 * have corrected the state problem above.
 		 */
 		if (status & (R1_COM_CRC_ERROR | R1_ILLEGAL_COMMAND)) {
-			pr_err("%s: command error, retrying timeout\n", req->rq_disk->disk_name);
+			pr_err_ratelimited(
+				"%s: command error, retrying timeout\n",
+				req->rq_disk->disk_name);
 			return ERR_RETRY;
 		}
 
 		/* Otherwise abort the command */
-		pr_err("%s: not retrying timeout\n", req->rq_disk->disk_name);
+		pr_err_ratelimited(
+			"%s: not retrying timeout\n",
+			req->rq_disk->disk_name);
 		return ERR_ABORT;
 
 	default:
 		/* We don't understand the error code the driver gave us */
-		pr_err("%s: unknown error %d sending read/write command, card status %#x\n",
+		pr_err_ratelimited(
+			"%s: unknown error %d sending read/write command, card status %#x\n",
 		       req->rq_disk->disk_name, error, status);
 		return ERR_ABORT;
 	}
@@ -1355,13 +1365,6 @@ static int mmc_blk_issue_discard_rq(struct mmc_queue *mq, struct request *req)
 	if (card->ext_csd.bkops_en)
 		card->bkops_info.sectors_changed += blk_rq_sectors(req);
 
-//ASUS_BSP +++ Gavin_Chang "mmc suspend stress test"
-#ifdef CONFIG_MMC_SUSPEND_TEST
-	if (card->host->suspendtest)
-		card->sectors_changed += blk_rq_sectors(req);
-#endif
-//ASUS_BSP --- Gavin_Chang "mmc suspend stress test"
-
 	if (mmc_can_discard(card))
 		arg = MMC_DISCARD_ARG;
 	else if (mmc_can_trim(card))
@@ -1446,13 +1449,6 @@ retry:
 			goto out;
 	}
 
-	if (mmc_can_sanitize(card)) {
-		trace_mmc_blk_erase_start(EXT_CSD_SANITIZE_START, 0, 0);
-		err = mmc_switch(card, EXT_CSD_CMD_SET_NORMAL,
-				 EXT_CSD_SANITIZE_START, 1,
-				 MMC_SANITIZE_REQ_TIMEOUT);
-		trace_mmc_blk_erase_end(EXT_CSD_SANITIZE_START, 0, 0);
-	}
 out_retry:
 	if (err && !mmc_blk_reset(md, card->host, type))
 		goto retry;
@@ -1472,6 +1468,16 @@ static int mmc_blk_issue_flush(struct mmc_queue *mq, struct request *req)
 	int ret = 0;
 
 	ret = mmc_flush_cache(card);
+	if (ret == -ENODEV) {
+		pr_err("%s: %s: restart mmc card",
+				req->rq_disk->disk_name, __func__);
+		if (mmc_blk_reset(md, card->host, MMC_BLK_FLUSH))
+			pr_err("%s: %s: fail to restart mmc",
+				req->rq_disk->disk_name, __func__);
+		else
+			mmc_blk_reset_success(md, MMC_BLK_FLUSH);
+	}
+
 	if (ret == -ETIMEDOUT) {
 		pr_info("%s: %s: requeue flush request after timeout",
 				req->rq_disk->disk_name, __func__);
@@ -2313,12 +2319,6 @@ static u8 mmc_blk_prep_packed_list(struct mmc_queue *mq, struct request *req)
 			if (card->ext_csd.bkops_en)
 				card->bkops_info.sectors_changed +=
 					blk_rq_sectors(next);
-//ASUS_BSP +++ Gavin_Chang "mmc suspend stress test"
-#ifdef CONFIG_MMC_SUSPENDTEST
-			if (card->host->suspendtest)
-				card->sectors_changed += blk_rq_sectors(next);
-#endif
-//ASUS_BSP --- Gavin_Chang "mmc suspend stress test"
 		}
 		list_add_tail(&next->queuelist, &mqrq->packed->list);
 		cur = next;
@@ -2575,12 +2575,6 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *rqc)
 	if (rqc) {
 		if ((card->ext_csd.bkops_en) && (rq_data_dir(rqc) == WRITE))
 			card->bkops_info.sectors_changed += blk_rq_sectors(rqc);
-//ASUS_BSP +++ Gavin_Chang "mmc suspend stress test"
-#ifdef CONFIG_MMC_SUSPENDTEST
-		if ((card->host->suspendtest) && (rq_data_dir(rqc) == WRITE))
-			card->sectors_changed += blk_rq_sectors(rqc);
-#endif
-//ASUS_BSP --- Gavin_Chang "mmc suspend stress test"
 		reqs = mmc_blk_prep_packed_list(mq, rqc);
 	}
 
@@ -2694,10 +2688,7 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *rqc)
 			err = mmc_blk_reset(md, card->host, type);
 			if (!err)
 				break;
-			if (err == -ENODEV ||
-				mmc_packed_cmd(mq_rq->cmd_type))
-				goto cmd_abort;
-			/* Fall through */
+			goto cmd_abort;
 		}
 		case MMC_BLK_ECC_ERR:
 			if (brq->data.blocks > 1) {

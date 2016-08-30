@@ -14,6 +14,7 @@
 
 #include <linux/i2c.h>
 #include <linux/gpio.h>
+#include <linux/of_gpio.h>
 #include <soc/qcom/camera2.h>
 #include <media/v4l2-subdev.h>
 #include <media/msmb_camera.h>
@@ -30,8 +31,8 @@
 struct msm_actuator_ctrl_t;
 
 enum msm_actuator_state_t {
-	ACTUATOR_POWER_UP,
 	ACTUATOR_POWER_DOWN,
+	ACTUATOR_POWER_UP,
 };
 
 struct msm_actuator_func_tbl {
@@ -67,6 +68,7 @@ struct msm_actuator_vreg {
 	struct camera_vreg_t *cam_vreg;
 	void *data[MSM_ACTUATOT_MAX_VREGS];
 	int num_vreg;
+	struct msm_camera_gpio_conf *gpio_conf;
 };
 
 struct msm_actuator_ctrl_t {
@@ -78,6 +80,7 @@ struct msm_actuator_ctrl_t {
 	struct msm_sd_subdev msm_sd;
 	enum af_camera_name cam_name;
 	struct mutex *actuator_mutex;
+	struct mutex *actuator_power_mutex;
 	struct msm_actuator_func_tbl *func_tbl;
 	enum msm_actuator_data_type i2c_data_type;
 	struct v4l2_subdev sdev;

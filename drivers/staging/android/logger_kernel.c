@@ -170,30 +170,11 @@ static void write_console(struct work_struct *work)
 
 	update_log_from_bottom(log_bot, log_out);
 }
-
-void
-write_to_logcat(const char *s, unsigned int count)
-{
-	struct logger_log *log_bot = get_log_from_name(LOGGER_LOG_KERNEL_BOT);
-	struct logger_log *log_out = get_log_from_name(LOGGER_LOG_MAIN);
-
-	
-
-	if (!log_bot)
-		return;
-
-	flush_to_bottom_log(log_bot, s, count);
-	
-
-	if (unlikely(!log_out))
-		return;
-	if (unlikely(!keventd_up()))
-		return;
-	if (!oops_in_progress && !in_nmi())
-		schedule_work(&write_console_wq);
-
-}
-
+#ifndef ASUS_ZC550KL_PROJECT
+extern int get_Kmsgconfig(void);
+extern int selinux_enforcing;
+extern bool selinux_is_enabled(void);
+#endif
 static void
 logger_console_write(struct console *console, const char *s, unsigned int count)
 {
@@ -206,7 +187,11 @@ logger_console_write(struct console *console, const char *s, unsigned int count)
 		return;
 
 	flush_to_bottom_log(log_bot, s, count);
-
+#ifndef ASUS_ZC550KL_PROJECT	
+	if (!get_Kmsgconfig() && selinux_enforcing) {
+		 return;
+	}
+#endif
 	if (unlikely(!log_out))
 		return;
 	if (unlikely(!keventd_up()))

@@ -22,10 +22,23 @@
 #include <linux/i2c.h>
 #include <linux/fs.h>
 #include <linux/input/ASH.h>
-#include "../ASH_log.h"
 
 static int g_devMajor = -1;
 static struct class *g_property_class = NULL;
+
+/**************************/
+/* Debug and Log System */
+/************************/
+#define MODULE_NAME	"ASH_ATTR"
+
+#undef dbg
+#ifdef ASH_ATTR_DEBUG
+	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s]"fmt,MODULE_NAME,##args)
+#else
+	#define dbg(fmt, args...)
+#endif
+#define log(fmt, args...) printk(KERN_INFO "[%s]"fmt,MODULE_NAME,##args)
+#define err(fmt, args...) printk(KERN_ERR "[%s]"fmt,MODULE_NAME,##args)
 
 static int ASH_class_open(struct inode * inode, struct file * file)
 {
@@ -40,9 +53,9 @@ static const struct file_operations ASH_class_fops = {
 static int create_ASH_chrdev(void)
 {
 	/*create character device*/
-	g_devMajor = register_chrdev(0, "ASH", &ASH_class_fops);
+	g_devMajor = register_chrdev(0, "sensors", &ASH_class_fops);
 	if (g_devMajor < 0) {
-		err("create_ASH_chrdev : could not get major number\n");
+		err("%s: could not get major number\n", __FUNCTION__);
 		return g_devMajor;
 	}
 	
@@ -52,9 +65,9 @@ static int create_ASH_chrdev(void)
 static int create_ASH_class(void)
 {
 	/* create sys/class file node*/
-	g_property_class = class_create(THIS_MODULE, "ASH");
+	g_property_class = class_create(THIS_MODULE, "sensors");
 	if (IS_ERR(g_property_class)) {
-		err("create_ASH_class : could not get class\n");
+		err("%s: class_create ERROR.\n", __FUNCTION__);
 		return PTR_ERR(g_property_class);
 	}
 	
@@ -98,13 +111,13 @@ struct device *ASH_ATTR_device_create(ASH_type type)
 			sensor_dev = device_create(g_property_class, NULL, dev, NULL, "%s", "hallsensor");
 			break;
 		default:
-			err("ASH_Interface_device_create Type ERROR.(%d)\n", type);
+			err("%s: Type ERROR.(%d)\n", __FUNCTION__, type);
 
 	}
 	
 	if (IS_ERR(sensor_dev)) {
 		ret = PTR_ERR(sensor_dev);
-		err("sensor_dev pointer is ERROR.(%d)\n", ret);		
+		err("%s: sensor_dev pointer is ERROR(%d). \n", __FUNCTION__, ret);		
 		return NULL;
 	}	
 	
@@ -130,7 +143,7 @@ void ASH_ATTR_device_remove(ASH_type type)
 			device_destroy(g_property_class, dev);
 			break;
 		default:
-			err("ASH_Interface_remove Type ERROR.(%d)\n", type);
+			err("%s: ASH_ATTR_device_remove Type ERROR.(%d)\n", __FUNCTION__, type);
 
 	}
 

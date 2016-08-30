@@ -1,4 +1,4 @@
-/* Copyright (c) 2013-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2013-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -182,6 +182,8 @@ int msm_isp_update_bandwidth(enum msm_isp_hw_client client,
 				isp_bandwidth_mgr.client_info[i].ib;
 		}
 	}
+	ISP_DBG("%s: Total AB = %llu IB = %llu\n", __func__,
+			path->vectors[0].ab, path->vectors[0].ib);
 	msm_bus_scale_client_update_request(isp_bandwidth_mgr.bus_client,
 		isp_bandwidth_mgr.bus_vector_active_idx);
 	/* Insert into circular buffer */
@@ -743,6 +745,16 @@ static long msm_isp_ioctl_unlocked(struct v4l2_subdev *sd,
 			start_fetch_eng(vfe_dev, arg);
 		mutex_unlock(&vfe_dev->core_mutex);
 		break;
+	case VIDIOC_MSM_ISP_REG_UPDATE_CMD:
+		if (arg) {
+			enum msm_vfe_input_src frame_src =
+				*((enum msm_vfe_input_src *)arg);
+			vfe_dev->hw_info->vfe_ops.core_ops.
+				reg_update(vfe_dev, (1 << frame_src));
+			vfe_dev->axi_data.src_info[frame_src].last_updt_frm_id =
+			  vfe_dev->axi_data.src_info[frame_src].frame_id;
+		}
+		break;
 	case VIDIOC_MSM_ISP_SET_SRC_STATE:
 		mutex_lock(&vfe_dev->core_mutex);
 		rc = msm_isp_set_src_state(vfe_dev, arg);
@@ -776,6 +788,14 @@ static long msm_isp_ioctl_unlocked(struct v4l2_subdev *sd,
 	case VIDIOC_MSM_ISP_SMMU_ATTACH:
 		mutex_lock(&vfe_dev->core_mutex);
 		rc = msm_isp_smmu_attach(vfe_dev->buf_mgr, arg);
+		mutex_unlock(&vfe_dev->core_mutex);
+		break;
+	case MSM_SD_NOTIFY_FREEZE:
+		vfe_dev->isp_sof_debug = 0;
+		break;
+	case VIDIOC_MSM_ISP_BUF_DONE:
+		mutex_lock(&vfe_dev->core_mutex);
+		rc = msm_isp_user_buf_done(vfe_dev, arg);
 		mutex_unlock(&vfe_dev->core_mutex);
 		break;
 	case MSM_SD_SHUTDOWN:
@@ -823,6 +843,35 @@ static long msm_isp_ioctl_compat(struct v4l2_subdev *sd,
 		mutex_unlock(&vfe_dev->realtime_mutex);
 		break;
 	}
+	case VIDIOC_MSM_ISP_BUF_DONE: {
+		struct msm_isp_event_data buf_event;
+		struct msm_isp_event_data32 *buf_event32;
+		memset(&buf_event, 0, sizeof(buf_event));
+		buf_event32 =
+		  (struct msm_isp_event_data32 *)arg;
+		buf_event.input_intf = buf_event32->input_intf;
+		buf_event.frame_id = buf_event32->frame_id;
+		buf_event.timestamp.tv_sec =
+				buf_event32->timestamp.tv_sec;
+		buf_event.timestamp.tv_usec =
+				buf_event32->timestamp.tv_usec;
+		buf_event.mono_timestamp.tv_sec =
+				buf_event32->mono_timestamp.tv_sec;
+		buf_event.mono_timestamp.tv_usec =
+				buf_event32->mono_timestamp.tv_usec;
+		buf_event.u.buf_done.session_id =
+		  buf_event32->u.buf_done.session_id;
+		buf_event.u.buf_done.stream_id =
+		  buf_event32->u.buf_done.stream_id;
+		buf_event.u.buf_done.output_format =
+			buf_event32->u.buf_done.output_format;
+		buf_event.u.buf_done.buf_idx =
+			buf_event32->u.buf_done.buf_idx;
+		buf_event.u.buf_done.handle =
+			buf_event32->u.buf_done.handle;
+		cmd = VIDIOC_MSM_ISP_BUF_DONE;
+		return msm_isp_ioctl_unlocked(sd, cmd, &buf_event);
+	}
 	default:
 		return msm_isp_ioctl_unlocked(sd, cmd, arg);
 	}
@@ -859,28 +908,95 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 			cmd_len);
 		return -EINVAL;
 	}
+
+	/* Validate input parameters */
 	switch (reg_cfg_cmd->cmd_type) {
-	case VFE_WRITE: {
-		if (reg_cfg_cmd->u.rw_info.reg_offset <
-			resource_size(vfe_dev->vfe_mem)) {
-			uint32_t diff = 0;
-			diff = resource_size(vfe_dev->vfe_mem) -
-				reg_cfg_cmd->u.rw_info.reg_offset;
-			if (diff < reg_cfg_cmd->u.rw_info.len) {
-				pr_err("%s: VFE_WRITE: Invalid length\n",
-					__func__);
+	case VFE_WRITE:
+	case VFE_READ:
+	case VFE_WRITE_MB: {
+		if ((reg_cfg_cmd->u.rw_info.reg_offset >
+			(UINT_MAX - reg_cfg_cmd->u.rw_info.len)) ||
+			((reg_cfg_cmd->u.rw_info.reg_offset +
+			reg_cfg_cmd->u.rw_info.len) >
+			resource_size(vfe_dev->vfe_mem))) {
+			pr_err("%s:%d reg_offset %d len %d res %d\n",
+				__func__, __LINE__,
+				reg_cfg_cmd->u.rw_info.reg_offset,
+				reg_cfg_cmd->u.rw_info.len,
+				(uint32_t)resource_size(vfe_dev->vfe_mem));
+			return -EINVAL;
+		}
+
+		if ((reg_cfg_cmd->u.rw_info.cmd_data_offset >
+			(UINT_MAX - reg_cfg_cmd->u.rw_info.len)) ||
+			((reg_cfg_cmd->u.rw_info.cmd_data_offset +
+			reg_cfg_cmd->u.rw_info.len) > cmd_len)) {
+			pr_err("%s:%d cmd_data_offset %d len %d cmd_len %d\n",
+				__func__, __LINE__,
+				reg_cfg_cmd->u.rw_info.cmd_data_offset,
+				reg_cfg_cmd->u.rw_info.len, cmd_len);
+			return -EINVAL;
+		}
+		break;
+	}
+
+	case VFE_WRITE_DMI_16BIT:
+	case VFE_WRITE_DMI_32BIT:
+	case VFE_WRITE_DMI_64BIT:
+	case VFE_READ_DMI_16BIT:
+	case VFE_READ_DMI_32BIT:
+	case VFE_READ_DMI_64BIT: {
+		if (reg_cfg_cmd->cmd_type == VFE_WRITE_DMI_64BIT) {
+			if ((reg_cfg_cmd->u.dmi_info.hi_tbl_offset <=
+				reg_cfg_cmd->u.dmi_info.lo_tbl_offset) ||
+				(reg_cfg_cmd->u.dmi_info.hi_tbl_offset -
+				reg_cfg_cmd->u.dmi_info.lo_tbl_offset !=
+				(sizeof(uint32_t)))) {
+				pr_err("%s:%d hi %d lo %d\n",
+					__func__, __LINE__,
+					reg_cfg_cmd->u.dmi_info.hi_tbl_offset,
+					reg_cfg_cmd->u.dmi_info.hi_tbl_offset);
 				return -EINVAL;
 			}
-		} else {
-			pr_err("%s: VFE_WRITE: Invalid length\n", __func__);
+			if (reg_cfg_cmd->u.dmi_info.len <= sizeof(uint32_t)) {
+				pr_err("%s:%d len %d\n",
+					__func__, __LINE__,
+					reg_cfg_cmd->u.dmi_info.len);
+				return -EINVAL;
+			}
+			if (((UINT_MAX -
+				reg_cfg_cmd->u.dmi_info.hi_tbl_offset) <
+				(reg_cfg_cmd->u.dmi_info.len -
+				sizeof(uint32_t))) ||
+				((reg_cfg_cmd->u.dmi_info.hi_tbl_offset +
+				reg_cfg_cmd->u.dmi_info.len -
+				sizeof(uint32_t)) > cmd_len)) {
+				pr_err("%s:%d hi_tbl_offset %d len %d cmd %d\n",
+					__func__, __LINE__,
+					reg_cfg_cmd->u.dmi_info.hi_tbl_offset,
+					reg_cfg_cmd->u.dmi_info.len, cmd_len);
+				return -EINVAL;
+			}
+		}
+		if ((reg_cfg_cmd->u.dmi_info.lo_tbl_offset >
+			(UINT_MAX - reg_cfg_cmd->u.dmi_info.len)) ||
+			((reg_cfg_cmd->u.dmi_info.lo_tbl_offset +
+			reg_cfg_cmd->u.dmi_info.len) > cmd_len)) {
+			pr_err("%s:%d lo_tbl_offset %d len %d cmd_len %d\n",
+				__func__, __LINE__,
+				reg_cfg_cmd->u.dmi_info.lo_tbl_offset,
+				reg_cfg_cmd->u.dmi_info.len, cmd_len);
 			return -EINVAL;
 		}
-		if (resource_size(vfe_dev->vfe_mem) <
-			(reg_cfg_cmd->u.rw_info.reg_offset +
-			reg_cfg_cmd->u.rw_info.len)) {
-			pr_err("%s: VFE_WRITE: Invalid length\n", __func__);
-			return -EINVAL;
-		}
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	switch (reg_cfg_cmd->cmd_type) {
+	case VFE_WRITE: {
 		msm_camera_io_memcpy(vfe_dev->vfe_base +
 			reg_cfg_cmd->u.rw_info.reg_offset,
 			cfg_data + reg_cfg_cmd->u.rw_info.cmd_data_offset/4,
@@ -888,39 +1004,27 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 		break;
 	}
 	case VFE_WRITE_MB: {
-		uint32_t *data_ptr = cfg_data +
-			reg_cfg_cmd->u.rw_info.cmd_data_offset/4;
-
-		if ((UINT_MAX - sizeof(*data_ptr) <
-					reg_cfg_cmd->u.rw_info.reg_offset) ||
-			(resource_size(vfe_dev->vfe_mem) <
-			reg_cfg_cmd->u.rw_info.reg_offset +
-			sizeof(*data_ptr))) {
-			pr_err("%s: VFE_WRITE_MB: Invalid length\n", __func__);
-			return -EINVAL;
-		}
-		msm_camera_io_w_mb(*data_ptr, vfe_dev->vfe_base +
-			reg_cfg_cmd->u.rw_info.reg_offset);
+		msm_camera_io_memcpy_mb(vfe_dev->vfe_base +
+			reg_cfg_cmd->u.rw_info.reg_offset,
+			cfg_data + reg_cfg_cmd->u.rw_info.cmd_data_offset/4,
+			reg_cfg_cmd->u.rw_info.len);
 		break;
 	}
 	case VFE_CFG_MASK: {
 		uint32_t temp;
-		if (resource_size(vfe_dev->vfe_mem) <
-				reg_cfg_cmd->u.mask_info.reg_offset)
-			return -EINVAL;
-		temp = msm_camera_io_r(vfe_dev->vfe_base +
-			reg_cfg_cmd->u.mask_info.reg_offset);
-
-		temp &= ~reg_cfg_cmd->u.mask_info.mask;
-		temp |= reg_cfg_cmd->u.mask_info.val;
 		if ((UINT_MAX - sizeof(temp) <
-					reg_cfg_cmd->u.mask_info.reg_offset) ||
+			reg_cfg_cmd->u.mask_info.reg_offset) ||
 			(resource_size(vfe_dev->vfe_mem) <
 			reg_cfg_cmd->u.mask_info.reg_offset +
 			sizeof(temp))) {
 			pr_err("%s: VFE_CFG_MASK: Invalid length\n", __func__);
 			return -EINVAL;
 		}
+		temp = msm_camera_io_r(vfe_dev->vfe_base +
+			reg_cfg_cmd->u.mask_info.reg_offset);
+
+		temp &= ~reg_cfg_cmd->u.mask_info.mask;
+		temp |= reg_cfg_cmd->u.mask_info.val;
 		msm_camera_io_w(temp, vfe_dev->vfe_base +
 			reg_cfg_cmd->u.mask_info.reg_offset);
 		break;
@@ -932,23 +1036,8 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 		uint32_t *hi_tbl_ptr = NULL, *lo_tbl_ptr = NULL;
 		uint32_t hi_val, lo_val, lo_val1;
 		if (reg_cfg_cmd->cmd_type == VFE_WRITE_DMI_64BIT) {
-			if ((UINT_MAX - reg_cfg_cmd->u.dmi_info.hi_tbl_offset <
-						reg_cfg_cmd->u.dmi_info.len -
-						sizeof(uint32_t)) ||
-				(reg_cfg_cmd->u.dmi_info.hi_tbl_offset +
-				reg_cfg_cmd->u.dmi_info.len -
-					sizeof(uint32_t) > cmd_len)) {
-				pr_err("Invalid Hi Table out of bounds\n");
-				return -EINVAL;
-			}
 			hi_tbl_ptr = cfg_data +
 				reg_cfg_cmd->u.dmi_info.hi_tbl_offset/4;
-		}
-
-		if (reg_cfg_cmd->u.dmi_info.lo_tbl_offset +
-			reg_cfg_cmd->u.dmi_info.len > cmd_len) {
-			pr_err("Invalid Lo Table out of bounds\n");
-			return -EINVAL;
 		}
 		lo_tbl_ptr = cfg_data +
 			reg_cfg_cmd->u.dmi_info.lo_tbl_offset/4;
@@ -982,23 +1071,16 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 		uint32_t *hi_tbl_ptr = NULL, *lo_tbl_ptr = NULL;
 		uint32_t hi_val, lo_val, lo_val1;
 		if (reg_cfg_cmd->cmd_type == VFE_READ_DMI_64BIT) {
-			if (reg_cfg_cmd->u.dmi_info.hi_tbl_offset +
-				reg_cfg_cmd->u.dmi_info.len -
-					sizeof(uint32_t) > cmd_len) {
-				pr_err("Invalid Hi Table out of bounds\n");
-				return -EINVAL;
-			}
 			hi_tbl_ptr = cfg_data +
 				reg_cfg_cmd->u.dmi_info.hi_tbl_offset/4;
 		}
 
-		if (reg_cfg_cmd->u.dmi_info.lo_tbl_offset +
-			reg_cfg_cmd->u.dmi_info.len > cmd_len) {
-			pr_err("Invalid Lo Table out of bounds\n");
-			return -EINVAL;
-		}
 		lo_tbl_ptr = cfg_data +
 			reg_cfg_cmd->u.dmi_info.lo_tbl_offset/4;
+
+		if (reg_cfg_cmd->cmd_type == VFE_READ_DMI_64BIT)
+			reg_cfg_cmd->u.dmi_info.len =
+				reg_cfg_cmd->u.dmi_info.len / 2;
 
 		for (i = 0; i < reg_cfg_cmd->u.dmi_info.len/4; i++) {
 			lo_val = msm_camera_io_r(vfe_dev->vfe_base +
@@ -1023,11 +1105,9 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 	case VFE_HW_UPDATE_LOCK: {
 		uint32_t update_id =
 			vfe_dev->axi_data.src_info[VFE_PIX_0].last_updt_frm_id;
-		if (vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id != *cfg_data
-			|| update_id == *cfg_data) {
-			ISP_DBG("%s hw update lock failed acq %d, cur id %u, last id %u\n",
+		if (update_id) {
+			ISP_DBG("%s hw update lock failed cur id %u, last id %u\n",
 				__func__,
-				*cfg_data,
 				vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id,
 				update_id);
 			return -EINVAL;
@@ -1053,7 +1133,7 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 			if ((data_ptr < cfg_data) ||
 				(UINT_MAX / sizeof(*data_ptr) <
 				 (data_ptr - cfg_data)) ||
-				(sizeof(*data_ptr) * (data_ptr - cfg_data) >
+				(sizeof(*data_ptr) * (data_ptr - cfg_data) >=
 				 cmd_len))
 				return -EINVAL;
 			*data_ptr++ = msm_camera_io_r(vfe_dev->vfe_base +
@@ -1099,6 +1179,13 @@ static int msm_isp_send_hw_cmd(struct vfe_device *vfe_dev,
 	case SET_WM_UB_SIZE:
 		break;
 	case SET_UB_POLICY: {
+
+		if (cmd_len < sizeof(vfe_dev->vfe_ub_policy)) {
+			pr_err("%s:%d failed: invalid cmd len %u exp %zu\n",
+				__func__, __LINE__, cmd_len,
+				sizeof(vfe_dev->vfe_ub_policy));
+			return -EINVAL;
+		}
 		vfe_dev->vfe_ub_policy = *cfg_data;
 		break;
 	}
@@ -1647,6 +1734,8 @@ void msm_isp_do_tasklet(unsigned long data)
 			irq_status0, irq_status1, &ts);
 		irq_ops->process_reg_update(vfe_dev,
 			irq_status0, irq_status1, &ts);
+		irq_ops->process_epoch_irq(vfe_dev,
+			irq_status0, irq_status1, &ts);
 	}
 }
 
@@ -1709,6 +1798,7 @@ int msm_isp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	}
 
 	vfe_dev->reset_pending = 0;
+	vfe_dev->isp_sof_debug = 0;
 
 	if (vfe_dev->hw_info->vfe_ops.core_ops.init_hw(vfe_dev) < 0) {
 		pr_err("%s: init hardware failed\n", __func__);
@@ -1749,6 +1839,11 @@ int msm_isp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	vfe_dev->axi_data.hw_info = vfe_dev->hw_info->axi_hw_info;
 	vfe_dev->taskletq_idx = 0;
 	vfe_dev->vt_enable = 0;
+	vfe_dev->bus_util_factor = 0;
+	rc = of_property_read_u32(vfe_dev->pdev->dev.of_node,
+			"bus-util-factor", &vfe_dev->bus_util_factor);
+	if (rc < 0)
+		ISP_DBG("%s: Use default bus utilization factor\n", __func__);
 	iommu_set_fault_handler(vfe_dev->buf_mgr->iommu_domain,
 		msm_vfe_iommu_fault_handler, vfe_dev);
 	mutex_unlock(&vfe_dev->core_mutex);

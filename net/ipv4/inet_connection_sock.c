@@ -29,6 +29,18 @@ const char inet_csk_timer_bug_msg[] = "inet_csk BUG: unknown timer value\n";
 EXPORT_SYMBOL(inet_csk_timer_bug_msg);
 #endif
 
+//ASUS_BSP+++ SYN FIREWALL
+struct port_link
+{
+	int port;
+	int read;
+	int deleting;
+	struct port_link* next;
+} syn_firewall_port_link_head;
+DEFINE_SPINLOCK(listen_port_lock);
+extern struct completion listen_event;
+//ASUS_BSP---
+
 /*
  * This struct holds the first and last local port number.
  */
@@ -422,7 +434,8 @@ struct dst_entry *inet_csk_route_req(struct sock *sk,
 			   sk->sk_protocol,
 			   flags,
 			   (opt && opt->opt.srr) ? opt->opt.faddr : ireq->rmt_addr,
-			   ireq->loc_addr, ireq->rmt_port, inet_sk(sk)->inet_sport);
+			   ireq->loc_addr, ireq->rmt_port, inet_sk(sk)->inet_sport,
+			   sock_i_uid(sk));
 	security_req_classify_flow(req, flowi4_to_flowi(fl4));
 	rt = ip_route_output_flow(net, fl4, sk);
 	if (IS_ERR(rt))
@@ -458,7 +471,8 @@ struct dst_entry *inet_csk_route_child_sock(struct sock *sk,
 			   RT_CONN_FLAGS(sk), RT_SCOPE_UNIVERSE,
 			   sk->sk_protocol, inet_sk_flowi_flags(sk),
 			   (opt && opt->opt.srr) ? opt->opt.faddr : ireq->rmt_addr,
-			   ireq->loc_addr, ireq->rmt_port, inet_sk(sk)->inet_sport);
+			   ireq->loc_addr, ireq->rmt_port, inet_sk(sk)->inet_sport,
+			   sock_i_uid(sk));
 	security_req_classify_flow(req, flowi4_to_flowi(fl4));
 	rt = ip_route_output_flow(net, fl4, sk);
 	if (IS_ERR(rt))
@@ -775,6 +789,37 @@ int inet_csk_listen_start(struct sock *sk, const int nr_table_entries)
 		sk_dst_reset(sk);
 		sk->sk_prot->hash(sk);
 
+    	//ASUS_BSP+++ SYN FIREWALL
+		if(!strcmp(sk->sk_prot->name,"TCP")){
+			if(0!=ntohs(inet->inet_sport)){
+				if(0x0100007f != inet->inet_saddr){
+					struct port_link *p;
+					int search_port=ntohs(inet->inet_sport);
+					
+					spin_lock_bh(&listen_port_lock);
+					p=&syn_firewall_port_link_head;
+					
+					while(p->next!=NULL)
+					{						
+						p=p->next;
+						if(p->port==search_port){
+							printk("[SYN] already have port??\n");
+							if(p->deleting==1)
+								p->deleting=0;
+							spin_unlock_bh(&listen_port_lock);
+							complete(&listen_event);
+                            return 0;
+						}
+					}
+					p->next=kzalloc(sizeof(struct port_link), GFP_ATOMIC);
+					p->next->port=search_port;		
+					spin_unlock_bh(&listen_port_lock);
+					complete(&listen_event);
+					printk("[SYN] inet_csk_listen_start %p %p %d %x\n",p, p->next, p->next->port, inet->inet_saddr);
+				}
+			}
+		}
+    	//ASUS_BSP---
 		return 0;
 	}
 
@@ -795,6 +840,7 @@ void inet_csk_listen_stop(struct sock *sk)
 	struct request_sock *acc_req;
 	struct request_sock *req;
 
+	struct inet_sock *inet = inet_sk(sk);//ASUS_BSP+ SYN FIREWALL
 	inet_csk_delete_keepalive_timer(sk);
 
 	/* make all the listen_opt local to us */
@@ -860,6 +906,36 @@ void inet_csk_listen_stop(struct sock *sk)
 		}
 	}
 	WARN_ON(sk->sk_ack_backlog);
+
+    //ASUS_BSP+++ SYN FIREWALL
+	if(!strcmp(sk->sk_prot->name,"TCP")){
+		if(0!=ntohs(inet->inet_sport)){
+			int searchport=ntohs(inet->inet_sport);
+			struct port_link* p,*prev,*next;
+
+			spin_lock_bh(&listen_port_lock);
+			p=&syn_firewall_port_link_head;
+			
+			// find the certain port we record
+			while(p->next!=NULL)
+			{
+				prev=p;
+				p=prev->next;
+				next=p->next;
+				if(p->port==searchport){
+					p->deleting=1;
+				    printk("[SYN] inet_csk_listen_stop %p %p %p %d %d\n", prev, p, next, p->port, searchport);
+					printk("[SYN] deleting port\n");
+					complete(&listen_event);
+				
+					break;
+				}
+			}
+			spin_unlock_bh(&listen_port_lock);
+
+		}	
+	}
+	//ASUS_BSP---
 }
 EXPORT_SYMBOL_GPL(inet_csk_listen_stop);
 

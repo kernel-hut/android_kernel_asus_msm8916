@@ -180,9 +180,11 @@ struct scsi_cmnd;
 #define VERIFY_32	      0x0a
 #define WRITE_32	      0x0b
 #define WRITE_SAME_32	      0x0d
-//ASUS_BSP+++ Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+//ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
+#ifdef ASUS_ZC550KL_PROJECT
 #define FACTORY_MODE              0xF1
-//ASUS_BSP--- Show_Wang "[ZC550KL][USBH][Spec] add scsi cmd to enable diag"
+#endif
+//ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
 
 /* Values for T10/04-262r7 */
 #define	ATA_16		      0x85	/* 16-byte pass-thru */

@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,7 +21,6 @@
 #undef CDBG
 #define CDBG(fmt, args...) pr_debug(fmt, ##args)
 
-extern  void actuator_close(void);
 int isPowerup=0;
 
 static struct v4l2_file_operations msm_sensor_v4l2_subdev_fops;
@@ -427,11 +426,6 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 		return -EINVAL;
 	}
 
-	if(isPowerup&&strcmp(s_ctrl->sensordata->actuator_name, "dw9714") == 0){
-		printk("PJlog now need dynamic close Actuator\n");
-		actuator_close();
-	}
-
 	power_info = &s_ctrl->sensordata->power_info;
 	sensor_device_type = s_ctrl->sensor_device_type;
 	sensor_i2c_client = s_ctrl->sensor_i2c_client;
@@ -441,7 +435,6 @@ int msm_sensor_power_down(struct msm_sensor_ctrl_t *s_ctrl)
 			__func__, __LINE__, power_info, sensor_i2c_client);
 		return -EINVAL;
 	}
-
 	isPowerup=0;
 	rc = msm_camera_power_down(power_info, sensor_device_type,
 		sensor_i2c_client);
@@ -459,6 +452,7 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	const char *sensor_name;
 	uint32_t retry = 0;
 
+	printk("%s : E\n", __func__);
 	if (!s_ctrl) {
 		pr_err("%s:%d failed: %p\n",
 			__func__, __LINE__, s_ctrl);
@@ -477,15 +471,15 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 			sensor_i2c_client, slave_info, sensor_name);
 		return -EINVAL;
 	}
-
 	if (s_ctrl->set_mclk_23880000)
 		msm_sensor_adjust_mclk(power_info);
 
 	for (retry = 0; retry < 3; retry++) {
 		rc = msm_camera_power_up(power_info, s_ctrl->sensor_device_type,
 			sensor_i2c_client);
-		if (rc < 0)
+		if (rc < 0) {
 			return rc;
+		}
 		rc = msm_sensor_check_id(s_ctrl);
 		if (rc < 0) {
 			msm_camera_power_down(power_info,
@@ -500,7 +494,7 @@ int msm_sensor_power_up(struct msm_sensor_ctrl_t *s_ctrl)
 	if(rc==0){
 		isPowerup=1;
 	}
-
+	printk("%s : rc=(%d) X\n", __func__, rc);
 	return rc;
 }
 
@@ -536,14 +530,12 @@ int msm_sensor_match_id(struct msm_sensor_ctrl_t *s_ctrl)
 		return rc;
 	}
 
-	pr_err("%s: read id: 0x%x expected id 0x%x:\n", __func__, chipid,
+	CDBG("%s: read id: 0x%x expected id 0x%x:\n", __func__, chipid,
 		slave_info->sensor_id);
-
 	if (chipid != slave_info->sensor_id) {
 		pr_err("msm_sensor_match_id chip id doesnot match\n");
 		return -ENODEV;
 	}
-
 	return rc;
 }
 
@@ -599,6 +591,8 @@ static long msm_sensor_subdev_ioctl(struct v4l2_subdev *sd,
 	case VIDIOC_MSM_SENSOR_RELEASE:
 	case MSM_SD_SHUTDOWN:
 		msm_sensor_stop_stream(s_ctrl);
+		return 0;
+	case MSM_SD_NOTIFY_FREEZE:
 		return 0;
 	default:
 		return -ENOIOCTLCMD;
@@ -708,8 +702,10 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 		conf_array.delay = conf_array32.delay;
 		conf_array.size = conf_array32.size;
 		conf_array.reg_setting = compat_ptr(conf_array32.reg_setting);
+		conf_array.qup_i2c_batch = conf_array32.qup_i2c_batch;
 
-		if (!conf_array.size) {
+		if (!conf_array.size ||
+			conf_array.size > I2C_REG_DATA_MAX) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
@@ -782,16 +778,12 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 			pr_err("%s:%d: i2c_read failed\n", __func__, __LINE__);
 			break;
 		}
-		pr_err("Randy reading data=0x%X, rc=%d", local_data, rc);
-		((struct msm_camera_i2c_read_config*)compat_ptr(cdata->cfg.setting))->data=local_data;
-		/*
 		if (copy_to_user(&read_config.data,
 			(void *)&local_data, sizeof(uint16_t))) {
 			pr_err("%s:%d copy failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
 		}
-		*/
 		break;
 	}
 	case CFG_WRITE_I2C_SEQ_ARRAY: {
@@ -819,11 +811,13 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 		conf_array.size = conf_array32.size;
 		conf_array.reg_setting = compat_ptr(conf_array32.reg_setting);
 
-		if (!conf_array.size) {
+		if (!conf_array.size ||
+			conf_array.size > I2C_SEQ_REG_DATA_MAX) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
 		}
+
 		reg_setting = kzalloc(conf_array.size *
 			(sizeof(struct msm_camera_i2c_seq_reg_array)),
 			GFP_KERNEL);
@@ -916,6 +910,7 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 		stop_setting->data_type = stop_setting32.data_type;
 		stop_setting->delay = stop_setting32.delay;
 		stop_setting->size = stop_setting32.size;
+		stop_setting->qup_i2c_batch = stop_setting32.qup_i2c_batch;
 
 		reg_setting = compat_ptr(stop_setting32.reg_setting);
 
@@ -1035,7 +1030,8 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 			break;
 		}
 
-		if (!conf_array.size) {
+		if (!conf_array.size ||
+			conf_array.size > I2C_REG_DATA_MAX) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
@@ -1131,11 +1127,13 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 			write_config.slave_addr,
 			write_config.conf_array.size);
 
-		if (!write_config.conf_array.size) {
+		if (!write_config.conf_array.size ||
+			write_config.conf_array.size > I2C_SEQ_REG_DATA_MAX) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
 		}
+
 		reg_setting = kzalloc(write_config.conf_array.size *
 			(sizeof(struct msm_camera_i2c_reg_array)), GFP_KERNEL);
 		if (!reg_setting) {
@@ -1209,11 +1207,13 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void __user *argp)
 			break;
 		}
 
-		if (!conf_array.size) {
+		if (!conf_array.size ||
+			conf_array.size > I2C_SEQ_REG_DATA_MAX) {
 			pr_err("%s:%d failed\n", __func__, __LINE__);
 			rc = -EFAULT;
 			break;
 		}
+
 		reg_setting = kzalloc(conf_array.size *
 			(sizeof(struct msm_camera_i2c_seq_reg_array)),
 			GFP_KERNEL);
@@ -1622,7 +1622,7 @@ int msm_sensor_i2c_probe(struct i2c_client *client,
 		return rc;
 	}
 
-	pr_err("%s %s probe succeeded\n", __func__, client->name);
+	CDBG("%s %s probe succeeded\n", __func__, client->name);
 	snprintf(s_ctrl->msm_sd.sd.name,
 		sizeof(s_ctrl->msm_sd.sd.name), "%s", id->name);
 	v4l2_i2c_subdev_init(&s_ctrl->msm_sd.sd, client,

@@ -21,44 +21,48 @@
 #include <linux/i2c.h>
 #include <linux/fs.h>
 #include <linux/input/ASH.h>
-#include "../ASH_log.h"
 
 #define BUF_SIZE	(10)
 IRsensor_ATTR *g_IR_ATTR = NULL;
 struct device *g_psensor_dev;
 struct device *g_lsensor_dev;
 
+/**************************/
+/* Debug and Log System */
+/************************/
+#define MODULE_NAME			"ASH_ATTR"
+#define SENSOR_TYPE_NAME		"IRsensor"
+
+
+#undef dbg
+#ifdef ASH_ATTR_DEBUG
+	#define dbg(fmt, args...) printk(KERN_DEBUG "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#else
+	#define dbg(fmt, args...)
+#endif
+#define log(fmt, args...) printk(KERN_INFO "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+#define err(fmt, args...) printk(KERN_ERR "[%s][%s]"fmt,MODULE_NAME,SENSOR_TYPE_NAME,##args)
+
 ssize_t  ATT_IRsensor_show_vendor(struct device *dev, 
 	struct device_attribute *attr, char *buf)
 {
-	if(g_IR_ATTR->info_type.vendor==NULL) {
+	if(strcmp(g_IR_ATTR->info_type->vendor, "") == 0) {
 		err("Show vendor NOT SUPPORT. \n");
 		return sprintf(buf, "NOT SUPPORT\n");
 	}
 	
-	return sprintf(buf, "%s\n", g_IR_ATTR->info_type.vendor);
-}
-
-ssize_t  ATT_IRsensor_show_version(struct device *dev, 
-	struct device_attribute *attr, char *buf)
-{
-	if(g_IR_ATTR->info_type.version==NULL) {
-		err("Show version NOT SUPPORT. \n");
-		return sprintf(buf, "NOT SUPPORT\n");
-	}
-	
-	return sprintf(buf, "%s\n", g_IR_ATTR->info_type.version);
+	return sprintf(buf, "%s\n", g_IR_ATTR->info_type->vendor);
 }
 
 ssize_t  ATT_IRsensor_show_module_number(struct device *dev, 
 	struct device_attribute *attr, char *buf)
 {
-	if(g_IR_ATTR->info_type.module_number==NULL) {
+	if(strcmp(g_IR_ATTR->info_type->module_number, "") == 0) {
 		err("Show module number NOT SUPPORT. \n");
 		return sprintf(buf, "NOT SUPPORT\n");
 	}
 	
-	return sprintf(buf, "%s\n", g_IR_ATTR->info_type.module_number);
+	return sprintf(buf, "%s\n", g_IR_ATTR->info_type->module_number);
 }
 
 /**********************/
@@ -231,13 +235,14 @@ ssize_t  ATT_light_show_shift(struct device *dev,
 ssize_t  ATT_light_show_gain(struct device *dev, 
 	struct device_attribute *attr, char *buf)
 {
-	int gain = 0;
+	int gainvalue = 0;
 	if(g_IR_ATTR->ATTR_Calibration->light_show_gain == NULL) {
 		err("light_show_gain NOT SUPPORT. \n");
 		return sprintf(buf, "NOT SUPPORT\n");
 	}
-	gain = g_IR_ATTR->ATTR_Calibration->light_show_gain();
-	return sprintf(buf, "%d\n", gain);
+	gainvalue = g_IR_ATTR->ATTR_Calibration->light_show_gain();
+	return sprintf(buf, "%d.%05d\n", 
+		gainvalue/LIGHT_GAIN_ACCURACY_CALVALUE, gainvalue%LIGHT_GAIN_ACCURACY_CALVALUE);
 }
 
 ssize_t ATT_light_show_adc(struct device *dev, struct device_attribute *attr, char *buf)
@@ -331,7 +336,7 @@ ssize_t  ATT_IRsensor_store_write_reg(struct device *dev,
 		return count;
 	}
 	
-	sscanf(buf, "%x %x", &i2c_reg_addr, &i2c_reg_value);
+	sscanf(buf, "%x %d", &i2c_reg_addr, &i2c_reg_value);
 	
 	if(g_IR_ATTR->ATTR_Hardware->IRsensor_store_reg(i2c_reg_addr, i2c_reg_value) < 0)
 		return -EINVAL;
@@ -542,43 +547,78 @@ ssize_t  ATT_light_store_sensitivity(struct device *dev,
 	return count;
 }
 
+ssize_t  ATT_light_show_log_threshold(struct device *dev, 
+	struct device_attribute *attr, char *buf)
+{
+	int log_threshold = 0;
+	if(g_IR_ATTR->ATTR_Extension->light_show_log_threshold == NULL) {
+		err("light_show_log_threshold NOT SUPPORT. \n");
+		return sprintf(buf, "NOT SUPPORT\n");
+	}
+	
+	log_threshold = g_IR_ATTR->ATTR_Extension->light_show_log_threshold();
+	return sprintf(buf, "%d\n", log_threshold);
+}
+
+ssize_t  ATT_light_store_log_threshold(struct device *dev, 
+	struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long log_threshold;	
+
+	if(g_IR_ATTR->ATTR_Extension->light_store_log_threshold == NULL) {
+		err("light_store_log_threshold NOT SUPPORT. \n");
+		return count;
+	}
+	
+	if ((strict_strtoul(buf, 10, &log_threshold) < 0))
+		return -EINVAL;
+	if(log_threshold < 0) {
+		err("Light Sensor store Log Threshold with NEGATIVE value. (%lu) \n", log_threshold);
+		return -EINVAL;
+	}
+	if(g_IR_ATTR->ATTR_Extension->light_store_log_threshold(log_threshold) < 0)
+		return -EINVAL;	
+	log("Light Sensor store Log Threshold: %lu\n", log_threshold);
+	
+	return count;
+}
+
 
 static struct device_attribute proximity_property_attrs[] = {
 	/*read only*/
-	__ATTR(vendor, 0440, ATT_IRsensor_show_vendor, NULL),
-	__ATTR(version, 0440, ATT_IRsensor_show_version, NULL),
-	__ATTR(module_number, 0440, ATT_IRsensor_show_module_number, NULL),
-	__ATTR(proxm, 0440, ATT_proximity_show_adc, NULL),
-	__ATTR(atd_status, 0440, ATT_proximity_show_atd_test, NULL),
-	__ATTR(proxm_status, 0440, ATT_proximity_show_status, NULL),	
-	__ATTR(dump_reg, 0440, ATT_IRsensor_show_allreg, NULL),
+	__ATTR(vendor, 0444, ATT_IRsensor_show_vendor, NULL),
+	__ATTR(module_number, 0444, ATT_IRsensor_show_module_number, NULL),
+	__ATTR(proxm, 0444, ATT_proximity_show_adc, NULL),
+	__ATTR(atd_status, 0444, ATT_proximity_show_atd_test, NULL),
+	__ATTR(proxm_status, 0444, ATT_proximity_show_status, NULL),	
+	__ATTR(dump_reg, 0444, ATT_IRsensor_show_allreg, NULL),
 	/*read/write*/
-	__ATTR(switch, 0660, ATT_proximity_show_switch_onoff, ATT_proximity_store_switch_onoff),
-	__ATTR(hi_cal, 0660, ATT_proximity_show_calibration_hi, ATT_proximity_store_calibration_hi),
-	__ATTR(low_cal, 0660, ATT_proximity_show_calibration_lo, ATT_proximity_store_calibration_lo),
-	__ATTR(poll_mode, 0660, ATT_proximity_show_polling_mode, ATT_proximity_store_polling_mode),
-	__ATTR(read_reg, 0660, ATT_IRsensor_show_read_reg, ATT_IRsensor_store_read_reg),
+	__ATTR(switch, 0664, ATT_proximity_show_switch_onoff, ATT_proximity_store_switch_onoff),
+	__ATTR(hi_cal, 0664, ATT_proximity_show_calibration_hi, ATT_proximity_store_calibration_hi),
+	__ATTR(low_cal, 0664, ATT_proximity_show_calibration_lo, ATT_proximity_store_calibration_lo),
+	__ATTR(poll_mode, 0664, ATT_proximity_show_polling_mode, ATT_proximity_store_polling_mode),
+	__ATTR(read_reg, 0664, ATT_IRsensor_show_read_reg, ATT_IRsensor_store_read_reg),
 	__ATTR(write_reg, 0220, NULL, ATT_IRsensor_store_write_reg),
 };
 
 static struct device_attribute light_property_attrs[] = {
 	/*read only*/
-	__ATTR(vendor, 0440, ATT_IRsensor_show_vendor, NULL),
-	__ATTR(version, 0440, ATT_IRsensor_show_version, NULL),
-	__ATTR(module_number, 0440, ATT_IRsensor_show_module_number, NULL),
-	__ATTR(adc, 0440, ATT_light_show_adc, NULL),	
-	__ATTR(shift, 0440, ATT_light_show_shift, NULL),
-	__ATTR(gain, 0440, ATT_light_show_gain, NULL),
-	__ATTR(atd_status, 0440, ATT_light_show_atd_test, NULL),
-	__ATTR(lux, 0440, ATT_light_show_lux, NULL),
-	__ATTR(dump_reg, 0440, ATT_IRsensor_show_allreg, NULL),
+	__ATTR(vendor, 0444, ATT_IRsensor_show_vendor, NULL),
+	__ATTR(module_number, 0444, ATT_IRsensor_show_module_number, NULL),
+	__ATTR(adc, 0444, ATT_light_show_adc, NULL),	
+	__ATTR(shift, 0444, ATT_light_show_shift, NULL),
+	__ATTR(gain, 0444, ATT_light_show_gain, NULL),
+	__ATTR(atd_status, 0444, ATT_light_show_atd_test, NULL),
+	__ATTR(lux, 0444, ATT_light_show_lux, NULL),
+	__ATTR(dump_reg, 0444, ATT_IRsensor_show_allreg, NULL),
 	/*read/write*/
-	__ATTR(switch, 0660, ATT_light_show_switch_onoff, ATT_light_store_switch_onoff),
-	__ATTR(200lux_cal, 0660, ATT_light_show_calibration_200lux, ATT_light_store_calibration_200lux),
-	__ATTR(1000lux_cal, 0660, ATT_light_show_calibration_1000lux, ATT_light_store_calibration_1000lux),
-	__ATTR(sensitivity, 0660, ATT_light_show_sensitivity, ATT_light_store_sensitivity),
-	__ATTR(read_reg, 0660, ATT_IRsensor_show_read_reg, ATT_IRsensor_store_read_reg),
+	__ATTR(switch, 0664, ATT_light_show_switch_onoff, ATT_light_store_switch_onoff),
+	__ATTR(200lux_cal, 0664, ATT_light_show_calibration_200lux, ATT_light_store_calibration_200lux),
+	__ATTR(1000lux_cal, 0664, ATT_light_show_calibration_1000lux, ATT_light_store_calibration_1000lux),
+	__ATTR(sensitivity, 0664, ATT_light_show_sensitivity, ATT_light_store_sensitivity),
+	__ATTR(read_reg, 0664, ATT_IRsensor_show_read_reg, ATT_IRsensor_store_read_reg),
 	__ATTR(write_reg, 0220, NULL, ATT_IRsensor_store_write_reg),
+	__ATTR(log_threshold, 0664, ATT_light_show_log_threshold, ATT_light_store_log_threshold),
 };
 
 int IRsensor_ATTR_register(IRsensor_ATTR *mATTR)
@@ -592,7 +632,7 @@ int IRsensor_ATTR_register(IRsensor_ATTR *mATTR)
 	g_psensor_dev = ASH_ATTR_device_create(psensor);
 	if (IS_ERR(g_psensor_dev) || g_psensor_dev == NULL) {
 		ret = PTR_ERR(g_psensor_dev);
-		err("IRsensor_ATTR_register : psensor create ERROR.\n");
+		err("%s: psensor create ERROR.\n", __FUNCTION__);
 		return ret;
 	}	
 	for (ATTR_index=0; ATTR_index < ARRAY_SIZE(proximity_property_attrs); ATTR_index++) {
@@ -604,7 +644,7 @@ int IRsensor_ATTR_register(IRsensor_ATTR *mATTR)
 	/*lsensor device*/
 	g_lsensor_dev = ASH_ATTR_device_create(lsensor);
 	if (IS_ERR(g_lsensor_dev) || g_lsensor_dev == NULL) {
-		err("IRsensor_ATTR_register : lsensor create ERROR.\n");
+		err("%s: lsensor create ERROR.\n", __FUNCTION__);
 		ret = PTR_ERR(g_lsensor_dev);
 		return ret;
 	}
@@ -631,12 +671,12 @@ int psensor_ATTR_create(struct device_attribute *mpsensor_attr)
 {
 	int ret = 0;
 	if(mpsensor_attr == NULL) {
-		err("psensor_ATTR_create : the device_attribute is NULL point. \n");
+		err("%s: the device_attribute is NULL point. \n", __FUNCTION__);
 		return -EINVAL;
 	}
 	ret = device_create_file(g_psensor_dev, mpsensor_attr);
 	if (ret){		
-		err("psensor_ATTR_create : psensor create customize attribute ERROR. \n");
+		err("%s: device_create_file ERROR(%d). \n", __FUNCTION__, ret);
 		return ret;
 	}
 
@@ -648,12 +688,12 @@ int lsensor_ATTR_create(struct device_attribute *mlsensor_attr)
 {
 	int ret = 0;
 	if(mlsensor_attr == NULL) {
-		err("lsensor_ATTR_create : the device_attribute is NULL point. \n");
+		err("%s: the device_attribute is NULL point. \n", __FUNCTION__);
 		return -EINVAL;
 	}
 	ret = device_create_file(g_lsensor_dev, mlsensor_attr);
 	if (ret){		
-		err("lsensor_ATTR_create : lsensor create customize attribute ERROR. \n");
+		err("%s: device_create_file ERROR(%d). \n", __FUNCTION__, ret);
 		return ret;
 	}
 

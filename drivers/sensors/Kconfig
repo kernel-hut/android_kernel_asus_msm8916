@@ -1,4 +1,3 @@
-source "drivers/sensors/ASH/Kconfig"
 config SENSORS
 	bool "Sensors Class Support"
 	help

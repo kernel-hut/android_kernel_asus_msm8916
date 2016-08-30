@@ -4,79 +4,57 @@
 *	Time:	2015-05
 *
 */
-//#include "Laura_shipping_func.h"
+
 #include "msm_laser_focus.h"
 #include "show_log.h"
+
+static struct mutex _mutex;
 
 /** @brief Check device verify number
 *	
 *	@param dev_t the laser focus controller
 *
 */
+int match_id(struct msm_laser_focus_ctrl_t *dev_t, int chip_id_size)
+{
+	int rc = 0;
+	uint16_t chipid = 0;
+	struct msm_camera_i2c_client *sensor_i2c_client;
+	struct msm_camera_slave_info *slave_info;
+	const char *sensor_name;
 
-
-
-int Laser_Product = PRODUCT_UNKNOWN;
-int FirmWare;
-extern uint16_t module_id[34];
-
-int ID_Info_is_Exist(struct msm_laser_focus_ctrl_t *dev_t){
+	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
 
 	if (!dev_t) {
 		LOG_Handler(LOG_ERR, "%s: failed: %p\n", __func__, dev_t);
 		return -EINVAL;
 	}
-	if (!(dev_t->i2c_client && dev_t->sensordata->slave_info && dev_t->sensordata->sensor_name)) {
-		LOG_Handler(LOG_ERR, "%s: failed: %p %p %p\n", __func__, 
-			dev_t->i2c_client, 
-			dev_t->sensordata->slave_info,
-			dev_t->sensordata->sensor_name);
-		return -EINVAL;
-	}
-	return 0;
-}
-
-int Verify_ID_is_Correct(struct msm_laser_focus_ctrl_t *dev_t, int chip_id_size){
-
-	int rc = 0;
-	uint16_t chip_id = 0;
-	struct msm_camera_i2c_client *sensor_i2c_client;
-	struct msm_camera_slave_info *slave_info;
-	const char *sensor_name;
-	
 	sensor_i2c_client = dev_t->i2c_client;
 	slave_info = dev_t->sensordata->slave_info;
 	sensor_name = dev_t->sensordata->sensor_name;
 
-	// Get verify number 
-	rc = sensor_i2c_client->i2c_func_tbl->i2c_read(sensor_i2c_client,
-		slave_info->sensor_id_reg_addr, &chip_id, chip_id_size);	
+	/* Check sensor client, slave information and sensor name if NULL */
+	if (!sensor_i2c_client || !slave_info || !sensor_name) {
+		LOG_Handler(LOG_ERR, "%s: failed: %p %p %p\n", __func__, 
+			sensor_i2c_client, slave_info, sensor_name);
+		return -EINVAL;
+	}
+
+	/* Get verify number */
+	rc = sensor_i2c_client->i2c_func_tbl->i2c_read(
+		sensor_i2c_client, slave_info->sensor_id_reg_addr, 
+		&chipid, chip_id_size);
 	if (rc < 0) {
-		LOG_Handler(LOG_ERR, "%s: %s read id failed\n", __func__, sensor_name);
+		LOG_Handler(LOG_ERR, "%s: %s: read id failed\n", __func__, sensor_name);
 		return rc;
 	}
-	
-	// Verify ID 
-	printk( "%s: read id: 0x%x expected id 0x%x\n", __func__, chip_id, slave_info->sensor_id);	
-	if (chip_id != slave_info->sensor_id) {
+	LOG_Handler(LOG_DBG, "%s: read id: 0x%x expected id 0x%x\n", __func__, chipid, slave_info->sensor_id);
+
+	/* Compare verify number */
+	if (chipid != slave_info->sensor_id) {
 		LOG_Handler(LOG_ERR, "%s: msm_sensor_match_id chip id doesnot match\n", __func__);
 		return -ENODEV;
 	}
-	return rc;
-}
-
-int Laser_Match_ID(struct msm_laser_focus_ctrl_t *dev_t, int chip_id_size)
-{
-	int rc = 0;
-	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
-
-	//avoid NULL pointer
-	rc = ID_Info_is_Exist(dev_t);
-	if(rc<0)	return rc;
-
-	rc = Verify_ID_is_Correct(dev_t, chip_id_size);
-	if(rc<0)	return rc;
-	
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
 	return rc;
 }
@@ -91,18 +69,9 @@ int32_t vreg_control(struct msm_laser_focus_ctrl_t *dev_t, int config)
 {
 	int rc = 0, i, cnt;
 	struct msm_laser_focus_vreg *vreg_cfg;
-#if I2C_DEVICE
-	struct msm_camera_power_ctrl_t *power_info;
-#endif
+	
 	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
-#if I2C_DEVICE
-	power_info = &dev_t->sensordata->power_info;
-	if (!power_info)
-	{
-		pr_err("%s:%d failed: %p\n", __func__, __LINE__, power_info);
-		return -EINVAL;
-	}
-#endif
+
 	vreg_cfg = &dev_t->vreg_cfg;
 	cnt = vreg_cfg->num_vreg;
 	if (!cnt)
@@ -114,17 +83,11 @@ int32_t vreg_control(struct msm_laser_focus_ctrl_t *dev_t, int config)
 	}
 
 	for (i = 0; i < cnt; i++) {
-#if I2C_DEVICE
-		//LOG_Handler(LOG_ERR,"%s %d cnt %d, name:%s, %p\n", __func__, __LINE__, cnt, (&vreg_cfg->cam_vreg[i])->reg_name, power_info->dev);
-		rc = msm_camera_config_single_vreg(power_info->dev,
-			&vreg_cfg->cam_vreg[i], (struct regulator **)&vreg_cfg->data[i], config);
-#else
 		rc = msm_camera_config_single_vreg(&(dev_t->pdev->dev),
 			&vreg_cfg->cam_vreg[i], (struct regulator **)&vreg_cfg->data[i], config);
-#endif
 	}
 	
-	LOG_Handler(LOG_FUN, "%s: Exit, rc=%d\n", __func__,rc);
+	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
 	
 	return rc;
 }
@@ -137,7 +100,7 @@ int32_t vreg_control(struct msm_laser_focus_ctrl_t *dev_t, int config)
 int32_t power_up(struct msm_laser_focus_ctrl_t *dev_t)
 {
 	int rc = 0;
-	 
+	
 	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
 
 	/* Enable voltage */
@@ -151,7 +114,7 @@ int32_t power_up(struct msm_laser_focus_ctrl_t *dev_t)
 	dev_t->laser_focus_state = LASER_FOCUS_POWER_UP;
 
 	/* Set GPIO vdig to high for sku4 */
-	//GPIO_Handler(dev_t, SENSOR_GPIO_VDIG, GPIO_HIGH);
+	GPIO_Handler(dev_t, SENSOR_GPIO_VDIG, GPIO_HIGH);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
 	
@@ -188,23 +151,13 @@ int32_t power_down(struct msm_laser_focus_ctrl_t *dev_t)
 	}
 
 	/* Set GPIO vdig to low for sku4 */
-	//GPIO_Handler(dev_t, SENSOR_GPIO_VDIG, GPIO_LOW);
+	GPIO_Handler(dev_t, SENSOR_GPIO_VDIG, GPIO_LOW);
 	
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
 	
 	return rc;
 }
 
-#if I2C_DEVICE
-	int dev_init(struct msm_laser_focus_ctrl_t *dev_t)
-	{
-		return 0;
-	}
-	int dev_deinit(struct msm_laser_focus_ctrl_t *dev_t)
-	{
-		return 0;
-	}
-#else
 /** @brief Initialize device
 *	
 *	@param dev_t the laser focus controller
@@ -260,63 +213,6 @@ int dev_deinit(struct msm_laser_focus_ctrl_t *dev_t)
 	
 	return rc;
 }
-#endif
-
-
-
-//extern static uint16_t module_id[34];
-
-#define CPE_LEN	5
-#define PRODUCT_VERSION	5
-
-void Product_Family(struct msm_laser_focus_ctrl_t *dev_t){
-	char Laura[CPE_LEN] = {'0', 'M', 'G', 'B', 'X'};
-	char Olivia[CPE_LEN] = {'0', 'M', 'L', 'A', 'X'};
-	int PV,i;
-
-	PV = module_id[PRODUCT_VERSION];
-
-	for(i=1; i < CPE_LEN; i++)
-		if(module_id[i] != Olivia[i])
-			break;
-			
-	if(i == CPE_LEN){
-		Laser_Product = PRODUCT_OLIVIA;		
-		if(PV == 0)
-			FirmWare = Laser_Product;
-		else 
-			LOG_Handler(LOG_DBG, "%s: unknown FW version: %d\n", __func__, PV);		
-	}
-	
-	for(i=1; i < CPE_LEN; i++)
-		if(module_id[i] != Laura[i])
-			break;		
-
-	if(i==CPE_LEN){
-		Laser_Product = PRODUCT_LAURA;				
-		if(PV == 0)
-			FirmWare = Laser_Product;
-		else if(PV == 2)
-			LOG_Handler(LOG_CDBG, "%s: FW version is OLIVIA\n", __func__, PV);
-		else
-			LOG_Handler(LOG_ERR, "%s: unknown FW version: %d\n", __func__, PV);
-			
-	}
-
-
-}
-
-extern void Laura_Get_Module_ID_From_Chip(struct msm_laser_focus_ctrl_t *dev_t);
-
-void Laser_Match_Module(struct msm_laser_focus_ctrl_t *dev_t){
-
-	Laura_Get_Module_ID_From_Chip(dev_t);
-	
-	Product_Family(dev_t);
-	
-	LOG_Handler(LOG_CDBG, "%s: %d\n", __func__, Laser_Product);
-}
-
 
 /** @brief Check device status
 *	
@@ -324,56 +220,44 @@ void Laser_Match_Module(struct msm_laser_focus_ctrl_t *dev_t){
 *
 */
 int dev_I2C_status_check(struct msm_laser_focus_ctrl_t *dev_t, int chip_id_size){
-	int32_t rc=0,rc2;
+	int32_t rc;
 
 	LOG_Handler(LOG_FUN, "%s: Enter\n", __func__);
 
 	/* VL6180x only */
-	/*
 	if(g_ASUS_laserID == 1){
-		// Power on device 
+		/* Power on device */
 		rc = power_up(dev_t);
 		if (rc < 0) {
 			LOG_Handler(LOG_ERR, "%s: dev_power_up failed %d\n", __func__, __LINE__);
 			return 0;
 		}
 	}
-	*/
-	rc =power_up(dev_t);
-			if (rc < 0) {
-			LOG_Handler(LOG_ERR, "%s: dev_power_up failed %d\n", __func__, __LINE__);
-			return 0;
-		}
-
-
+	
 	/* Initialize device */
-	rc = dev_init(dev_t);
+	dev_init(dev_t);
 	if (rc < 0) {
 		LOG_Handler(LOG_ERR, "%s: dev_init failed %d\n", __func__, __LINE__);
 		return 0;
 	}
 
 	/* Check device ID */
-	rc = Laser_Match_ID(dev_t, chip_id_size);
+	rc = match_id(dev_t, chip_id_size);
 	if (rc < 0) {
 		LOG_Handler(LOG_ERR, "%s: dev_match_id failed %d\n", __func__, __LINE__);
 		
 		/* If device id is not match, deinitialize and power off device*/
-		rc2 = dev_deinit(dev_t);
-		if (rc2 < 0) {
-			LOG_Handler(LOG_ERR, "%s: dev_deinit failed line(%d), rc2=%d\n", __func__, __LINE__);
+		rc = dev_deinit(dev_t);
+		if (rc < 0) {
+			LOG_Handler(LOG_ERR, "%s: dev_deinit failed %d\n", __func__, __LINE__);
 		}
-		rc2 = power_down(dev_t);
-		if (rc2 < 0) {
-			LOG_Handler(LOG_ERR, "%s: dev_power_down failed line(%d), rc2=%d\n", __func__, __LINE__);
+		rc = power_down(dev_t);
+		if (rc < 0) {
+			LOG_Handler(LOG_ERR, "%s: dev_power_down failed %d\n", __func__, __LINE__);
 		}
 		
 		return 0;
 	}
-
-	Laser_Match_Module(dev_t);
-
-	
 	/* Deinitialize device */
 	rc = dev_deinit(dev_t);
 	if (rc < 0) {
@@ -382,25 +266,18 @@ int dev_I2C_status_check(struct msm_laser_focus_ctrl_t *dev_t, int chip_id_size)
 	}
 
 	/* VL6180x only */
-	/*
 	if(g_ASUS_laserID == 1){
-		// Power off device 
+		/* Power off device */
 		rc = power_down(dev_t);
 		if (rc < 0) {
 			LOG_Handler(LOG_ERR, "%s: dev_power_down failed %d\n", __func__, __LINE__);
 			return 0;
 		}
 	}
-	*/
-		rc = power_down(dev_t);
-		if (rc < 0) {
-			LOG_Handler(LOG_ERR, "%s: dev_power_down failed %d\n", __func__, __LINE__);
-			return 0;
-		}
-	
+
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
 
-	return 2;
+	return 1;
 }
 
 /** @brief Mutex controller handles mutex action
@@ -422,16 +299,17 @@ int mutex_ctrl(struct msm_laser_focus_ctrl_t *dev_t, int ctrl)
 
 	switch(ctrl){
 		/* Allocate mutex */
-		case MUTEX_ALLOCATE:
+		/*case MUTEX_ALLOCATE:
 			rc = _mutex_allocate(&dev_t->laser_focus_mutex);
 			if(rc < 0){
 				LOG_Handler(LOG_ERR, "%s: fail mutex_allocate\n", __func__);
 				return rc;
 			}
 			break;
+		*/
 		/* Initialize mutex */
 		case MUTEX_INIT:
-			_mutex_init(dev_t->laser_focus_mutex);
+			mutex_init(&_mutex);
 			if(rc < 0){
 				LOG_Handler(LOG_ERR, "%s: fail mutex_init\n", __func__);
 				return rc;
@@ -439,7 +317,7 @@ int mutex_ctrl(struct msm_laser_focus_ctrl_t *dev_t, int ctrl)
 			break;
 		/* Lock mutex */
 		case MUTEX_LOCK:
-			_mutex_lock(dev_t->laser_focus_mutex);
+			mutex_lock(&_mutex);
 			if(rc < 0){
 				LOG_Handler(LOG_ERR, "%s: fail mutex_lock\n", __func__);
 				return rc;
@@ -447,7 +325,7 @@ int mutex_ctrl(struct msm_laser_focus_ctrl_t *dev_t, int ctrl)
 			break;
 		/* Try lock mutex*/
 		case MUTEX_TRYLOCK:
-			_mutex_trylock(dev_t->laser_focus_mutex);
+			mutex_trylock(&_mutex);
 			if(rc < 0){
 				LOG_Handler(LOG_ERR, "%s: fail mutex_trylock\n", __func__);
 				return rc;
@@ -455,7 +333,7 @@ int mutex_ctrl(struct msm_laser_focus_ctrl_t *dev_t, int ctrl)
 			break;
 		/* Unlock mutex */
 		case MUTEX_UNLOCK:
-			_mutex_unlock(dev_t->laser_focus_mutex);
+			 mutex_unlock(&_mutex);
 			if(rc < 0){
 				LOG_Handler(LOG_ERR, "%s: fail mutex_unlock\n", __func__);
 				return rc;
@@ -463,7 +341,7 @@ int mutex_ctrl(struct msm_laser_focus_ctrl_t *dev_t, int ctrl)
 			break;
 		/* Destroy mutex */
 		case MUTEX_DESTROY:
-			_mutex_destroy(dev_t->laser_focus_mutex);
+			mutex_destroy(&_mutex);
 			if(rc < 0){
 				LOG_Handler(LOG_ERR, "%s: fail mutex_destroy\n", __func__);
 				return rc;
@@ -478,7 +356,7 @@ int mutex_ctrl(struct msm_laser_focus_ctrl_t *dev_t, int ctrl)
 
 	return rc;;
 }
-#if 0
+
 /** @brief Laser focus driver prob function
 *	
 *	@param pdev platform device information
@@ -580,7 +458,7 @@ int32_t Laser_Focus_platform_probe(struct platform_device *pdev, struct msm_lase
 	snprintf(dev_t->msm_sd.sd.name, ARRAY_SIZE(dev_t->msm_sd.sd.name), "msm_laser_focus");
 	media_entity_init(&dev_t->msm_sd.sd.entity, 0, NULL, 0);
 	dev_t->msm_sd.sd.entity.type = MEDIA_ENT_T_V4L2_SUBDEV;
-	//dev_t->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_LASER_FOCUS;
+	dev_t->msm_sd.sd.entity.group_id = MSM_CAMERA_SUBDEV_LASER_FOCUS;
 	dev_t->msm_sd.close_seq = MSM_SD_CLOSE_2ND_CATEGORY | 0x2;
 	msm_sd_register(&dev_t->msm_sd);
 	dev_t->laser_focus_state = LASER_FOCUS_POWER_DOWN;
@@ -610,4 +488,3 @@ probe_failure:
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
 	return rc;
 }
-#endif

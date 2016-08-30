@@ -612,7 +612,6 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 
 	if (dev->disconnected) {
 		pr_debug("acc_read disconnected");
-		printk("acc_read disconnected");
 		return -ENODEV;
 	}
 
@@ -623,6 +622,7 @@ static ssize_t acc_read(struct file *fp, char __user *buf,
 
 	/* we will block until we're online */
 	pr_debug("acc_read: waiting for online\n");
+	printk("acc_read disconnected");
 	ret = wait_event_interruptible(dev->read_wq, dev->online);
 	if (ret < 0) {
 		r = ret;
@@ -795,7 +795,6 @@ static int acc_open(struct inode *ip, struct file *fp)
 		printk("[USB] acc_open busy\n");
 		return -EBUSY;
 	}
-
 	_acc_dev->disconnected = 0;
 	fp->private_data = _acc_dev;
 	return 0;

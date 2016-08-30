@@ -43,8 +43,9 @@ int32_t dtsi_gpio_parser(struct device_node *of_node, struct msm_camera_sensor_b
 		gpio_array = kzalloc(sizeof(uint16_t) * gpio_array_size, GFP_KERNEL);
 		if(!gpio_array){
 			LOG_Handler(LOG_ERR, "%s: failed %d\n", __func__, __LINE__);
+			kfree(gconf);
 			rc = -ENOMEM;
-			goto Error_Early;
+			return rc;
 		}
 		
 		for(i=0; i < gpio_array_size; i++){
@@ -55,32 +56,28 @@ int32_t dtsi_gpio_parser(struct device_node *of_node, struct msm_camera_sensor_b
 		rc = msm_camera_get_dt_gpio_req_tbl(of_node, gconf, gpio_array, gpio_array_size);
 		if(rc < 0){
 			LOG_Handler(LOG_ERR, "%s: failed %d\n", __func__, __LINE__);
-			goto Error_Late;
+			kfree(gconf);
+			return rc;
 		}
-
 
 		rc = msm_camera_get_dt_gpio_set_tbl(of_node, gconf, gpio_array, gpio_array_size);
 		if(rc < 0){
 			LOG_Handler(LOG_ERR, "%s: failed %d\n", __func__, __LINE__);
-			goto Error_Late;
+			kfree(gconf->cam_gpio_req_tbl);
+			return rc;
 		}
 
 		rc = msm_camera_init_gpio_pin_tbl(of_node, gconf, gpio_array, gpio_array_size);
 		if(rc < 0){
 			LOG_Handler(LOG_ERR, "%s: failed %d\n", __func__, __LINE__);
-			goto Error_Late;
+			kfree(gconf->cam_gpio_set_tbl);
+			return rc;
 		}
 	}
 	kfree(gpio_array);
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
-	return rc;
-
-Error_Late:
-	kfree(gpio_array);
-Error_Early:
-	kfree(gconf);
-	LOG_Handler(LOG_FUN, "%s: Exit with error, rc=%d\n", __func__,rc);
+	
 	return rc;
 }
 
@@ -117,7 +114,7 @@ int32_t get_dtsi_data(struct device_node *of_node, struct msm_laser_focus_ctrl_t
 	rc = of_property_read_u32(of_node, "cell-index", &dev_t->subdev_id);
 	if (rc < 0) {
 		LOG_Handler(LOG_ERR, "%s: failed\n", __func__);
-		goto Error_Early;
+		return -EINVAL;
 	}
 	LOG_Handler(LOG_DBG, "%s: subdev id %d\n", __func__, dev_t->subdev_id);
 
@@ -125,11 +122,10 @@ int32_t get_dtsi_data(struct device_node *of_node, struct msm_laser_focus_ctrl_t
 	rc = of_property_read_string(of_node, "label", &sensordata->sensor_name);
 	if (rc < 0) {
 		LOG_Handler(LOG_ERR, "%s: failed %d\n", __func__, __LINE__);
-		goto Error_Early;
+		goto ERROR;
 	}
 	LOG_Handler(LOG_DBG, "%s: label %s, rc %d\n", __func__, sensordata->sensor_name, rc);
 
-#if !I2C_DEVICE
 	/* Get cci master information */
 	rc = of_property_read_u32(of_node, "qcom,cci-master", &dev_t->cci_master);
 	if (rc < 0) {
@@ -138,14 +134,15 @@ int32_t get_dtsi_data(struct device_node *of_node, struct msm_laser_focus_ctrl_t
 		rc = 0;
 	}
 	LOG_Handler(LOG_DBG, "%s: qcom,cci-master %d, rc %d\n", __func__, dev_t->cci_master, rc);
-#endif
+
 	/* Get voltage information */
 	if (of_find_property(of_node, "qcom,cam-vreg-name", NULL)) {
 		vreg_cfg = &dev_t->vreg_cfg;
 		rc = msm_camera_get_dt_vreg_data(of_node, &vreg_cfg->cam_vreg, &vreg_cfg->num_vreg);
 		if (rc < 0) {
+			kfree(dev_t);
 			LOG_Handler(LOG_ERR, "%s: failed rc %d\n", __func__, rc);
-			goto Error_Early;
+			return rc;
 		}
 	}
 
@@ -153,14 +150,14 @@ int32_t get_dtsi_data(struct device_node *of_node, struct msm_laser_focus_ctrl_t
 	if (!sensordata->slave_info) {
 		LOG_Handler(LOG_ERR, "%s: failed %d\n", __func__, __LINE__);
 		rc = -ENOMEM;
-		goto Error_Early;
+		goto ERROR;
 	}
 
 	/* Get slave information */
 	rc = of_property_read_u32_array(of_node, "qcom,slave-id", id_info, 3);
 	if (rc < 0) {
 		LOG_Handler(LOG_ERR, "%s: failed %d\n", __func__, __LINE__);
-		goto Error_Late;
+		goto ERROR;
 	}
 	dev_t->sensordata->slave_info->sensor_slave_addr = id_info[0];
 	dev_t->sensordata->slave_info->sensor_id_reg_addr = id_info[1];
@@ -175,21 +172,17 @@ int32_t get_dtsi_data(struct device_node *of_node, struct msm_laser_focus_ctrl_t
 	rc = dtsi_gpio_parser(of_node, sensordata);
 	if(rc < 0){
 		LOG_Handler(LOG_ERR, "%s: failed %d\n", __func__, __LINE__);
-		goto Error_Late;
+		goto ERROR;
 	}
 
 	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
 
 	return rc;
 
-
-
-Error_Late:
+ERROR:
 	kfree(dev_t->sensordata->slave_info);
-Error_Early:
-	kfree(dev_t->sensordata);
 
-	LOG_Handler(LOG_FUN, "%s: Exit with error, rc=%d\n", __func__,rc);
+	LOG_Handler(LOG_FUN, "%s: Exit\n", __func__);
 
 	return rc;
 }

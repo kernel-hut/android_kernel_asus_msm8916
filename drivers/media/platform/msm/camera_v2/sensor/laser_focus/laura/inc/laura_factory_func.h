@@ -22,7 +22,6 @@
 
 /* Size of Laura calibration data */
 #define SIZE_OF_LAURA_CALIBRATION_DATA 10
-#define SIZE_OF_OLIVIA_CALIBRATION_DATA 17
 
 /* Calibration */
 int Laura_device_calibration(struct msm_laser_focus_ctrl_t *dev_t, int16_t *cal_input_data);
@@ -37,8 +36,5 @@ int Larua_Read_Calibration_Data_From_File(int16_t *cal_data, uint32_t size);
 /* Laura get calibration input data */
 int Laura_get_calibration_input(struct seq_file *buf, void *v, 
 	int16_t *cal_data_10, int16_t *cal_data_40, int16_t *cal_data_inf);
-
-int Olivia_get_calibration_input(struct seq_file *buf, void *v, 
-	int16_t *cal_data_10, int16_t *cal_data_40, int16_t *cal_data_inf, int16_t *cal_data_f0);
 
 #endif

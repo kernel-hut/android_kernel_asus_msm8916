@@ -1,4 +1,5 @@
-/* Copyright (c) 2009-2014, The Linux Foundation. All rights reserved.
+/*
+ * Copyright (c) 2009-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -32,9 +33,13 @@
 #include <soc/qcom/smem.h>
 #include <soc/qcom/boot_stats.h>
 
+//ASUS BSP: Enter_Zhang+++
+#ifdef ASUS_ZC550KL_PROJECT
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/oem_functions.h>
+#endif
+//ASUS BSP: Enter_Zhang---
 
 #define BUILD_ID_LENGTH 32
 #define SMEM_IMAGE_VERSION_BLOCKS_COUNT 32
@@ -120,7 +125,8 @@ const char *hw_platform_subtype[] = {
 	[PLATFORM_SUBTYPE_UNKNOWN] = "Unknown",
 	[PLATFORM_SUBTYPE_CHARM] = "charm",
 	[PLATFORM_SUBTYPE_STRANGE] = "strange",
-	[PLATFORM_SUBTYPE_STRANGE_2A] = "strange_2a,"
+	[PLATFORM_SUBTYPE_STRANGE_2A] = "strange_2a",
+	[PLATFORM_SUBTYPE_INVALID] = "Invalid",
 };
 
 /* Used to parse shared memory.  Must match the modem. */
@@ -192,6 +198,13 @@ struct socinfo_v9 {
 	uint32_t foundry_id;
 };
 
+struct socinfo_v10 {
+	struct socinfo_v9 v9;
+
+	/* only valid when format==10*/
+	uint32_t serial_number;
+};
+
 static union {
 	struct socinfo_v1 v1;
 	struct socinfo_v2 v2;
@@ -202,6 +215,7 @@ static union {
 	struct socinfo_v7 v7;
 	struct socinfo_v8 v8;
 	struct socinfo_v9 v9;
+	struct socinfo_v10 v10;
 } *socinfo;
 
 static struct msm_soc_info cpu_of_id[] = {
@@ -469,9 +483,15 @@ static struct msm_soc_info cpu_of_id[] = {
 
 	/* 8909 IDs */
 	[245] = {MSM_CPU_8909, "MSM8909"},
+	[258] = {MSM_CPU_8909, "MSM8209"},
+	[259] = {MSM_CPU_8909, "MSM8208"},
+	[265] = {MSM_CPU_8909, "APQ8009"},
+	[275] = {MSM_CPU_8909, "MSM8609"},
 	[260] = {MSM_CPU_8909, "MDMFERRUM"},
 	[261] = {MSM_CPU_8909, "MDMFERRUM"},
 	[262] = {MSM_CPU_8909, "MDMFERRUM"},
+	[300] = {MSM_CPU_8909, "MSM8909W"},
+	[301] = {MSM_CPU_8909, "APQ8009W"},
 
 	/* ZIRC IDs */
 	[234] = {MSM_CPU_ZIRC, "MSMZIRC"},
@@ -495,6 +515,12 @@ static struct msm_soc_info cpu_of_id[] = {
 
 	/* Tellurium ID */
 	[264] = {MSM_CPU_TELLURIUM, "MSMTELLURIUM"},
+
+	/* 8929 IDs */
+	[268] = {MSM_CPU_8929, "MSM8929"},
+	[269] = {MSM_CPU_8929, "MSM8629"},
+	[270] = {MSM_CPU_8929, "MSM8229"},
+	[271] = {MSM_CPU_8929, "APQ8029"},
 
 	/* Uninitialized IDs are not known to run Linux.
 	   MSM_CPU_UNKNOWN is set to 0 to ensure these IDs are
@@ -713,10 +739,14 @@ msm_get_platform_subtype(struct device *dev,
 		}
 		return snprintf(buf, PAGE_SIZE, "%-.32s\n",
 					qrd_hw_platform_subtype[hw_subtype]);
+	} else {
+		if (hw_subtype >= PLATFORM_SUBTYPE_INVALID) {
+			pr_err("Invalid hardware platform subtype\n");
+			hw_subtype = PLATFORM_SUBTYPE_INVALID;
+		}
+		return snprintf(buf, PAGE_SIZE, "%-.32s\n",
+			hw_platform_subtype[hw_subtype]);
 	}
-
-	return snprintf(buf, PAGE_SIZE, "%-.32s\n",
-		hw_platform_subtype[hw_subtype]);
 }
 
 static ssize_t
@@ -1010,6 +1040,10 @@ static void * __init setup_dummy_socinfo(void)
 		dummy_socinfo.id = 264;
 		strlcpy(dummy_socinfo.build_id, "msmtellurium - ",
 			sizeof(dummy_socinfo.build_id));
+	} else if (early_machine_is_msm8929()) {
+		dummy_socinfo.id = 268;
+		strlcpy(dummy_socinfo.build_id, "msm8929 - ",
+			sizeof(dummy_socinfo.build_id));
 	}
 
 	strlcat(dummy_socinfo.build_id, "Dummy socinfo",
@@ -1028,6 +1062,7 @@ static void __init populate_soc_sysfs_files(struct device *msm_soc_device)
 	device_create_file(msm_soc_device, &select_image);
 
 	switch (legacy_format) {
+	case 10:
 	case 9:
 		 device_create_file(msm_soc_device,
 					&msm_soc_attr_foundry_id);
@@ -1203,6 +1238,22 @@ static void socinfo_print(void)
 			socinfo->v7.pmic_die_revision,
 			socinfo->v9.foundry_id);
 		break;
+	case 10:
+		pr_info("%s: v%u, id=%u, ver=%u.%u, raw_id=%u, raw_ver=%u, hw_plat=%u, hw_plat_ver=%u\n accessory_chip=%u, hw_plat_subtype=%u, pmic_model=%u, pmic_die_revision=%u foundry_id=%u serial_number=%u\n",
+			__func__,
+			socinfo->v1.format,
+			socinfo->v1.id,
+			SOCINFO_VERSION_MAJOR(socinfo->v1.version),
+			SOCINFO_VERSION_MINOR(socinfo->v1.version),
+			socinfo->v2.raw_id, socinfo->v2.raw_version,
+			socinfo->v3.hw_platform, socinfo->v4.platform_version,
+			socinfo->v5.accessory_chip,
+			socinfo->v6.hw_platform_subtype,
+			socinfo->v7.pmic_model,
+			socinfo->v7.pmic_die_revision,
+			socinfo->v9.foundry_id,
+			socinfo->v10.serial_number);
+		break;
 
 	default:
 		pr_err("%s: Unknown format found\n", __func__);
@@ -1218,6 +1269,12 @@ int __init socinfo_init(void)
 		return 0;
 
 	socinfo = smem_find(SMEM_HW_SW_BUILD_ID,
+				sizeof(struct socinfo_v10),
+				0,
+				SMEM_ANY_HOST_FLAG);
+
+	if (IS_ERR_OR_NULL(socinfo))
+		socinfo = smem_find(SMEM_HW_SW_BUILD_ID,
 				sizeof(struct socinfo_v9),
 				0,
 				SMEM_ANY_HOST_FLAG);
@@ -1391,6 +1448,8 @@ const int cpu_is_krait_v3(void)
 	};
 }
 
+//ASUS BSP: Enter_Zhang+++
+#ifdef ASUS_ZC550KL_PROJECT
 static struct oem_shared_info* msm_get_hardware_info(void)
 {
 	return (struct oem_shared_info*)smem_find(SMEM_ID_VENDOR0, sizeof(struct oem_shared_info), 0, SMEM_ANY_HOST_FLAG);
@@ -1475,6 +1534,9 @@ void oem_get_ddr_info_str(struct seq_file *s, const struct oem_shared_ddr_info* 
 		case 2048u:
 			ddr_density = "2G";
 			break;
+		case 3072u:
+			ddr_density = "3G";
+			break;
 		case 4096u:
 			ddr_density = "4G";
 			break;
@@ -1524,23 +1586,51 @@ void oem_get_emmc_info_str(struct seq_file *s, const struct oem_shared_emmc_info
 		cap_str = "64G";
 	}
 
-	seq_printf(s, "%s %s %s Prod_V%u\n", manuf_name, cap_str, emmc_info->product_name, emmc_info->prod_rev);
+	seq_printf(s, "%s eMMC %s %s Prod_V%u\n", manuf_name, cap_str, emmc_info->product_name, emmc_info->prod_rev);
 }
 
 void oem_get_soc_info_str(struct seq_file *s, uint32_t msm_hw_revision)
 {
 	const char* soc_type = "UNKNOWN";
+	uint32_t part_num = (msm_hw_revision >> 12) & 0xFFFF;
 
-	switch(msm_hw_revision)
+	switch(part_num)
 	{
-		case 0x007050e1u:
+		case 0x705:
 			soc_type = "MSM8916";
 			break;
-		case 0x007070e1u:
+		case 0x706:
+			soc_type = "APQ8016";
+			break;
+		case 0x707:
 			soc_type = "MSM8216";
 			break;
-		case 0x007090e1u:
+		case 0x708:
+			soc_type = "MSM8116";
+			break;
+		case 0x709:
 			soc_type = "MSM8616";
+			break;
+		case 0x90A:
+			soc_type = "MSM8936";
+			break;
+		case 0x90B:
+			soc_type = "MSM8939";
+			break;
+		case 0x90C:
+			soc_type = "APQ8036";
+			break;
+		case 0x90D:
+			soc_type = "APQ8039";
+			break;
+		case 0x90E:
+			soc_type = "MSM8236";
+			break;
+		case 0x90F:
+			soc_type = "MSM8636";
+			break;
+		case 0x957:
+			soc_type = "MSM8239";
 			break;
 	}
 
@@ -1551,7 +1641,7 @@ void oem_get_sku_id_str(struct seq_file *s, uint32_t sku_id)
 {
 	static const char* sku_id_str[] =
 	{
-		"A(WW)", "B(TW/JP)", "C(CN5/IN)"
+		"A(WW)", "B(TW/JP)", "C(CN5/IN)", "D(New CN)"
 	};
 
 	const char* sku_info = "UNKNOWN";
@@ -1603,4 +1693,7 @@ static int __init soc_boot_info_proc_init(void)
 	return 0;
 }
 late_initcall(soc_boot_info_proc_init);
+#endif //ASUS_ZC550KL_PROJECT
+//ASUS BSP: Enter_Zhang---
+
 

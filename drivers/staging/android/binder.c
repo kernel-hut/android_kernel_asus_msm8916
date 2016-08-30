@@ -1318,7 +1318,6 @@ static void binder_transaction(struct binder_proc *proc,
 	struct binder_transaction *in_reply_to = NULL;
 	struct binder_transaction_log_entry *e;
 	uint32_t return_error;
-	int pid, tid;
 
 	e = binder_transaction_log_add(&binder_transaction_log);
 	e->call_type = reply ? 2 : !!(tr->flags & TF_ONE_WAY);
@@ -1417,14 +1416,12 @@ static void binder_transaction(struct binder_proc *proc,
 		e->to_thread = target_thread->pid;
 		target_list = &target_thread->todo;
 		target_wait = &target_thread->wait;
-		tid = target_thread->pid;
 	} else {
 		target_list = &target_proc->todo;
 		target_wait = &target_proc->wait;
-		tid = -1;
 	}
 	e->to_proc = target_proc->pid;
-	pid = target_proc->pid;
+
 	/* TODO: reuse incoming transaction for reply */
 	t = kzalloc(sizeof(*t), GFP_KERNEL);
 	if (t == NULL) {
@@ -1718,17 +1715,10 @@ err_empty_call_stack:
 err_dead_binder:
 err_invalid_target_handle:
 err_no_context_mgr_node:
-	if(reply){
-		binder_debug(BINDER_DEBUG_FAILED_TRANSACTION,
-			"%d:%d --> %d:%d BC_REPLY failed %d, size %lld-%lld\n",
-			proc->pid, thread->pid, pid, tid, return_error,
-			(u64)tr->data_size, (u64)tr->offsets_size);
-	}else{
-		binder_debug(BINDER_DEBUG_FAILED_TRANSACTION,
-			"%d:%d --> %d BC_TRANSACTION failed %d, size %lld-%lld\n",
-			proc->pid, thread->pid, pid, return_error,
-			(u64)tr->data_size, (u64)tr->offsets_size);
-	}
+	binder_debug(BINDER_DEBUG_FAILED_TRANSACTION,
+		     "%d:%d transaction failed %d, size %lld-%lld\n",
+		     proc->pid, thread->pid, return_error,
+		     (u64)tr->data_size, (u64)tr->offsets_size);
 
 	{
 		struct binder_transaction_log_entry *fe;

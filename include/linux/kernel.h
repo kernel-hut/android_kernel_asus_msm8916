@@ -55,10 +55,16 @@ enum DEVICE_HWID
 	ZE500KG_PREMP  = 0x36,
 	ZE500KG_MP  = 0x37,
 
+	// ZC550KL
+	ZC550KL_8916_MP = 0,
+	ZC550KL_8939_PR = 1,
+	ZC550KL_8939_ER = 2,
+
 	ZE500KL_UNKNOWN = 0xFF
 };
-extern enum DEVICE_HWID g_ASUS_hwID;
+//extern enum DEVICE_HWID g_ASUS_hwID;
 // --- ASUS_BSP : add for miniporting
+extern int g_ASUS_laserID;  //ASUS_BSP  Deka "support laser sensor 2nd source"
 
 //+++ ASUS_BSP: Yan_Sun
 enum CPU_FEATUREID
@@ -70,6 +76,8 @@ enum CPU_FEATUREID
 };
 extern enum CPU_FEATUREID cpu_feature_id;
 //+++ ASUS_BSP: Yan_Sun
+
+uint32_t get_zc550kl_pcb_rev(void);
 
 // +++ ASUS_BSP : add for boot mode
 enum BOOT_MODE
@@ -95,6 +103,8 @@ enum {
 extern int g_asus_lcdID; 
 //ASUS_BSP: Louis ---
 
+extern bool g_Charger_mode; //ASUS BSP Austin_T +++
+
 //ASUS_BSP: Deeo +++
 enum DEVICE_MCPID
 {
@@ -112,8 +122,12 @@ enum DEVICE_MCPID
 };
 extern enum DEVICE_MCPID g_mcp_id;
 //ASUS_BSP: Deeo ---
-extern int g_user_dbg_mode;
+//ASUS_BSP +++ Jeffery "add for uart / kernel log control"
+#ifdef ASUS_ZC550KL_PROJECT
+extern int g_uart_dbg_mode;
 extern int g_user_klog_mode;
+#endif
+//ASUS_BSP --- Jeffery "add for uart / kernel log control"
 #define USHRT_MAX	((u16)(~0U))
 #define SHRT_MAX	((s16)(USHRT_MAX>>1))
 #define SHRT_MIN	((s16)(-SHRT_MAX - 1))

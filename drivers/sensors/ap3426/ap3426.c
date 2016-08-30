@@ -192,8 +192,8 @@ static struct sensors_classdev sensors_proximity_cdev = {
 	.version = 1, 
 	.handle = SENSORS_PROXIMITY_HANDLE, 
 	.type = SENSOR_TYPE_PROXIMITY, 
-	.max_range = "5.0", 
-	.resolution = "5.0", 
+	.max_range = "10.0", 
+	.resolution = "10.0", 
 	.sensor_power = "0.1", 
 	.min_delay = 0, 
 	.fifo_reserved_event_count = 0, 
@@ -243,6 +243,35 @@ static int read_prox_crosstalk_value(void)
 	printk("[ap3426][Alian] --- read_psensor crosstalk value for HuaQin\n");
 
 	return ps_crosstalk;
+}
+
+static int write_prox_crosstalk_to_reg(const struct i2c_client *client)
+{
+    int ps_crosstalk;
+
+    ps_crosstalk = read_prox_crosstalk_value();
+    printk("[ap3426] HuaQin crosstalk=%d\n", ps_crosstalk);
+
+        ps_hi = PS_HIGH_THRESHHOLD_DEFAULT;
+        ps_low = PS_LOW_THRESHHOLD_DEFAULT;
+    ps_hi += ps_crosstalk;
+    ps_hi = (ps_hi < 0) ? 0 : ps_hi;
+    if (ps_hi > PS_HIGH_THRE_MAX) {
+        printk("[ap3426][L%d] the crosstalk(%d) is too large.", __LINE__, ps_crosstalk);
+        ps_hi = PS_HIGH_THRE_MAX;
+    }
+
+    ps_low += ps_crosstalk;
+    ps_low = (ps_low < 0) ? 0 : ps_low;
+
+    i2c_smbus_write_byte_data(client, 0x2A, (ps_low & 0xFF));   //- low
+    i2c_smbus_write_byte_data(client, 0x2B, ((ps_low >> 8) & 0xFF));
+    i2c_smbus_write_byte_data(client, 0x2C, (ps_hi & 0xFF));   //- high
+    i2c_smbus_write_byte_data(client, 0x2D, ((ps_hi >> 8) & 0xFF));
+
+    printk("[ap3426][L%d] psensor ps_hi=%d, ps_low=%d\n", __LINE__, ps_hi, ps_low);
+
+    return 0;
 }
 #endif
 //--- ASUS Alian_Shen "Add test for HuaQin"	
@@ -512,7 +541,6 @@ static int ap3426_ps_enable(struct ap3426_data *ps_data,int enable)
    
     if(misc_ps_opened == enable)
                 return 0;
-    misc_ps_opened = enable;
     printk("ps enable delay \n");
     msleep(30);
     ret = __ap3426_write_reg(ps_data->client,
@@ -520,6 +548,10 @@ static int ap3426_ps_enable(struct ap3426_data *ps_data,int enable)
     if(ret < 0){
 	printk("ps enable error!!!!!!\n");
     }
+    //+++ ASUS_BSP Alian_Shen "change the postion of set enable"
+     misc_ps_opened = enable;
+    //--- ASUS_BSP Alian_Shen "change the postion of set enable"
+
     msleep(30);
     //ret = mod_timer(&ps_data->pl_timer, jiffies + msecs_to_jiffies(PL_TIMER_DELAY));
 
@@ -540,7 +572,6 @@ static int ap3426_ls_enable(struct ap3426_data *ps_data,int enable)
 // normal kevindang20140925
 		return 0;
 	}
-    misc_ls_opened = enable;
     printk("ls enable delay \n");
     msleep(30);
     ret = __ap3426_write_reg(ps_data->client,
@@ -548,6 +579,11 @@ static int ap3426_ls_enable(struct ap3426_data *ps_data,int enable)
     if(ret < 0){
         printk("ls enable error!!!!!!\n");
     } 
+
+    //+++ ASUS_BSP Alian_Shen "change the postion of set enable"
+    misc_ls_opened = enable;
+    //--- ASUS_BSP Alian_Shen "change the postion of set enable"
+
     msleep(30);
     //ret = mod_timer(&ps_data->pl_timer, jiffies + msecs_to_jiffies(PL_TIMER_DELAY));
     
@@ -735,13 +771,22 @@ static ssize_t AP3426_show_HuaQin_PS_CAL (struct device *dev, struct device_attr
 			 j = 0;
 	    }
 	    else {
-		j++;
-		if (j > HUAQIN_PSENSOR_CAL_NUM) {
-			crosstalk = -1;
-
-			printk("[ap3426] cal for Psensor Error. \n");
-			return sprintf(buf, "%d\n", crosstalk);
-		}
+			j++;
+			if (j > HUAQIN_PSENSOR_CAL_NUM) {
+				printk("[ap3426] cal for Psensor Error.\n");
+				if(crosstalk == 0) // for some device cross = 0
+				{
+					crosstalk = 1;
+					ps_sum =  10;
+					printk("[ap3426] cal for Psensor Error but adc=0. return crosstalk=%d\n", crosstalk);
+					break;
+				}
+				else
+				{
+					crosstalk = -1;
+					return sprintf(buf, "%d\n", crosstalk);
+				}
+			}
 	    }
 	}
 	crosstalk = ps_sum / HUAQIN_PSENSOR_CAL_NUM;
@@ -886,25 +931,11 @@ static ssize_t ps_enable_store(struct device *dev, struct device_attribute *attr
        mutex_unlock(&g_ir_lock);
        //--- ASUS_BSP Alian_Shen "addd for doubule touche"
 
+        write_prox_crosstalk_to_reg(ps_data->client);
+
 //+++ ASUS Alian_Shen "repot the ps value while enabled"
 	if (en) {
-        //msleep(100);
-        //queue_work(ps_data->psensor_wq, &ps_data->psensor_work);
-        queue_work(ps_data->psensor_wq, &ps_data->psensor_work2);
-		/*distance = ap3426_get_object(ps_data->client);
-		pxvalue = ap3426_get_px_value(ps_data->client); //test
-
-		printk("distance=%d pxvalue=%d\n",distance,pxvalue);
-		//if (pxvalue <= 0) {
-		//	printk("[ap3426] psensor read adc error(%d).\n", pxvalue);
-		//} else {
-			
-			input_report_abs(ps_data->psensor_input_dev, ABS_DISTANCE, distance);
-			input_sync(ps_data->psensor_input_dev);	
-		//}*/
-		
-		
-		
+            queue_work(ps_data->psensor_wq, &ps_data->psensor_work2);
 	}
 //--- ASUS Alian_Shen "repot the ps value while enabled"
 
@@ -941,6 +972,8 @@ int proximity_status(void)
 	 //- psensor had not opened
 	 printk("[AP3426] double touch enable psensor\n");
 	 ap3426_ps_enable(data, 1);	
+     write_prox_crosstalk_to_reg(data->client);
+
 	 bIsOpenPsensor = true;
     }
     msleep(50);
@@ -993,7 +1026,7 @@ static int ap3426_register_psensor_device(struct i2c_client *client, struct ap34
     }
     data->psensor_input_dev = input_dev;
     input_set_drvdata(input_dev, data);
-    input_dev->name = "proximity";
+    input_dev->name = "ap3426-proximity";
     input_dev->dev.parent = &client->dev;
     set_bit(EV_ABS, input_dev->evbit);
     input_set_abs_params(input_dev, ABS_DISTANCE, 0, 1, 0, 0);
@@ -1111,16 +1144,29 @@ static int ap3426_als_poll_delay_set(struct sensors_classdev *sensors_cdev,
 static int ap3426_ps_enable_set(struct sensors_classdev *sensors_cdev, 
 					   unsigned int enabled) 
 { 
-   struct ap3426_data *ps_data = container_of(sensors_cdev, 
+	struct ap3426_data *ps_data = container_of(sensors_cdev, 
 					   struct ap3426_data, ps_cdev); 
-   int err; 
+	int err; 
 
-   err = ap3426_ps_enable(ps_data,enabled);
+	//+++ ASUS_BSP Alian_Shen "add for qcom HAL enable"
+	printk("[ap3426] ap3426_ps_enable_set(en=%d)\n", enabled);
 
+	mutex_lock(&g_ir_lock);
+	err = ap3426_ps_enable(ps_data, enabled);
+	mutex_unlock(&g_ir_lock);
 
-   if (err < 0) 
-	   return err; 
-   return 0; 
+	if (err < 0) 
+		return err; 
+	
+	write_prox_crosstalk_to_reg(ps_data->client);
+
+	if (enabled) {
+        	queue_work(ps_data->psensor_wq, &ps_data->psensor_work2);
+	}
+
+   	//--- ASUS_BSP Alian_Shen "add for qcom HAL enable"
+
+	return 0; 
 }
 
 
@@ -1823,6 +1869,9 @@ static void psensor_work_handler(struct work_struct *w)
     struct ap3426_data *data =
 	container_of(w, struct ap3426_data, psensor_work);
     int distance,pxvalue;
+    //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+    ktime_t timestamp;
+    //--- ASUS_BSP Alian_Shen
 
     distance = ap3426_get_object(data->client);
     pxvalue = ap3426_get_px_value(data->client); //test
@@ -1840,8 +1889,19 @@ static void psensor_work_handler(struct work_struct *w)
     //--- ASUS_BSP Alian_Shen "use pxvalue to report event"
     
     printk("psensor_work_handler: distance=%d pxvalue=%d\n",distance,pxvalue);
+
+   //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+   timestamp = ktime_get_boottime();
+    //--- ASUS_BSP Alian_Shen
+
     input_report_abs(data->psensor_input_dev, ABS_DISTANCE, distance);
+    //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+    input_event(data->psensor_input_dev, EV_SYN, SYN_TIME_SEC,
+        ktime_to_timespec(timestamp).tv_sec);
+    input_event(data->psensor_input_dev, EV_SYN, SYN_TIME_NSEC,
+        ktime_to_timespec(timestamp).tv_nsec);
     input_sync(data->psensor_input_dev);
+    //--- ASUS_BSP Alian_Shen
 }
 
 static void psensor_work_handler2(struct work_struct *w)
@@ -1850,6 +1910,9 @@ static void psensor_work_handler2(struct work_struct *w)
     struct ap3426_data *data =
     container_of(w, struct ap3426_data, psensor_work2);
     int distance,pxvalue;
+    //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+    ktime_t timestamp;
+    //--- ASUS_BSP Alian_Shen
 
     msleep(150);
 
@@ -1869,7 +1932,18 @@ static void psensor_work_handler2(struct work_struct *w)
     //--- ASUS_BSP Alian_Shen "use pxvalue to report event"
 
     printk("psensor_work_handler: distance=%d pxvalue=%d\n",distance,pxvalue);
+
+   //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+   timestamp = ktime_get_boottime();
+    //--- ASUS_BSP Alian_Shen
+
     input_report_abs(data->psensor_input_dev, ABS_DISTANCE, distance);
+    //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+    input_event(data->psensor_input_dev, EV_SYN, SYN_TIME_SEC,
+        ktime_to_timespec(timestamp).tv_sec);
+    input_event(data->psensor_input_dev, EV_SYN, SYN_TIME_NSEC,
+        ktime_to_timespec(timestamp).tv_nsec);
+    //--- ASUS_BSP Alian_Shen
     input_sync(data->psensor_input_dev);
 }
 
@@ -1879,13 +1953,27 @@ static void lsensor_work_handler(struct work_struct *w)
     struct ap3426_data *data =
 	container_of(w, struct ap3426_data, lsensor_work);
     int value;
+    //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+    ktime_t timestamp;
+    //--- ASUS_BSP Alian_Shen
 
     msleep(150);
 	
     value = ap3426_get_adc_value(data->client);
 
     printk("lsensor adc = %d-------------\n", value);
+
+   //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+   timestamp = ktime_get_boottime();
+    //--- ASUS_BSP Alian_Shen
+
     input_report_abs(data->lsensor_input_dev, ABS_MISC, value);
+    //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+    input_event(data->lsensor_input_dev, EV_SYN, SYN_TIME_SEC,
+        ktime_to_timespec(timestamp).tv_sec);
+    input_event(data->lsensor_input_dev, EV_SYN, SYN_TIME_NSEC,
+        ktime_to_timespec(timestamp).tv_nsec);
+    //--- ASUS_BSP Alian_Shen
     input_sync(data->lsensor_input_dev);
 }
 
@@ -1905,6 +1993,12 @@ static void ap3426_work_handler(struct work_struct *w)
     unsigned int als_threshhold_low = 0;
     unsigned int als_threshhold_high = 0;
     //--- ASUS Alian_Shen
+
+    //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+    ktime_t timestamp;
+
+    timestamp = ktime_get_boottime();
+    //--- ASUS_BSP Alian_Shen
 
    //+++ ASUS_BSP Alian_Shen "addd for doubule touche"
    mutex_lock(&g_ir_lock);
@@ -1939,8 +2033,14 @@ static void ap3426_work_handler(struct work_struct *w)
 	if (distance)
 		wake_unlock(&proximity_wake_lock);
 
-    printk("[AP3426] --- distance=%d pxvalue=%d\n",distance,pxvalue);
+        printk("[AP3426] --- distance=%d pxvalue=%d\n",distance,pxvalue);
 	input_report_abs(data->psensor_input_dev, ABS_DISTANCE, distance);
+ //+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+        input_event(data->psensor_input_dev, EV_SYN, SYN_TIME_SEC,
+        ktime_to_timespec(timestamp).tv_sec);
+        input_event(data->psensor_input_dev, EV_SYN, SYN_TIME_NSEC,
+        ktime_to_timespec(timestamp).tv_nsec);
+//--- ASUS_BSP Alian_Shen
 	input_sync(data->psensor_input_dev);
     }
     
@@ -1948,6 +2048,12 @@ static void ap3426_work_handler(struct work_struct *w)
     {
 	pxvalue = ap3426_get_px_value(data->client); 
 	input_report_abs(data->hsensor_input_dev, ABS_WHEEL, pxvalue);
+//+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+        input_event(data->hsensor_input_dev, EV_SYN, SYN_TIME_SEC,
+        ktime_to_timespec(timestamp).tv_sec);
+        input_event(data->hsensor_input_dev, EV_SYN, SYN_TIME_NSEC,
+        ktime_to_timespec(timestamp).tv_nsec);
+//--- ASUS_BSP Alian_Shen
 	input_sync(data->hsensor_input_dev);
     }
     
@@ -1957,6 +2063,12 @@ static void ap3426_work_handler(struct work_struct *w)
         if(1 == misc_ls_opened)
         {
             input_report_abs(data->lsensor_input_dev, ABS_MISC, value);
+//+++ ASUS_BSP Alian_Shen "input: sensors: send boot time alone with sensor events"
+            input_event(data->lsensor_input_dev, EV_SYN, SYN_TIME_SEC,
+            ktime_to_timespec(timestamp).tv_sec);
+            input_event(data->lsensor_input_dev, EV_SYN, SYN_TIME_NSEC,
+            ktime_to_timespec(timestamp).tv_nsec);
+//--- ASUS_BSP Alian_Shen
             input_sync(data->lsensor_input_dev);
 
         //als_threshhold_low = (value < als_offset) ? 0 : (value - als_offset);

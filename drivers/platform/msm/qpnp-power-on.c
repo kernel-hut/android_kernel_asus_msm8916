@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -25,17 +25,13 @@
 #include <linux/log2.h>
 #include <linux/qpnp/power-on.h>
 /*ASUS BSP Porting Debug*/
-unsigned int pwr_keycode ;
+unsigned int pwr_keycode;
 /*ASUS BSP Porting Debug*/
 
-//jorney_dong+++
-#include <linux/workqueue.h>
-#include <linux/wakelock.h>
-
-#include <linux/reboot.h>
-#include <asm/uaccess.h>
-
-//jorney_dong---
+#define CREATE_MASK(NUM_BITS, POS) \
+	((unsigned char) (((1 << (NUM_BITS)) - 1) << (POS)))
+#define PON_MASK(MSB_BIT, LSB_BIT) \
+	CREATE_MASK(MSB_BIT - LSB_BIT + 1, LSB_BIT)
 
 #define PMIC_VER_8941           0x01
 #define PMIC_VERSION_REG        0x0105
@@ -78,6 +74,7 @@ unsigned int pwr_keycode ;
 #define QPNP_PON_S3_DBC_CTL(base)		(base + 0x75)
 #define QPNP_PON_TRIGGER_EN(base)		(base + 0x80)
 #define QPNP_PON_XVDD_RB_SPARE(base)		(base + 0x8E)
+#define QPNP_PON_SOFT_RB_SPARE(base)		(base + 0x8F)
 #define QPNP_PON_SEC_ACCESS(base)		(base + 0xD0)
 
 #define QPNP_PON_SEC_UNLOCK			0xA5
@@ -111,6 +108,7 @@ unsigned int pwr_keycode ;
 #define QPNP_PON_S3_SRC_KPDPWR_AND_RESIN	2
 #define QPNP_PON_S3_SRC_KPDPWR_OR_RESIN		3
 #define QPNP_PON_S3_SRC_MASK			0x3
+#define QPNP_PON_HARD_RESET_MASK		PON_MASK(7, 5)
 
 #define QPNP_PON_UVLO_DLOAD_EN		BIT(7)
 
@@ -167,6 +165,7 @@ struct qpnp_pon {
 	struct dentry *debugfs;
 	u8 warm_reset_reason1;
 	u8 warm_reset_reason2;
+	bool store_hard_reset_reason;
 };
 
 static struct qpnp_pon *sys_reset_dev;
@@ -175,16 +174,6 @@ static u32 s1_delay[PON_S1_COUNT_MAX + 1] = {
 	0 , 32, 56, 80, 138, 184, 272, 408, 608, 904, 1352, 2048,
 	3072, 4480, 6720, 10256
 };
-
-//jorney_dong+++
-static struct wake_lock pwr_key_wake_lock;
-extern char g_CHG_mode;
-static int pwr_key_extra_debounce = 2000; //power key 2 second debounce in charging mode
-static bool pwr_key_reboot = true;
-static bool pwr_key_timer_added = false;
-static struct timer_list pwrkey_timer;
-static struct work_struct pwrkey_work;
-//jorney_dong---
 
 static const char * const qpnp_pon_reason[] = {
 	[0] = "Triggered from Hard Reset",
@@ -249,6 +238,56 @@ qpnp_pon_masked_write(struct qpnp_pon *pon, u16 addr, u8 mask, u8 val)
 			"Unable to write to addr=%hx, rc(%d)\n", addr, rc);
 	return rc;
 }
+
+/**
+ * qpnp_pon_set_restart_reason - Store device restart reason in PMIC register.
+ *
+ * Returns = 0 if PMIC feature is not avaliable or store restart reason
+ * successfully.
+ * Returns > 0 for errors
+ *
+ * This function is used to store device restart reason in PMIC register.
+ * It checks here to see if the restart reason register has been specified.
+ * If it hasn't, this function should immediately return 0
+ */
+int qpnp_pon_set_restart_reason(enum pon_restart_reason reason)
+{
+	int rc = 0;
+	struct qpnp_pon *pon = sys_reset_dev;
+
+	if (!pon)
+		return 0;
+
+	if (!pon->store_hard_reset_reason)
+		return 0;
+
+	rc = qpnp_pon_masked_write(pon, QPNP_PON_SOFT_RB_SPARE(pon->base),
+					PON_MASK(7, 2), (reason << 2));
+	if (rc)
+		dev_err(&pon->spmi->dev,
+				"Unable to write to addr=%x, rc(%d)\n",
+				QPNP_PON_SOFT_RB_SPARE(pon->base), rc);
+	return rc;
+}
+EXPORT_SYMBOL(qpnp_pon_set_restart_reason);
+
+/*
+ * qpnp_pon_check_hard_reset_stored - Checks if the PMIC need to
+ * store hard reset reason.
+ *
+ * Returns true if reset reason can be stored, false if it cannot be stored
+ *
+ */
+bool qpnp_pon_check_hard_reset_stored(void)
+{
+	struct qpnp_pon *pon = sys_reset_dev;
+
+	if (!pon)
+		return false;
+
+	return pon->store_hard_reset_reason;
+}
+EXPORT_SYMBOL(qpnp_pon_check_hard_reset_stored);
 
 static int qpnp_pon_set_dbc(struct qpnp_pon *pon, u32 delay)
 {
@@ -366,7 +405,7 @@ int qpnp_pon_system_pwr_off(enum pon_power_off_type type)
 				QPNP_PON_PS_HOLD_RST_CTL(pon->base), rc);
 
 	rc = qpnp_pon_masked_write(pon, rst_en_reg, QPNP_PON_RESET_EN,
-								QPNP_PON_RESET_EN);
+						    QPNP_PON_RESET_EN);
 	if (rc)
 		dev_err(&pon->spmi->dev,
 			"Unable to write to addr=%hx, rc(%d)\n",
@@ -512,7 +551,6 @@ qpnp_get_cfg(struct qpnp_pon *pon, u32 pon_type)
 
 	return NULL;
 }
-
 /* ASUS BSP Freeman++ add node for side_key SMMI_Test */
 /* node: sys/module/intel_mid_powerbtn/parameter/pwrkey_mode */
 static int pwrkey_mode ;
@@ -622,7 +660,8 @@ static int slow_ok;
 		power_key_6s_running = 1;
 		startime = press_time;
 		timeout = startime + HZ*TIMEOUT_COUNT/10;
-		for (i = 0; i < TIMEOUT_COUNT; i++) {
+		for (i = 0, slow_ok = 0; i < TIMEOUT_COUNT && slow_ok == 0 &&
+				time_before(jiffies, timeout) ; i++) {
 			if (is_holding_power_key()) {
 				msleep(100);
 			} else {
@@ -630,20 +669,20 @@ static int slow_ok;
 			}
 		}
 
-		if ((((i == TIMEOUT_COUNT) && (slow_ok == 1)) ||
+		if (((i == TIMEOUT_COUNT) || (slow_ok == 1) ||
 				time_after_eq(jiffies, timeout)) &&
 				(is_holding_power_key()) && (i > 0)) {
 			duration = (jiffies - startime)*10/HZ;
-			//ASUSEvtlog("ASDF: reset device after power press %d.%d sec (%d)\n",
-					//duration/10, duration%10, i);
+			ASUSEvtlog("ASDF: reset device after power press %d.%d sec (%d)\n",
+					duration/10, duration%10, i);
 			set_vib_enable(200);
 			msleep(200);
 
 			asus_global.ramdump_enable_magic = 0;
 			printk(KERN_CRIT "asus_global.ramdump_enable_magic = 0x%x\n",
 					asus_global.ramdump_enable_magic);
-			//printk("force reset device!!\n");
-			//kernel_restart(NULL);
+			printk("force reset device!!\n");
+			kernel_restart(NULL);
 		}
 
 		power_key_6s_running = 0;
@@ -684,14 +723,14 @@ void wait_for_slowlog_work(struct work_struct *work)
 			printk("start to gi chk after power press %d.%d sec (%d)\n",
 					duration/10, duration%10, i);
 			save_all_thread_info();
-
+			save_phone_hang_log(0);
 			msleep(1 * 1000);
 
 			duration = (jiffies - startime)*10/HZ;
 			printk("start to gi delta after power press %d.%d sec (%d)\n",
 					duration/10, duration%10, i);
 			delta_all_thread_info();
-			save_phone_hang_log();
+			save_phone_hang_log(1);
 			slow_ok = 1;
 
 			get_last_shutdown_log();
@@ -817,75 +856,15 @@ qpnp_pon_input_dispatch(struct qpnp_pon *pon, u32 pon_type)
 	return 0;
 }
 
-//jorney_dong+++
-
-static int get_power_key_state(struct qpnp_pon *pon)
-{
-	int rc;
-	struct qpnp_pon_config *cfg = NULL;
-	u8 pon_rt_sts = 0, pon_rt_bit = 0;
-
-		cfg = qpnp_get_cfg(pon, PON_KPDPWR);
-		if (!cfg)
-			return -1;
-
-		/* Check if key reporting is supported */
-		if (!cfg->key_code)
-			return -1;
-
-		/* check the RT status to get the current status of the line */
-		rc = spmi_ext_register_readl(pon->spmi->ctrl, pon->spmi->sid,
-					QPNP_PON_RT_STS(pon->base), &pon_rt_sts, 1);
-		if (rc) {
-			dev_err(&pon->spmi->dev, "Unable to read PON RT status\n");
-			return -1;
-		}
-		pon_rt_bit = QPNP_PON_KPDPWR_N_SET;
-	return pon_rt_sts & pon_rt_bit;	
-}
-
-//jorney_dong---
-
 static irqreturn_t qpnp_kpdpwr_irq(int irq, void *_pon)
 {
 	int rc;
 	struct qpnp_pon *pon = _pon;
-//jorney_dong+++
 
-	int state = 0;
-		if (g_CHG_mode && pwr_key_reboot) {
-			state = get_power_key_state(pon);
-			printk("[qpnp-power-on]: state =%d\n",state);
-			if(state==1 &&!pwr_key_timer_added)
-			{
-				wake_lock_timeout(&pwr_key_wake_lock, 3 * HZ);
-				mod_timer(&pwrkey_timer,
-					jiffies + msecs_to_jiffies(pwr_key_extra_debounce));
-				pwr_key_timer_added = true;
-			}
-			else if(state == 0)
-			{
-				if(pwr_key_timer_added)
-				{
-					pwr_key_reboot = false;
-					del_timer(&pwrkey_timer);
-					pwr_key_timer_added = false;
-				}
-			}
-			
-		}
-		else
-		{
-			rc = qpnp_pon_input_dispatch(pon, PON_KPDPWR);
-			if (rc)
-				dev_err(&pon->spmi->dev, "Unable to send input event\n");
-		}
-#if 0
-//jorney_dong---
 	rc = qpnp_pon_input_dispatch(pon, PON_KPDPWR);
 	if (rc)
 		dev_err(&pon->spmi->dev, "Unable to send input event\n");
-#endif //jorney_dong
+
 	return IRQ_HANDLED;
 }
 
@@ -1162,98 +1141,6 @@ qpnp_config_reset(struct qpnp_pon *pon, struct qpnp_pon_config *cfg)
 	return 0;
 }
 
-//jorney_dong+++
-
-static void power_key_timer(unsigned long _data)
-{
-	if (g_CHG_mode && pwr_key_reboot) {
-		schedule_work(&pwrkey_work);
-	}
-}
-
-static void power_key_work_func(struct work_struct *work)
-{
-	if (g_CHG_mode && pwr_key_reboot)
-	{
-		if (pon_for_powerkey != NULL) {
-			dev_err(&pon_for_powerkey->spmi->dev,"[qpnp-power-on] Long press power key in charging mode. reboot now ...\r\n");
-		}
-			pwr_key_reboot = false;
-			kernel_restart(NULL);
-	}
-}
-
-#ifdef  CONFIG_PROC_FS
-//#include <linux/syscalls.h>
-#include <linux/fs.h>
-#include <linux/file.h>
-#include <linux/proc_fs.h>
-#define CHARGER_POWER_KEY_PROC_FILE  "driver/charger_power_key"
-static struct proc_dir_entry *charger_power_key_proc_file;
-
-static mm_segment_t oldfs;
-static void initKernelEnv(void)
-{
-    oldfs = get_fs();
-     set_fs(KERNEL_DS);
-}
-
-static void deinitKernelEnv(void)
-{
-     set_fs(oldfs);
-}
-
-
-static ssize_t charger_power_key_proc_write(struct file *filp, const char *buff, size_t len, loff_t *off)
-{
-    char messages[256];
-
-    memset(messages, 0, sizeof(messages));
-    if (len > 256)
-    {
-        len = 256;
-    }
-    if (copy_from_user(messages, buff, len))
-    {
-        return -EFAULT;
-    }
-
-    initKernelEnv();
-
-    if(strncmp(messages, "1", 1) == 0)
-    {
-		pwr_key_reboot = false;
-		pwr_key_extra_debounce = 0;
-		printk("[qpnp-power-on] Enter charger power key manager state!\n");
-    }
-
-    deinitKernelEnv();
-    return len;
-}
-
-static struct file_operations charger_power_key_proc_ops = {
-	.write = charger_power_key_proc_write,
-};
-
-static void create_charger_power_key_proc_file(void)
-{
-    printk("[qpnp-power-on] create_charger_power_key_proc_file\n");
-    charger_power_key_proc_file = proc_create(CHARGER_POWER_KEY_PROC_FILE, 0666, NULL,&charger_power_key_proc_ops);
-    if (charger_power_key_proc_file) {
-        //charger_power_key_proc_file->proc_fops = &charger_power_key_proc_ops;
-    }
-}
-
-static void remove_charger_power_key_proc_file(void)
-{
-    extern struct proc_dir_entry proc_root;
-    printk("[qpnp-power-on] remove_charger_power_key_proc_file\n");   
-    remove_proc_entry(CHARGER_POWER_KEY_PROC_FILE, &proc_root);
-}
-#endif
-
-//jorney_dong---
-
 static int
 qpnp_pon_request_irqs(struct qpnp_pon *pon, struct qpnp_pon_config *cfg)
 {
@@ -1363,6 +1250,7 @@ qpnp_pon_config_input(struct qpnp_pon *pon,  struct qpnp_pon_config *cfg)
 	/* don't send dummy release event when system resumes */
 	__set_bit(INPUT_PROP_NO_DUMMY_RELEASE, pon->pon_input->propbit);
 	/*ASUS BSP Porting keypad debug*/
+	//input_set_capability(pon->pon_input, EV_KEY, cfg->key_code);
 	input_set_capability(pon->pon_input, EV_KEY, KEY_POWER);
 	input_set_capability(pon->pon_input, EV_KEY, KEY_A);
 	input_set_capability(pon->pon_input, EV_KEY,KEY_VOLUMEDOWN); //ASUS_BSP: Freeman  +++
@@ -1673,7 +1561,7 @@ static int qpnp_pon_config_init(struct qpnp_pon *pon)
 					"Unable to config pon reset\n");
 				goto unreg_input_dev;
 			}
-		} else if (cfg->pon_type != PON_CBLPWR) {
+		} else if (cfg->pon_type != PON_CBLPWR && cfg->pon_type != PON_KPDPWR) {
 			/* disable S2 reset */
 			rc = qpnp_pon_masked_write(pon, cfg->s2_cntl2_addr,
 						QPNP_PON_S2_CNTL_EN, 0);
@@ -1692,16 +1580,7 @@ static int qpnp_pon_config_init(struct qpnp_pon *pon)
 	}
 
 	device_init_wakeup(&pon->spmi->dev, 1);
-//jorney_dong+++
-dev_err(&pon->spmi->dev,"[qpnp-power-on]: g_CHG_mode = %d, pwr_key_reboot = %d \n", g_CHG_mode ,pwr_key_reboot);
-	if (g_CHG_mode && pwr_key_reboot) {
-		wake_lock_init(&pwr_key_wake_lock, WAKE_LOCK_SUSPEND, "pwr_key_lock");
-		INIT_WORK(&pwrkey_work, power_key_work_func);
-		setup_timer(&pwrkey_timer,power_key_timer,(unsigned long)pon);
 
-	}
-
-//jorney_dong---
 	return rc;
 
 unreg_input_dev:
@@ -1856,6 +1735,9 @@ static int qpnp_pon_probe(struct spmi_device *spmi)
 	u16 poff_sts = 0;
 	const char *s3_src;
 	u8 s3_src_reg;
+	//ASUS_BSP+++ jeff_gu
+	ulong *printk_buffer_slot2_addr;
+	//ASUS_BSP---
 
 	pon = devm_kzalloc(&spmi->dev, sizeof(struct qpnp_pon),
 							GFP_KERNEL);
@@ -2031,12 +1913,6 @@ static int qpnp_pon_probe(struct spmi_device *spmi)
 			"Unable to intialize PON configurations\n");
 		return rc;
 	}
-	
-//jorney_dong+++
-#ifdef  CONFIG_PROC_FS
-	create_charger_power_key_proc_file();
-#endif
-//jorney_dong---
 
 	rc = of_property_read_u32(pon->spmi->dev.of_node,
 				"qcom,pon-dbc-delay", &delay);
@@ -2057,22 +1933,23 @@ static int qpnp_pon_probe(struct spmi_device *spmi)
 		return rc;
 	}
 
-	qpnp_pon_debugfs_init(spmi);
-	//jorney_dong +++++++++++++
-	dev_err(&pon->spmi->dev,"[qpnp-power-on]: 2 power key check \n");
-	if (g_CHG_mode && pwr_key_reboot) {
-	if(get_power_key_state(pon))//is_holding_power_key())
-		{
+	/* config whether store the hard reset reason */
+	pon->store_hard_reset_reason = of_property_read_bool(
+					spmi->dev.of_node,
+					"qcom,store-hard-reset-reason");
 
-			dev_err(&pon->spmi->dev,"[qpnp-power-on]: 2power key state: pressed, rebooting...\n");
-			pwr_key_reboot = false;
-			//kernel_restart(NULL);
-			machine_restart(NULL);
-		}
-		else
-		dev_err(&pon->spmi->dev,"[qpnp-power-on]:2 power state, not pressed \n");
+	qpnp_pon_debugfs_init(spmi);
+
+	//ASUS_BSP +++ jeff_gu
+	// cold boot power off. Clean the printk buffer magic
+	printk_buffer_slot2_addr = (ulong *)PRINTK_BUFFER_SLOT2;
+	if (!qpnp_pon_is_warm_reset())
+	{
+		printk("cold boot clean ddr flag,printk_buffer_slot2_addr=%p, value=0x%lx\n", printk_buffer_slot2_addr, *printk_buffer_slot2_addr);
+		*printk_buffer_slot2_addr = 0;
 	}
-		//jorney_dong ----------------------------
+	//ASUS_BSP +++
+
 	return rc;
 }
 
@@ -2087,17 +1964,6 @@ static int qpnp_pon_remove(struct spmi_device *spmi)
 	if (pon->pon_input)
 		input_unregister_device(pon->pon_input);
 	qpnp_pon_debugfs_remove(spmi);
-//jorney_dong+++		
-
-	if (g_CHG_mode)
-	{
-		del_timer(&pwrkey_timer);
-		pwr_key_timer_added = false;
-	}
-#ifdef  CONFIG_PROC_FS
-	remove_charger_power_key_proc_file();
-#endif
-//jorney_dong---
 	return 0;
 }
 //ASUS BSP : Austin_T +++

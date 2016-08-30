@@ -21,7 +21,7 @@ extern phys_addr_t RTB_BUFFER_PA;
 #define PRINTK_BUFFER_SLOT2     ((void *)((ulong)PRINTK_BUFFER_VA + (ulong)PRINTK_BUFFER_SLOT_SIZE))
 
 #define PHONE_HANG_LOG_BUFFER   ((void *)((ulong)PRINTK_BUFFER_VA + (ulong)2*PRINTK_BUFFER_SLOT_SIZE) - (ulong)0x3F000)
-#define PHONE_HANG_LOG_SIZE     (0x00080000)
+#define PHONE_HANG_LOG_SIZE     (0x00080000 + 0x3F000)
 
 #define ASUS_DBG_FILTER_PATH "/data/log/asus_debug_filter"
 
@@ -196,7 +196,7 @@ extern phys_addr_t RTB_BUFFER_PA;
 
 void save_all_thread_info(void);
 void delta_all_thread_info(void);
-void save_phone_hang_log(void);
+void save_phone_hang_log(int delta);
 void save_last_shutdown_log(char *filename);
 #if defined(CONFIG_MSM_RTB)
 void save_rtb_log(void);
