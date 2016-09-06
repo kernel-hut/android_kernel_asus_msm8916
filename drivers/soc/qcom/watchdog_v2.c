@@ -50,7 +50,7 @@
 static struct workqueue_struct *wdog_wq;
 static struct msm_watchdog_data *wdog_data;
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 struct msm_watchdog_data *g_wdog_dd = NULL;
 struct mutex g_pet_lock;
 #endif
@@ -315,7 +315,7 @@ static void ping_other_cpus(struct msm_watchdog_data *wdog_dd)
 	}
 }
 //ASUSBSP: Jeffery, add watchdog_test+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 extern int watchdog_test; 
 #endif
 //ASUSBSP: Jeffery, add watchdog_test---
@@ -327,7 +327,7 @@ static void pet_watchdog_work(struct work_struct *work)
 						struct msm_watchdog_data,
 							dogwork_struct);
 //ASUSBSP: Jeffery, add watchdog_test+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	if (watchdog_test){
 		printk("test watchdog function...\r\n");
 		printk("Wdog - STS: 0x%x, CTL: 0x%x, BARK TIME: 0x%x, BITE TIME: 0x%x",
@@ -342,7 +342,7 @@ static void pet_watchdog_work(struct work_struct *work)
 	delay_time = msecs_to_jiffies(wdog_dd->pet_time);
 	if (enable) {
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		mutex_lock(&g_pet_lock);
 #endif
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt---
@@ -350,7 +350,7 @@ static void pet_watchdog_work(struct work_struct *work)
 			ping_other_cpus(wdog_dd);
 		pet_watchdog(wdog_dd);
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		mutex_unlock(&g_pet_lock);
 #endif
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt---
@@ -411,7 +411,7 @@ static int msm_watchdog_remove(struct platform_device *pdev)
 	destroy_workqueue(wdog_wq);
 	kfree(wdog_dd);
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	g_wdog_dd = NULL;
 #endif
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt---
@@ -732,7 +732,7 @@ static int msm_watchdog_probe(struct platform_device *pdev)
 	platform_set_drvdata(pdev, wdog_dd);
 	cpumask_clear(&wdog_dd->alive_mask);
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	g_wdog_dd = wdog_dd;
 	mutex_init(&g_pet_lock);
 #endif
@@ -748,7 +748,7 @@ err:
 }
 
 //ASUSBSP: breeze, forece pet watchdog to avoid wdt+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 void asus_pet_watchdog(void) {
 	if(g_wdog_dd && enable) {
 		mutex_lock(&g_pet_lock);

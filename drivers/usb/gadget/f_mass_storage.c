@@ -219,7 +219,7 @@
 #include <linux/usb/composite.h>
 
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 #include <linux/usb/android.h>
 #endif
 //ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
@@ -1957,7 +1957,7 @@ static int do_scsi_command(struct fsg_common *common)
 	int			i;
 	static char		unknown[16];
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	int scsi_cmd_factory_mode[6]={0xF1, 0x01, 0x00, 0x00, 0x24, 0x00};
 	bool  cmdEqual = true;
 #endif
@@ -2198,7 +2198,7 @@ static int do_scsi_command(struct fsg_common *common)
 		break;
 
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	case FACTORY_MODE:
 		printk("[USB] add scsi cmd to enable factory mode \n");
 		if ( common->cmnd_size == 6) {

@@ -24,7 +24,7 @@ struct panel_id {
 	u16 id;
 	u16 type;
 };
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 //ASUS_BSP: Louis ++
 struct panel_list {
 	char name[16];

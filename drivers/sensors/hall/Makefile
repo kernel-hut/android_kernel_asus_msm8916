@@ -1,5 +1,5 @@
  #+++ SZ_BSP gauss_li "for porting"
-ifeq ($(ASUS_BUILD_PROJECT), ZC550KL)
+ifeq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
 	obj-y += hall_sensor_zc550kl.o
 else
 	obj-y += hall_sensor.o

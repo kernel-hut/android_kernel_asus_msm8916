@@ -47,7 +47,7 @@
 
 #include "smd_private.h"
 #include "smem_private.h"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 #include <linux/oem_functions.h>//asus-bsp-jeewu read sku_id+++
 #endif
 
@@ -63,7 +63,7 @@ uint32_t SMSM_NUM_HOSTS = 3;
 /* Legacy SMSM interrupt notifications */
 #define LEGACY_MODEM_SMSM_MASK (SMSM_RESET | SMSM_INIT | SMSM_SMDINIT)
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 static int modemsku = 0;//asus-bsp-jeewu read sku_id+++
 module_param(modemsku, int, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);//asus-bsp-jeewu read sku_id+++
 #endif
@@ -3386,7 +3386,7 @@ int __init msm_smd_init(void)
 		return rc;
 	}
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	modemsku = get_rf_sku_id();//asus-bsp-jeewu read sku_id+++
 #endif
 	return 0;

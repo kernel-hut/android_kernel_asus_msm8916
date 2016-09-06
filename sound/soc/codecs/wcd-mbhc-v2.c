@@ -26,7 +26,7 @@
 #include <linux/kernel.h>
 #include <linux/input.h>
 #include <linux/firmware.h>
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 #include <linux/debugfs.h>//mei_huang +++ for factory test headset insert check
 #endif
 #include <sound/pcm.h>
@@ -62,7 +62,7 @@
 
 #define WCD_MBHC_BTN_PRESS_COMPL_TIMEOUT_MS  50
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 /* ASUS_BSP Paul +++ */
 int g_jack_det_invert = 0;
 extern int g_DebugMode;
@@ -1462,7 +1462,7 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			mbhc->current_plug, detection_type);
 	wcd_cancel_hs_detect_plug(mbhc, &mbhc->correct_plug_swch);
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 	/* ASUS_BSP Paul +++ */
 	if (g_DebugMode)
 		goto exit;
@@ -1559,7 +1559,7 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 	}
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 exit: /* ASUS_BSP Paul +++ */
 #endif
 	mbhc->in_swch_irq_handler = false;
@@ -1585,7 +1585,7 @@ static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
 	return r;
 }
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 /* ASUS_BSP Paul +++ */
 void wcd_mbhc_plug_detect_for_debug_mode(struct wcd_mbhc *mbhc, int debug_mode)
 {
@@ -2335,7 +2335,7 @@ void wcd_mbhc_stop(struct wcd_mbhc *mbhc)
 }
 EXPORT_SYMBOL(wcd_mbhc_stop);
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 //mei_huang +++ for factory test headset insert check
 ssize_t wcd_mbhc_debug_read(struct file *file, char __user *buff,
 			      size_t len, loff_t *off)
@@ -2516,7 +2516,7 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		}
 	}
 
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	wcd9xxx_init_debugfs(mbhc);//mei_huang +++ for factory test headset insert check
 	#endif
 	
@@ -2638,7 +2638,7 @@ void wcd_mbhc_deinit(struct wcd_mbhc *mbhc)
 	if (mbhc->mbhc_cb && mbhc->mbhc_cb->register_notifier)
 		mbhc->mbhc_cb->register_notifier(codec, &mbhc->nblock, false);
 	mutex_destroy(&mbhc->codec_resource_lock);
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	wcd9xxx_cleanup_debugfs(mbhc);//mei_huang --- for factory test headset insert check
 	#endif
 }

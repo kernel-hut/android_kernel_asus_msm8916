@@ -211,7 +211,7 @@ extern int g_CHG_mode;
 #endif
 //ASUS_BSP--- ShowWang "read HW ID"
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 static int g_otg_poweron = 0;
 static int g_otg_state_in=0;
 static struct delayed_work asus_check_disable_5V_work;
@@ -827,7 +827,7 @@ const struct file_operations asus_otg_proc_otg_chargetype_fops = {
 //ASUS_BSP--- ShowWang "set otg current type as user switch"
 
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 static int asus_otg_proc_otg_poweron_show(struct seq_file *s, void *unused)
 {
 	if (g_otg_poweron)
@@ -942,7 +942,7 @@ static int asus_otg_procfs_init(struct msm_otg *motg)
 //ASUS_BSP--- ShowWang "add otg check at boot"
 
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	proc_entry = proc_create_data("otg_poweron", S_IRUGO |S_IWUSR, asus_otg_proc_root,
 			&asus_otg_proc_otg_poweron_fops, motg);
 	if (!proc_entry) {
@@ -987,7 +987,7 @@ static void asus_otg_procfs_cleanup(void)
 #endif
 //ASUS_BSP--- ShowWang "add otg check at boot"
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	remove_proc_entry("otg_poweron", asus_otg_proc_root);
 #endif
 //ASUS_BSP--- ShowWang "Enable otg poweron switching"
@@ -1291,7 +1291,7 @@ static void asus_otg_chg_unknown_delay_work(struct work_struct *w)
 void asus_otg_host_mode_cleanup(void)
 {
 //ASUS_BSP+++ ShowWang "support charging for Iphone when otg poweron"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	g_keep_apple_power_on = 0;
 	g_apple_attach = 0;
 #endif
@@ -1335,7 +1335,7 @@ void asus_otg_host_power_off(void)
 	struct usb_phy *phy = &motg->phy;
 
 //ASUS_BSP+++ ShowWang "support charging for Iphone when otg poweron"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	if (motg->host_mode && !g_keep_apple_power_on) {
 		dev_info(phy->dev, "%s()+++ (%d)(%d)\n", __func__, g_keep_power_on, g_host_none_mode);
 		if (!g_host_none_mode) {
@@ -1390,7 +1390,7 @@ static void asus_otg_early_suspend_delay_work(struct work_struct *w)
 	dev_info(phy->dev, "%s()+++\n", __func__);
 
 //ASUS_BSP+++ ShowWang "support charging for Iphone when otg poweron"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	if (motg->host_mode && !g_keep_apple_power_on) {
 		dev_info(phy->dev, "g_keep_power_on (%d)\n", g_keep_power_on);
 		if (!g_keep_power_on) {
@@ -3022,7 +3022,7 @@ phcd_retry:
 	}
 	wake_unlock(&motg->wlock);
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	//ASUS_BSP+++ Show_Wang "Add monitor to check otg suspend status in suspend mode"
 	if (motg->host_mode) {
 		cancel_delayed_work(&asus_otg_suspend_check_work);
@@ -3246,7 +3246,7 @@ skip_phy_resume:
 		msm_id_status_w(&motg->id_status_work.work);
 	}
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	//ASUS_BSP+++ Show_Wang "Add monitor to check otg suspend status in suspend mode"
 	if (motg->host_mode && !g_keep_apple_power_on) {
 		schedule_delayed_work(&asus_otg_suspend_check_work,
@@ -3580,7 +3580,7 @@ static int msm_otg_usbdev_notify(struct notifier_block *self,
 			motg->mA_port = udev->actconfig->desc.bMaxPower * 2;
 			desc = &udev->actconfig->intf_cache[0]->altsetting->desc;
 //ASUS_BSP+++ ShowWang "support charging for Iphone when otg poweron"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 			if( udev->descriptor.idVendor==__constant_cpu_to_le16(0x05AC)) {
 				g_apple_attach = 1;
 				printk("[usb_otg] otg keep poweron and Apple, Inc, Insert %s \n", __func__);
@@ -3621,7 +3621,7 @@ static int msm_otg_usbdev_notify(struct notifier_block *self,
 		break;
 	case USB_DEVICE_REMOVE:
 //ASUS_BSP+++ ShowWang "support charging for Iphone when otg poweron"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		if(udev != NULL && udev->descriptor.idVendor==__constant_cpu_to_le16(0x05AC))
 		{
 			g_apple_attach = 0;
@@ -4474,7 +4474,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 	unsigned long delay;
 	int ret;
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] re-detect charge type after charge detected first time"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	static bool first_detect=false;
 #endif
 //ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] re-detect charge type after charge detected first time"
@@ -4508,7 +4508,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 		break;
 	case USB_CHG_STATE_WAIT_FOR_DCD:
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] re-detect charge type after charge detected first time"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		first_detect = true;
 #endif
 //ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] re-detect charge type after charge detected first time"
@@ -4609,7 +4609,7 @@ static void msm_chg_detect_work(struct work_struct *w)
 		}
 
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] re-detect charge type after charge detected first time"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		if(first_detect)
 		{
 			if (motg->chg_type == USB_DCP_CHARGER)
@@ -5011,7 +5011,7 @@ static void msm_otg_sm_work(struct work_struct *w)
 					"PM RUNTIME: NOCHG PUT DONE",
 					get_pm_runtime_counter(otg->phy->dev),
 					motg->pm_done);
-			#ifdef ASUS_ZC550KL_PROJECT
+			#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 			
 			#else
 				if(is_usb_chg_plugged && !g_host_none_mode) {
@@ -5341,7 +5341,7 @@ static void msm_otg_sm_work(struct work_struct *w)
 				msm_otg_notify_charger(motg, IDEV_CHG_MIN);
 			else{
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 				if(!g_otg_poweron || (g_otg_poweron && g_otg_state_in)) {
 					msm_hsusb_vbus_power(motg, 0);
 				}
@@ -5393,7 +5393,7 @@ static void msm_otg_sm_work(struct work_struct *w)
 			otg->phy->state = OTG_STATE_A_WAIT_VFALL;
 			msm_otg_start_host(otg, 0);
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 			if (!g_otg_poweron && !test_bit(ID_A, &motg->inputs)) {
 				msm_hsusb_vbus_power(motg, 0);
 			}
@@ -5935,7 +5935,7 @@ static void msm_id_status_w(struct work_struct *w)
 	//Ignore host ID in host none mode. Ignore all ID event in manual mode
 
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	if(!g_otg_poweron)
 	{
 		if(motg->otg_mode == USB_AUTO && !(g_screen_off && !id_state)) {
@@ -5966,7 +5966,7 @@ static void msm_id_status_w(struct work_struct *w)
 //ASUS_BSP+++ Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
 	if (id_state) {
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		g_otg_state_in = 1;
 #endif
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
@@ -5983,13 +5983,13 @@ static void msm_id_status_w(struct work_struct *w)
 	}
 #endif
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		schedule_delayed_work(&asus_check_disable_5V_work, (500 * HZ/1000));
 #endif
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
 	} else {
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		g_otg_state_in = 0;
 #endif
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
@@ -6002,7 +6002,7 @@ static void msm_id_status_w(struct work_struct *w)
 		motg->host_mode = true;
 		asus_otg_host_mode_prepare();
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		cancel_delayed_work_sync(&asus_check_disable_5V_work);
 #endif
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
@@ -7716,7 +7716,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 	INIT_DELAYED_WORK(&asus_chg_unknown_delay_work, asus_otg_chg_unknown_delay_work);
 //ASUS_BSP--- Landice "[ZE500KL][USBH][NA][Spec] Set asus charger upon charger type detection"
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	INIT_DELAYED_WORK(&asus_check_disable_5V_work, asus_otg_check_disable_5V_work);
 #endif
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
@@ -8133,7 +8133,7 @@ static int msm_otg_remove(struct platform_device *pdev)
 	cancel_delayed_work_sync(&asus_chg_unknown_delay_work);
 //ASUS_BSP--- Landice "[ZE500KL][USBH][NA][Spec] Set asus charger upon charger type detection"
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	cancel_delayed_work_sync(&asus_check_disable_5V_work);
 #endif
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
@@ -8298,7 +8298,7 @@ static int msm_otg_pm_suspend(struct device *dev)
 //ASUS_BSP+++ Landice "[ZE500KL][USBH][TT332603][other] Add log to check if TT332603 still happens"
 	if (!atomic_read(&motg->in_lpm)) {
 		dev_err(dev, "Error - suspend out of lpm!\n");
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		return -EBUSY;
 #endif
 	}

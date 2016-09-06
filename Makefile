@@ -695,7 +695,7 @@ else
 endif
 
 #ASUS_BSP Ander: ZC550KL support mutliple project build +++
-ifeq ($(ASUS_BUILD_PROJECT), ZC550KL)
+ifeq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
         KBUILD_CPPFLAGS += -DASUS_ZC550KL_PROJECT=1
 endif
 # ASUS_BSP Ander : ZC550KL support mutliple project build ---

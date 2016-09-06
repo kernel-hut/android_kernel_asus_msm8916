@@ -215,7 +215,7 @@ struct msm8916_asoc_mach_data {
 	int ext_pa;
 	int us_euro_gpio;
 	int spk_ext_pa_gpio;
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	int spk_amp_gpio;//mei_huang +++ for speaker config
 	#endif
 	int mclk_freq;

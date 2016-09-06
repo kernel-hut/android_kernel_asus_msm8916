@@ -53,7 +53,7 @@
 #include <linux/msm-bus.h>
 #include "msm_serial_hs_hwreg.h"
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 extern int g_uart_dbg_mode;  //ASUSDEBUG jeffery_hu@asus.com  avoid log to uart console in user version
 #endif
 /*
@@ -1450,7 +1450,7 @@ static void msm_hsl_console_write(struct console *co, const char *s,
 	unsigned int vid;
 	int locked;
 //ASUSDEBUG+ jeffery_hu@asus.com  avoid log to uart console in user version
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	if (!g_uart_dbg_mode)
 		return;
 #endif

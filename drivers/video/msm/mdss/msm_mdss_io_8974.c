@@ -868,7 +868,7 @@ error:
 
 static int mdss_dsi_link_clk_set_rate(struct mdss_dsi_ctrl_pdata *ctrl_pdata)
 {
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
     u32 esc_clk_rate;
 	int rc = 0;
 

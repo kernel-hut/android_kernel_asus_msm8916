@@ -73,7 +73,7 @@ void acm_port_cleanup(void);
 int acm_init_port(int port_num, const char *name);
 
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 #include <linux/switch.h>
 #define ASUS_FACTORY_MODE_ON 1
 #define ASUS_FACTORY_MODE_OFF 0

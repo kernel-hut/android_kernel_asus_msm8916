@@ -36,7 +36,7 @@
 
 #include "gadget_chips.h"
 //ASUS_BSP+++ Show_Wang "set serialno refer to /factory/SSN"
-#ifdef  ASUS_ZC550KL_PROJECT
+#ifdef  CONFIG_ASUS_ZC550KL_PROJECT
 #define SSN_WRITE
 #endif
 
@@ -100,7 +100,7 @@ static const char longname[] = "Gadget Android";
 static int diag_enable = 0;
 //ASUS_BSP--- "[USB][NA][Spec] add diag enable support in kernel"
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
-#if defined(ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
+#if defined(CONFIG_ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
 static int last_diag_status = 0;
 #endif
 //ASUS_BSP--- Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
@@ -331,7 +331,7 @@ static const char *pm_qos_to_string(enum android_pm_qos_state state)
 }
 
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 static ssize_t asus_factory_mode_switch_name(struct switch_dev *sdev, char *buf)
 {
 	return sprintf(buf, "factory_mode\n");
@@ -3258,7 +3258,7 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 	int is_ffs;
 	int ffs_enabled = 0;
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
-#if defined(ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
+#if defined(CONFIG_ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
 	if(last_diag_status == 1 && last_diag_status == diag_enable){
 		return -EBUSY;
 	}
@@ -3290,7 +3290,7 @@ functions_store(struct device *pdev, struct device_attribute *attr,
 	strlcpy(buf, buff, sizeof(buf));
 	//ASUS_BSP+++ "[USB][NA][Spec] add diag enable support in kernel"
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
-#if defined(ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
+#if defined(CONFIG_ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
 	if(diag_enable==1){
 		strlcpy(buf, "diag,adb,serial", sizeof("diag,adb,serial"));
 	}
@@ -3404,7 +3404,7 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 	if (!cdev)
 		return -ENODEV;
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
-#if defined(ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
+#if defined(CONFIG_ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
 	if(last_diag_status == 1 && last_diag_status == diag_enable){
 		return  -ENODEV;
 	}
@@ -3435,7 +3435,7 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 		if(diag_enable){
 			cdev->desc.idVendor = __constant_cpu_to_le16(0x05C6);
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
-#if defined(ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
+#if defined(CONFIG_ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
 			cdev->desc.idProduct = __constant_cpu_to_le16(0x9025);
 #else
 			cdev->desc.idProduct = __constant_cpu_to_le16(0x9091);
@@ -3443,7 +3443,7 @@ static ssize_t enable_store(struct device *pdev, struct device_attribute *attr,
 //ASUS_BSP--- Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
 		}
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
-#if defined(ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
+#if defined(CONFIG_ASUS_ZC550KL_PROJECT) && defined(CONFIG_ENABLE_FACTORY_DIAG)
 		last_diag_status=diag_enable;
 #endif
 //ASUS_BSP--- Show_Wang "[ZC550KL][USB][Spec] enable diag in charger and factory mode"
@@ -4218,7 +4218,7 @@ static int android_probe(struct platform_device *pdev)
 	}
 
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	AsusFactoryModeNotifyInitialize();
 #endif
 //ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"

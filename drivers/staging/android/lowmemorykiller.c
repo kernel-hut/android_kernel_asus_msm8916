@@ -605,7 +605,7 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 
 
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		if(selected_oom_score_adj <= 529){
 				int count = 0;
 				printk(HEAD_LINE);

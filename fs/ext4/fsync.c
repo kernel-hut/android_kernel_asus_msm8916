@@ -34,7 +34,7 @@
 
 #include <trace/events/ext4.h>
 //ASUS_BSP +++ Jeffery "show the file taking long time to sync"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 #include <linux/jiffies.h>
 #endif
 //ASUS_BSP --- Jeffery "show the file taking long time to sync"
@@ -124,7 +124,7 @@ int ext4_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	tid_t commit_tid;
 	bool needs_barrier = false;
 //ASUS_BSP +++ Jeffery "show the file taking long time to sync"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	unsigned long cost_time = 0;
 	unsigned long start_j = jiffies;
 #endif
@@ -186,7 +186,7 @@ int ext4_sync_file(struct file *file, loff_t start, loff_t end, int datasync)
 	mutex_unlock(&inode->i_mutex);
 	trace_ext4_sync_file_exit(inode, ret);
 //ASUS_BSP +++ Jeffery "show the file taking long time to sync"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	cost_time = (jiffies - start_j)*1000/HZ;
 	if (cost_time > 5000) {
 		if (file->f_dentry->d_iname)

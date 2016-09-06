@@ -38,7 +38,7 @@
 #include "../codecs/wsa881x.h"
 
 #define DRV_NAME "msm8x16-asoc-wcd"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 //mei_huang +++ config speaker
 int ext_spk_amp_gpio = -1;
 int speaker_run = 0;
@@ -72,7 +72,7 @@ int speaker_run = 0;
 
 #define LPASS_CSR_GP_LPAIF_PRI_PCM_PRI_MODE_MUXSEL 0x07702008
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 int g_gpio_audio_debug; /* ASUS_BSP Paul +++ */
 #endif
 
@@ -275,7 +275,7 @@ struct cdc_pdm_pinctrl_info {
 	struct pinctrl_state *cdc_lines_act;
 	struct pinctrl_state *cross_conn_det_sus;
 	struct pinctrl_state *cross_conn_det_act;
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	struct pinctrl_state *spk_amp_sus;//mei_huang +++ config speaker
 	struct pinctrl_state *spk_amp_act;//mei_huang +++ config speaker
 	#endif
@@ -393,7 +393,7 @@ static const struct snd_soc_dapm_widget msm8x16_dapm_widgets[] = {
 static char const *rx_bit_format_text[] = {"S16_LE", "S24_LE"};
 static const char *const mi2s_tx_ch_text[] = {"One", "Two", "Three", "Four"};
 static const char *const loopback_mclk_text[] = {"DISABLE", "ENABLE"};
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 static const char *const ext_spk_amp_text[] = {"DISABLE", "ENABLE"};//mei_huang +++ config speaker
 #endif
 static char const *pri_rx_sample_rate_text[] = {"KHZ_48", "KHZ_96",
@@ -514,7 +514,7 @@ static int mi2s_rx_bit_format_put(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 //mei_huang +++ config speaker
 static void msm8x16_ext_spk_power_amp_enable(u32 enable)
 {
@@ -1125,7 +1125,7 @@ static const struct soc_enum msm_snd_enum[] = {
 	SOC_ENUM_SINGLE_EXT(2, rx_bit_format_text),
 	SOC_ENUM_SINGLE_EXT(4, mi2s_tx_ch_text),
 	SOC_ENUM_SINGLE_EXT(2, loopback_mclk_text),
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	//mei_huang +++ config speaker
 	SOC_ENUM_SINGLE_EXT(2, ext_spk_amp_text),
 	//mei_huang ---
@@ -1148,7 +1148,7 @@ static const struct snd_kcontrol_new msm_snd_controls[] = {
 			msm_pri_mi2s_rx_ch_get, msm_pri_mi2s_rx_ch_put),
 	SOC_ENUM_EXT("Loopback MCLK", msm_snd_enum[2],
 			loopback_mclk_get, loopback_mclk_put),
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	//mei_huang +++ config speaker
 	SOC_ENUM_EXT("ext spk amp", msm_snd_enum[3],
 			ext_spk_amp_get, ext_spk_amp_put),
@@ -2650,7 +2650,7 @@ static int msm8x16_setup_hs_jack(struct platform_device *pdev,
 {
 	struct pinctrl *pinctrl;
 
-	#ifndef ASUS_ZC550KL_PROJECT
+	#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 	/* ASUS_BSP Paul +++ */
 	g_gpio_audio_debug = of_get_named_gpio(pdev->dev.of_node, "AUDIO_DEBUG", 0);
 	if (g_gpio_audio_debug < 0)
@@ -3192,7 +3192,7 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 		dev_dbg(&pdev->dev, "Headset is using internal micbias\n");
 		mbhc_cfg.hs_ext_micbias = false;
 	}
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	{
 		//mei_huang +++ config speaker
 		ext_spk_amp_gpio = of_get_named_gpio(pdev->dev.of_node,
@@ -3283,7 +3283,7 @@ static int msm8x16_asoc_machine_probe(struct platform_device *pdev)
 	}
 	return 0;
 err:
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	//mei_huang +++ config speaker
 	if (ext_spk_amp_gpio >= 0) {
 		gpio_free(ext_spk_amp_gpio);
@@ -3307,7 +3307,7 @@ static int msm8x16_asoc_machine_remove(struct platform_device *pdev)
 	struct snd_soc_card *card = platform_get_drvdata(pdev);
 	struct msm8916_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	//mei_huang +++ config speaker
 	if (ext_spk_amp_gpio >= 0)
 		gpio_free(ext_spk_amp_gpio);
@@ -3319,7 +3319,7 @@ static int msm8x16_asoc_machine_remove(struct platform_device *pdev)
 		iounmap(pdata->vaddr_gpio_mux_mic_ctl);
 	if (pdata->vaddr_gpio_mux_pcm_ctl)
 		iounmap(pdata->vaddr_gpio_mux_pcm_ctl);
-	#ifdef ASUS_ZC550KL_PROJECT
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	//mei_huang +++ config speaker
 	ext_spk_amp_gpio = -1;
 	//mei_huang ---

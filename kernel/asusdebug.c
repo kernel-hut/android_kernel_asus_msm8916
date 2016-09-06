@@ -25,7 +25,7 @@
 //---
 #include <linux/err.h>
 #include <linux/oem_functions.h>
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 extern int g_uart_dbg_mode;
 #else
 extern int g_user_dbg_mode;
@@ -1178,7 +1178,7 @@ static ssize_t asusdebug_read(struct file *file, char __user *buf,
 
 #include <linux/reboot.h>
 extern int rtc_ready;
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 int watchdog_test = 0;
 #endif
 int asus_asdf_set = 0;
@@ -1193,7 +1193,7 @@ static ssize_t asusdebug_write(struct file *file, const char __user *buf, size_t
 
 	if (strncmp(messages, "panic", strlen("panic")) == 0) {
 		panic("panic test");
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	} else if (strncmp(messages, "enuart", strlen("enuart")) == 0) {
 		g_uart_dbg_mode = 1;
 		printk("Kernel  uart dbg mode = %d\n", g_uart_dbg_mode);
@@ -1248,7 +1248,7 @@ static ssize_t asusdebug_write(struct file *file, const char __user *buf, size_t
 		delta_all_thread_info();
 		save_phone_hang_log(1);
 		return count;
-#ifdef ASUS_ZC550KL_PROJECT		
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT		
 	} else if(strncmp(messages, "watchdog_test", 13) == 0)
     {
 		printk("start watchdog test...\r\n");
@@ -1382,7 +1382,7 @@ static const struct file_operations proc_kmsgconfig_operations = {
        .read = seq_read,
        .write = Kmsgconfig_proc_write,
 };
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 ///////////////////////////////////////////////////////////////////////
 //
 // printk controller
@@ -1442,7 +1442,7 @@ static int __init proc_asusdebug_init(void)
 	//+++ [ZC550KL] ASUS_BSP suri_gu@asus.com for screen off in factory mode when sys.screentimeout=1
 	proc_create_data("driver/screenofftimeout", 0666, NULL, &asus_screenofftimeout_switch_proc_fops, NULL);
 	//---
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
      proc_create_data("asusklog", S_IRWXUGO, NULL, &klog_proc_fops, NULL);
 #endif
 	PRINTK_BUFFER_VA = ioremap(PRINTK_BUFFER_PA, PRINTK_BUFFER_SIZE);

@@ -41,7 +41,7 @@
 #include "mdss_panel.h"
 
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 extern void rt4532_suspend(void);
 extern void rt4532_resume(void);
 extern void ftxxxx_ts_suspend(void);
@@ -54,7 +54,7 @@ extern void ftxxxx_ts_resume(void);
 #endif
 
 extern struct mdss_panel_data *g_mdss_pdata;
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 extern char lcd_unique_id[64];
 #else
 
@@ -64,11 +64,11 @@ void set_tcon_cmd(char *cmd, short len);
 void get_tcon_cmd(char cmd, int rlen);
 static struct mutex cmd_mutex;
 char bl_cmd[2] = {0x51, 0x64};
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 char dimming_cmd[2] = {0x53, 0x2C};
 
 #endif
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 #ifndef ASUS_FACTORY_BUILD
 char cabc_mode[2] = {0x55, Still_MODE};
 #else
@@ -79,7 +79,7 @@ char cabc_mode[2] = {0x55, Still_MODE};
 
 #endif
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 static struct panel_list supp_panels[] = {
 	{"AUO", ZE500KL_LCD_AUO},
 	{"TM", ZE500KL_LCD_TIANMA},
@@ -94,7 +94,7 @@ static struct panel_list supp_panels[] = {
 #include <linux/proc_fs.h>
 #include <linux/file.h>
 #include <linux/uaccess.h>
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 #define BL_DEFAULT 450
 #define BL_BOUNDARY_VAL 12
 #define LCD_CALIBRATION_PATH "/factory/lcd_calibration.ini"
@@ -451,7 +451,7 @@ extern int display_commit_cnt; //ASUS BSP Bernard: frame commit count
 static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 {
 	struct mdss_panel_info *pinfo;
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 	//ASUS BSP Bernard +++
     int tmp_level = 0;
 #ifndef ASUS_FACTORY_BUILD
@@ -468,7 +468,7 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 	int tmp_level = 0;
 
 #endif
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
     if (level == 0) {
         printk("[BL] Set %s brightness (%d) return func.\n", supp_panels[g_asus_lcdID].name, level);
         return;
@@ -487,7 +487,7 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 		if (ctrl->ndx != DSI_CTRL_LEFT)
 			return;
 	}
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
     //ASUS BSP Bernard +++
 #ifndef ASUS_FACTORY_BUILD
     if (g_bl_first_bootup) {
@@ -520,7 +520,7 @@ static void mdss_dsi_panel_bklt_dcs(struct mdss_dsi_ctrl_pdata *ctrl, int level)
 		}
 
 #endif
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 #ifndef ASUS_FACTORY_BUILD
     if ((g_adjust_bl < g_calibrated_bl) && (g_adjust_bl > 0))
         level = level * g_adjust_bl / g_calibrated_bl;
@@ -895,7 +895,7 @@ static void mdss_dsi_panel_bl_ctrl(struct mdss_panel_data *pdata,
 
 	pr_debug("[Display] %s: bl_level=%d\n" ,__func__, bl_level);	/*ASUS_BSP: Louis ++ */
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 
 	if ((bl_level < pdata->panel_info.bl_min) && (bl_level != 0))
 		bl_level = pdata->panel_info.bl_min;
@@ -968,7 +968,7 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 
 	if (ctrl->on_cmds.cmd_cnt)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
     set_tcon_cmd(cabc_mode, ARRAY_SIZE(cabc_mode)); //ASUS_BSP: Louis+++, restore cabc level
 	
 	rt4532_resume();/*Austin+++*/
@@ -1043,7 +1043,7 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 
 	pr_debug("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
 	printk("[Display] %s: ++\n", __func__);
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 
 	rt4532_suspend();/*Austin+++*/
 
@@ -1103,7 +1103,7 @@ static int mdss_dsi_panel_low_power_config(struct mdss_panel_data *pdata,
 //Louis, Panel debug control interface +++
 #define LCD_REGISTER_RW         "driver/panel_reg_rw"
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 #define DUMP_LCD_REGISTER       "driver/panel_reg"
 #define DUMP_CALIBRATION_INFO   "driver/panel_info"
 #define PANEL_REG_FILE       	"/data/data/ze500kl_panel_reg.txt"
@@ -1325,7 +1325,7 @@ void get_tcon_cmd(char cmd, int rlen)
 }
 
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 //////////////////  dump panel reg  //////////////////
 static char dsi_num_err_r[2] = {0x05, 0x00};
 static char power_mode_r[2] = {0x0A, 0x00};
@@ -2749,12 +2749,12 @@ int mdss_dsi_panel_init(struct device_node *node,
 
 	//ASUS_BSP: Louis ++
 	mutex_init(&cmd_mutex);
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 	proc_create(ZE500KL_LCD_UNIQUE_ID, 0444, NULL, &lcd_uniqueID_proc_ops);
 	proc_create(ZE500KL_LCD_ID, 0444, NULL, &lcd_id_proc_ops);
 #endif
 	proc_create(LCD_REGISTER_RW, 0640, NULL, &lcd_reg_rw_ops);
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 	proc_create(DUMP_LCD_REGISTER, 0644, NULL, &lcd_reg_proc_ops);
 	//ASUS_BSP: Louis --
 

@@ -229,7 +229,7 @@ static int qpnp_vib_set(struct qpnp_vib *vib, int on)
 		}	
 	#endif	
 	 //+++ SZ_BSP gauss_li fix zc550 vibrator too weak 
-    #ifdef ASUS_ZC550KL_PROJECT
+    #ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	   if (g_vib_stop_val < 30)
 		{
 			 printk("[vibrator]  before timer = %d ms\n",g_vib_stop_val);

@@ -181,7 +181,7 @@ struct scsi_cmnd;
 #define WRITE_32	      0x0b
 #define WRITE_SAME_32	      0x0d
 //ASUS_BSP+++ Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 #define FACTORY_MODE              0xF1
 #endif
 //ASUS_BSP--- Show_Wang "[ZC550KL][USB][NA][Spec] add scsi cmd to enable diag"

@@ -34,7 +34,7 @@
 #include <soc/qcom/boot_stats.h>
 
 //ASUS BSP: Enter_Zhang+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/oem_functions.h>
@@ -1449,7 +1449,7 @@ const int cpu_is_krait_v3(void)
 }
 
 //ASUS BSP: Enter_Zhang+++
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 static struct oem_shared_info* msm_get_hardware_info(void)
 {
 	return (struct oem_shared_info*)smem_find(SMEM_ID_VENDOR0, sizeof(struct oem_shared_info), 0, SMEM_ANY_HOST_FLAG);
@@ -1693,7 +1693,7 @@ static int __init soc_boot_info_proc_init(void)
 	return 0;
 }
 late_initcall(soc_boot_info_proc_init);
-#endif //ASUS_ZC550KL_PROJECT
+#endif //CONFIG_ASUS_ZC550KL_PROJECT
 //ASUS BSP: Enter_Zhang---
 
 

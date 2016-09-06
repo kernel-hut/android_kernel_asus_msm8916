@@ -45,7 +45,7 @@
 #include "msm8916-wcd-irq.h"
 #include "msm8x16_wcd_registers.h"
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 /* ASUS_BSP Paul +++ */
 #include <linux/proc_fs.h>
 struct msm8x16_wcd_priv *g_msm8x16_wcd_priv;
@@ -54,7 +54,7 @@ extern int g_gpio_audio_debug;
 /* ASUS_BSP Paul --- */
 #endif
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 //mei_huang +++ enable speaker not need to enable mic
 extern int speaker_run;
 //mei_huang ---
@@ -5453,7 +5453,7 @@ static void msm8x16_wcd_configure_cap(struct snd_soc_codec *codec,
 	}
 }
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 /* ASUS_BSP Paul +++ */
 #ifdef CONFIG_PROC_FS
 #define AUDIO_DEBUG_PROC_FILE "driver/audio_debug"
@@ -5783,7 +5783,7 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 		return -ENOMEM;
 	}
 
-	#ifndef ASUS_ZC550KL_PROJECT
+	#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 	/* ASUS_BSP Paul +++ */
 	g_msm8x16_wcd_priv = msm8x16_wcd_priv;
 
@@ -5817,7 +5817,7 @@ static int msm8x16_wcd_codec_remove(struct snd_soc_codec *codec)
 	kfree(msm8x16_wcd_priv->fw_data);
 	kfree(msm8x16_wcd_priv);
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 /* ASUS_BSP Paul +++ */
 #ifdef CONFIG_PROC_FS
 	remove_audio_debug_proc_file();

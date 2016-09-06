@@ -639,7 +639,7 @@ static int qpnp_lbc_is_usb_chg_plugged_in(struct qpnp_lbc_chip *chip)
 
 	return (usbin_valid_rt_sts & USB_IN_VALID_MASK) ? 1 : 0;
 }
- #ifndef ASUS_ZC550KL_PROJECT
+ #ifndef CONFIG_ASUS_ZC550KL_PROJECT
 int is_usb_chg_plugged_in(void)
 {
 	int rc;
@@ -1225,7 +1225,7 @@ static int get_prop_charge_type(struct qpnp_lbc_chip *chip)
 	return POWER_SUPPLY_CHARGE_TYPE_NONE;
 }
 extern int asus_battery_update_status(void);
- #ifdef ASUS_ZC550KL_PROJECT
+ #ifdef CONFIG_ASUS_ZC550KL_PROJECT
 static int get_prop_batt_status(struct qpnp_lbc_chip *chip)
 {
 	int rc;
@@ -1573,7 +1573,7 @@ static int qpnp_batt_property_is_writeable(struct power_supply *psy,
  *    (may be from a previous soc resume)
  * b. disable charging
  */
- #ifdef ASUS_ZC550KL_PROJECT
+ #ifdef CONFIG_ASUS_ZC550KL_PROJECT
 void smb358_update_aicl_work(int time)
  {
 
@@ -1660,7 +1660,7 @@ static int qpnp_batt_power_set_property(struct power_supply *psy,
 	return rc;
 }
 
- #ifdef ASUS_ZC550KL_PROJECT
+ #ifdef CONFIG_ASUS_ZC550KL_PROJECT
 int g_charge_full=0;
 int g_charge_now=0;
  #else

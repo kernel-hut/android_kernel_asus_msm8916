@@ -387,7 +387,7 @@ __setup("LASER_ID=", set_laser_id);
 EXPORT_SYMBOL(g_ASUS_laserID);
 //--- ASUS_BSP : Add for LASER ID
 
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 uint32_t zc550kl_pcb_rev_val = ZC550KL_8916_MP;
 static int set_zc550kl_pcb_rev(char *str)
 {

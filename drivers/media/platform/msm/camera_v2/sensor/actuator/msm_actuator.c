@@ -599,7 +599,7 @@ static int32_t msm_actuator_power_down(struct msm_actuator_ctrl_t *a_ctrl)
 		//a_ctrl->i2c_reg_tbl = NULL;
 
 		vreg_cfg = &a_ctrl->vreg_cfg;
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 		gpio_set_value_cansleep(
 			vreg_cfg->gpio_conf->gpio_num_info->
 			gpio_num[SENSOR_GPIO_AF_PWDM],
@@ -1167,7 +1167,7 @@ static int32_t msm_actuator_power_up(struct msm_actuator_ctrl_t *a_ctrl)
 	 		return rc;
 	 	}
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 		rc = msm_camera_request_gpio_table(
 			vreg_cfg->gpio_conf->cam_gpio_req_tbl,
 			vreg_cfg->gpio_conf->cam_gpio_req_tbl_size, 1);

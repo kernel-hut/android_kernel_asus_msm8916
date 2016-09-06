@@ -68,7 +68,7 @@
 
 #define BLANK_FLAG_LP	FB_BLANK_VSYNC_SUSPEND
 #define BLANK_FLAG_ULP	FB_BLANK_NORMAL
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 //+++ ASUS_BSP: Louis
 #define COMMIT_FRAMES_COUNT 5
 int display_commit_cnt;
@@ -76,7 +76,7 @@ extern char bl_cmd[2];
 extern char dimming_cmd[2];
 #endif
 extern void set_tcon_cmd(char*, short);
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 extern int g_dcs_bl_value;
 int g_charger_cnt = 2;
 //--- ASUS_BSP: Louis
@@ -1558,7 +1558,7 @@ static int mdss_fb_blank_sub(int blank_mode, struct fb_info *info,
 				mdss_fb_release_fences(mfd);
 			mfd->op_enable = true;
 			complete(&mfd->power_off_comp);
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
             //+++ ASUS_BSP: Louis
             if (display_commit_cnt == 0)
                 display_commit_cnt = COMMIT_FRAMES_COUNT;
@@ -3162,7 +3162,7 @@ static int mdss_fb_set_par(struct fb_info *info)
 		mdss_fb_blank_sub(FB_BLANK_UNBLANK, info, mfd->op_enable);
 		mfd->panel_reconfig = false;
 	}
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
     if(g_charger_cnt == 1) {
         bl_cmd[1] = 100;
         set_tcon_cmd(bl_cmd,ARRAY_SIZE(bl_cmd));
@@ -3456,7 +3456,7 @@ static int mdss_fb_display_commit(struct fb_info *info,
 		return ret;
 	}
 	ret = mdss_fb_pan_display_ex(info, &disp_commit);
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 	//+++ ASUS_BSP: Louis
     if (display_commit_cnt > 0) {
         if (display_commit_cnt == 4) {

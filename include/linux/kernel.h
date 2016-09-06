@@ -123,7 +123,7 @@ enum DEVICE_MCPID
 extern enum DEVICE_MCPID g_mcp_id;
 //ASUS_BSP: Deeo ---
 //ASUS_BSP +++ Jeffery "add for uart / kernel log control"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 extern int g_uart_dbg_mode;
 extern int g_user_klog_mode;
 #endif

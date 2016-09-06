@@ -172,7 +172,7 @@ obj-$(CONFIG_SENSORS_SSC)	+= sensors/
 
 #Texura
 ifdef CONFIG_TEXURA_ARM64
-	ifeq ($(ASUS_BUILD_PROJECT), ZC550KL)
+	ifeq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
 		ifeq ($(IS_BOARD_PLATFORM), 8939)
 			ifdef CONFIG_TEXURA_USERDEBUG
 			obj-y				+= exfat/ZC550KL/8939/userdebug/64/objects/

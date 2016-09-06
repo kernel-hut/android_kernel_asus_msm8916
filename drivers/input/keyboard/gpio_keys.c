@@ -403,7 +403,7 @@ static struct attribute_group gpio_keys_attr_group = {
 	.attrs = gpio_keys_attrs,
 };
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 unsigned int b_press = 0;
 #endif
 
@@ -432,7 +432,7 @@ static void gpio_keys_gpio_report_event(struct gpio_button_data *bdata)
 			//ASUS BSP Austin_T--- : Fix DoubleClickVolumeKey sometimes can't bring up panel
 		}
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 		if (state) {
 			if(button->code == 114)
 				b_press |= 0x01;

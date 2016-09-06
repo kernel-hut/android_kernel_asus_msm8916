@@ -3,7 +3,7 @@ ccflags-y += -Idrivers/media/platform/msm/camera_v2/msm_vb2
 ccflags-y += -Idrivers/media/platform/msm/camera_v2/camera
 ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/io
 ccflags-y += -Idrivers/media/platform/msm/camera_v2/sensor/cci
-ifneq ($(ASUS_BUILD_PROJECT), ZC550KL)
+ifneq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
 	obj-$(CONFIG_MSMB_CAMERA) += cci/ io/ csiphy/ csid/ actuator/  eeprom/ flash/ laser_focus/
 else
 	obj-$(CONFIG_MSMB_CAMERA) += cci/ io/ csiphy/ csid/ actuator/  eeprom/ flash_zc550kl/ laser_focus_zc550kl/

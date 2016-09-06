@@ -2073,7 +2073,7 @@ asmlinkage int printk_emit(int facility, int level,
 }
 EXPORT_SYMBOL(printk_emit);
 
-#ifndef ASUS_ZC550KL_PROJECT
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 extern int g_user_dbg_mode;
 #endif
 extern unsigned int asusdebug_enable;
@@ -2105,7 +2105,7 @@ asmlinkage int printk(const char *fmt, ...)
 
 	if (asusdebug_enable==0x11223344)
 		return 0;
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	if ( g_user_klog_mode==0 )
 		return 0;
 #else

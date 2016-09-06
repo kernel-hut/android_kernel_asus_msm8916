@@ -5321,7 +5321,7 @@ static int initialise_recv(struct iris_device *radio)
 		return retval;
 	}
 //ASUS_BSP+++ Show_Wang "[ZC550KL][FM][NA][Other] set FM SINR to 8 as HW suggest"
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 	radio->ch_det_threshold.sinr = 8;
 #else
 	radio->ch_det_threshold.sinr = 1;//This value is set according to VD's test result
