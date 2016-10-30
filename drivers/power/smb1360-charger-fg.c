@@ -3666,6 +3666,7 @@ static int smb1360_regulator_init(struct smb1360_chip *chip)
 
 	return rc;
 }
+int check_CSIR_function(void);
 
 static int smb1360_check_batt_profile(struct smb1360_chip *chip)
 {
@@ -3713,13 +3714,21 @@ static int smb1360_check_batt_profile(struct smb1360_chip *chip)
 						loaded_profile, new_profile);
 		}
 	}*/
-	if(loaded_profile == 0)
+	/*if(loaded_profile == 0)
 	{
 		pr_info("loaded profile is profile A ,skip ! \n");
 		return 0;
-	}
-	bid_mask = BATT_PROFILEA_MASK;
-	pr_info("load battery profile A! \n");
+	}*/
+	if(check_CSIR_function() == 0x2334 )
+	{
+		pr_info("load battery profile A! \n");
+		bid_mask = BATT_PROFILEA_MASK;
+	}	
+	else
+	{
+		pr_info("load battery profile B! \n");
+		bid_mask = BATT_PROFILEB_MASK;
+	}	
 	/* set the BID mask */
 	rc = smb1360_masked_write(chip, CFG_FG_BATT_CTRL_REG,
 				BATT_PROFILE_SELECT_MASK, bid_mask);
@@ -4841,7 +4850,7 @@ static int smb1360_parse_jeita_params(struct smb1360_chip *chip)
 			chip->hot_hysteresis = temp[1];
 		}
 
-		pr_debug("otp_hard_jeita_config = %d, otp_cold_bat_decidegc = %d\n"
+		pr_info("otp_hard_jeita_config = %d, otp_cold_bat_decidegc = %d\n"
 			"otp_hot_bat_decidegc = %d, cold_hysteresis = %d\n"
 			"hot_hysteresis = %d\n",
 			chip->otp_hard_jeita_config,
@@ -4917,7 +4926,7 @@ static int smb1360_parse_jeita_params(struct smb1360_chip *chip)
 		}
 	}
 
-	pr_debug("soft-jeita-enabled = %d, warm-bat-decidegc = %d, cool-bat-decidegc = %d, cool-bat-mv = %d, warm-bat-mv = %d, cool-bat-ma = %d, warm-bat-ma = %d\n",
+	pr_info("soft-jeita-enabled = %d, warm-bat-decidegc = %d, cool-bat-decidegc = %d, cool-bat-mv = %d, warm-bat-mv = %d, cool-bat-ma = %d, warm-bat-ma = %d\n",
 		chip->soft_jeita_supported, chip->warm_bat_decidegc,
 		chip->cool_bat_decidegc, chip->cool_bat_mv, chip->warm_bat_mv,
 		chip->cool_bat_ma, chip->warm_bat_ma);
@@ -5957,12 +5966,12 @@ int check_CSIR_function(void)
 		pr_err("Unable to set FG access I2C address\n");
 	}
 
-	printk("++++ fg_i2c_addr = %X \n",smb1360_dev->fg_i2c_addr);	
+	//printk("++++ fg_i2c_addr = %X \n",smb1360_dev->fg_i2c_addr);	
 	rc = smb1360_fg_read(smb1360_dev, 0xD2, &CSIR_first);
 	
 	rc = smb1360_fg_read(smb1360_dev, 0xD3, &CSIR_last);
  
-	printk("++++ CSIR version = %X%X\n",CSIR_first,CSIR_last);
+	//printk("++++ CSIR version = %X%X\n",CSIR_first,CSIR_last);
 	
 	CSIR_Version = (CSIR_first<<8 ) + CSIR_last;
 	
