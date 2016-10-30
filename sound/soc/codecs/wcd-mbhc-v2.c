@@ -1359,23 +1359,23 @@ correct_plug_type:
 		(!det_extn_cable_en)) {
 		if (wcd_is_special_headset(mbhc)) {
 			/*ASUS_BSP : detect impedance first*/
-			if (mbhc->impedance_detect &&
-				mbhc->mbhc_cb->compute_impedance){
-					mbhc->mbhc_cb->compute_impedance(mbhc,
-						&mbhc->zl, &mbhc->zr);
-			}
+//			if (mbhc->impedance_detect &&
+//				mbhc->mbhc_cb->compute_impedance){
+//					mbhc->mbhc_cb->compute_impedance(mbhc,
+//						&mbhc->zl, &mbhc->zr);
+//			}
 			/*ASUS_BSP : check impedance is higher than 1000*/
-			if ((mbhc->zl >= 1000) && ( mbhc->zr >= 1000)) {
-				pr_debug("%s: plug in might be illigal headset \n",
-					__func__);
-				plug_type = MBHC_PLUG_TYPE_INVALID ;
-				goto exit;
-			} else {
+//			if ((mbhc->zl >= 1000) && ( mbhc->zr >= 1000)) {
+//				pr_debug("%s: plug in might be illigal headset \n",
+//					__func__);
+//				plug_type = MBHC_PLUG_TYPE_INVALID ;
+//				goto exit;
+//			} else {
 				pr_debug("%s: Special headset found %d\n",
 						__func__, plug_type);
 				plug_type = MBHC_PLUG_TYPE_HEADSET;
 				goto report;
-			}
+//			}
 		}
 	}
 
