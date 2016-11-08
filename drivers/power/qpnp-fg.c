@@ -901,7 +901,7 @@ static int set_prop_jeita_temp(struct fg_chip *chip,
 
 	cancel_delayed_work_sync(
 		&chip->update_jeita_setting);
-	schedule_delayed_work(
+	queue_delayed_work(system_power_efficient_wq,
 		&chip->update_jeita_setting, 0);
 
 	return rc;
@@ -1049,7 +1049,7 @@ static void update_sram_data(struct work_struct *work)
 		resched_ms = SRAM_PERIOD_NO_ID_UPDATE_MS;
 	}
 	get_current_time(&chip->last_sram_update_time);
-	schedule_delayed_work(
+	queue_delayed_work(system_power_efficient_wq,
 		&chip->update_sram_data,
 		msecs_to_jiffies(resched_ms));
 }
@@ -1263,7 +1263,7 @@ static irqreturn_t fg_batt_missing_irq_handler(int irq, void *_chip)
 			INIT_COMPLETION(chip->batt_id_avail);
 			schedule_work(&chip->batt_profile_init);
 			cancel_delayed_work(&chip->update_sram_data);
-			schedule_delayed_work(
+			queue_delayed_work(system_power_efficient_wq,
 				&chip->update_sram_data,
 				msecs_to_jiffies(0));
 		} else {
@@ -2459,7 +2459,7 @@ static int fg_probe(struct spmi_device *spmi)
 		}
 	}
 
-	schedule_delayed_work(
+	queue_delayed_work(system_power_efficient_wq,
 		&chip->update_jeita_setting,
 		msecs_to_jiffies(INIT_JEITA_DELAY_MS));
 
@@ -2553,7 +2553,7 @@ static int fg_resume(struct device *dev)
 
 	cancel_delayed_work_sync(
 		&chip->update_sram_data);
-	schedule_delayed_work(
+	queue_delayed_work(system_power_efficient_wq,
 		&chip->update_sram_data, msecs_to_jiffies(time_left * 1000));
 	return 0;
 }
