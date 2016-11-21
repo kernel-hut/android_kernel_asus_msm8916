@@ -11,6 +11,7 @@
  */
 
 #include "msm8916-ion.dtsi"
+#include "cyanogenmod-pstore.dtsi"
 
 / {
 	memory {
@@ -72,7 +73,7 @@
 			reg = <0x0 0x83000000 0x0 0x1400000>;
 			label = "cont_splash_mem";
 		};
-		
+
 		asus_debug_mem: asus_debug_region@0 {
 			linux,reserve-contiguous-region;
 			linux,reserve-region;
