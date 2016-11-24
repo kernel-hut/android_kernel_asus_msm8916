@@ -1354,16 +1354,15 @@ kgsl_sharedmem_region_empty(struct kgsl_process_private *private,
 static inline struct kgsl_mem_entry * __must_check
 kgsl_sharedmem_find_id(struct kgsl_process_private *process, unsigned int id)
 {
-	int result = 0;
+	int result;
 	struct kgsl_mem_entry *entry;
 
 	spin_lock(&process->mem_lock);
 	entry = idr_find(&process->mem_idr, id);
-	if (entry)
-		result = kgsl_mem_entry_get(entry);
+	result = kgsl_mem_entry_get(entry);
 	spin_unlock(&process->mem_lock);
 
-	if (!result)
+	if (result == 0)
 		return NULL;
 	return entry;
 }
@@ -1579,7 +1578,7 @@ void kgsl_dump_syncpoints(struct kgsl_device *device,
 		}
 		case KGSL_CMD_SYNCPOINT_TYPE_FENCE:
 			if (event->handle)
-				dev_err(device->dev, "  fence: [%p] %s\n",
+				dev_err(device->dev, "  fence: [%pK] %s\n",
 					event->handle->fence,
 					event->handle->name);
 			else
@@ -2871,7 +2870,8 @@ static int kgsl_setup_useraddr(struct kgsl_mem_entry *entry,
 	struct dma_buf *dmabuf = NULL;
 	struct vm_area_struct *vma = NULL;
 
-	if (param->offset != 0 || param->hostptr == 0
+	if (param->len == 0 || param->offset != 0
+		|| param->hostptr == 0
 		|| !KGSL_IS_PAGE_ALIGNED(param->hostptr)
 		|| !KGSL_IS_PAGE_ALIGNED(param->len))
 		return -EINVAL;
@@ -3894,7 +3894,8 @@ kgsl_mmap_memstore(struct kgsl_device *device, struct vm_area_struct *vma)
 static void kgsl_gpumem_vm_open(struct vm_area_struct *vma)
 {
 	struct kgsl_mem_entry *entry = vma->vm_private_data;
-	if (!kgsl_mem_entry_get(entry))
+
+	if (kgsl_mem_entry_get(entry) == 0)
 		vma->vm_private_data = NULL;
 }
 
@@ -4623,9 +4624,8 @@ int kgsl_device_platform_probe(struct kgsl_device *device)
 	disable_irq(device->pwrctrl.interrupt_num);
 
 	KGSL_DRV_INFO(device,
-		"dev_id %d regs phys 0x%08lx size 0x%08x virt %p\n",
-		device->id, device->reg_phys, device->reg_len,
-		device->reg_virt);
+		"dev_id %d regs phys 0x%08lx size 0x%08x\n",
+		device->id, device->reg_phys, device->reg_len);
 
 	rwlock_init(&device->context_lock);
 

@@ -121,6 +121,7 @@ enum {
 	SET_MODE_TYPE,
 	//Sharon--
 
+	CORE_CUSTOM_TOPOLOGIES_CAL_TYPE,
 	MAX_CAL_TYPES,
 };
 

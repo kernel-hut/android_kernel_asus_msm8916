@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2014, 2016 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,10 +21,6 @@
 #include <linux/ratelimit.h>
 #include <sound/audio_calibration.h>
 #include <sound/audio_cal_utils.h>
-/* ASUS_BSP Paul +++ */
-#include <sound/soc.h>
-#include "../../codecs/msm8x16-wcd.h"
-/* ASUS_BSP Paul --- */
 
 struct audio_cal_client_info {
 	struct list_head		list;
@@ -40,16 +36,6 @@ struct audio_cal_info {
 
 static struct audio_cal_info	audio_cal;
 
-/* ASUS_BSP Paul +++ */
-int gRingtoneProfile = 0;
-int gSkypeState = 0;
-extern struct snd_soc_codec *registered_codec;
-/* ASUS_BSP Paul --- */
-
-//Sharon++
-int audio_mode = -1;
-int mode = -1;
-//Sharon--
 
 static bool callbacks_are_equal(struct audio_cal_callbacks *callback1,
 				struct audio_cal_callbacks *callback2)
@@ -410,7 +396,6 @@ static long audio_cal_shared_ioctl(struct file *file, unsigned int cmd,
 	int				ret = 0;
 	int32_t				size;
 	struct audio_cal_basic		*data = NULL;
-	struct audio_codec_reg *codec_reg = NULL; /* ASUS_BSP Paul +++ */
 	pr_debug("%s\n", __func__);
 
 	switch (cmd) {
@@ -421,124 +406,6 @@ static long audio_cal_shared_ioctl(struct file *file, unsigned int cmd,
 	case AUDIO_GET_CALIBRATION:
 	case AUDIO_POST_CALIBRATION:
 		break;
-	/* ASUS_BSP Paul +++ */
-	case AUDIO_SET_CODEC_REG:
-		mutex_lock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-		codec_reg = kmalloc(sizeof(struct audio_codec_reg), GFP_KERNEL);
-		if (codec_reg == NULL) {
-			pr_err("%s: could not allocated codec_reg!\n", __func__);
-			ret = -ENOMEM;
-			mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-			goto done;
-		}
-		if (copy_from_user(codec_reg, (void *)arg,
-				sizeof(struct audio_codec_reg))) {
-			pr_err("%s: Could not copy codec_reg from user\n", __func__);
-			ret = -EFAULT;
-			mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-			goto done;
-		}
-		if (codec_reg->index > MSM8X16_WCD_CACHE_SIZE - 1) {
-			pr_err("%s: index too large\n", __func__);
-			ret = -EINVAL;
-			mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-			goto done;
-		}
-		if (!snd_soc_codec_readable_register(registered_codec, codec_reg->index) ||
-				snd_soc_codec_volatile_register(registered_codec, codec_reg->index)) {
-			pr_err("%s: reg[0x%x] is not writable\n", __func__, codec_reg->index);
-			ret = -EINVAL;
-			mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-			goto done;
-		}
-		ret = snd_soc_write(registered_codec, codec_reg->index, codec_reg->value);
-		mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-		goto done;
-	case AUDIO_GET_CODEC_REG:
-		mutex_lock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-		codec_reg = kmalloc(sizeof(struct audio_codec_reg), GFP_KERNEL);
-		if (codec_reg == NULL) {
-			pr_err("%s: could not allocated codec_reg!\n", __func__);
-			ret = -ENOMEM;
-			mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-			goto done;
-		}
-		if (copy_from_user(codec_reg, (void *)arg,
-				sizeof(struct audio_codec_reg))) {
-			pr_err("%s: Could not copy codec_reg from user\n", __func__);
-			ret = -EFAULT;
-			mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-			goto done;
-		}
-		if (codec_reg->index > MSM8X16_WCD_CACHE_SIZE - 1) {
-			pr_err("%s: index too large\n", __func__);
-			ret = -EINVAL;
-			mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-			goto done;
-		}
-		if (!snd_soc_codec_readable_register(registered_codec, codec_reg->index)) {
-			pr_err("%s: reg[0x%x] is not readable\n", __func__, codec_reg->index);
-			ret = -EINVAL;
-			mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-			goto done;
-		}
-		codec_reg->value = snd_soc_read(registered_codec, codec_reg->index);
-		if (copy_to_user((void *)arg, codec_reg,
-				sizeof(struct audio_codec_reg))) {
-			pr_err("%s: Could not copy codec_reg to user\n", __func__);
-			ret = -EFAULT;
-		}
-		mutex_unlock(&audio_cal.cal_mutex[CODEC_REG_TYPE]);
-		goto done;
-	case AUDIO_SET_RINGTONE_PROFILE:
-		mutex_lock(&audio_cal.cal_mutex[RINGTONE_PROFILE_TYPE]);
-		if (copy_from_user(&gRingtoneProfile, (void *)arg,
-				sizeof(gRingtoneProfile))) {
-			pr_err("%s: Could not copy gRingtoneProfile from user\n", __func__);
-			ret = -EFAULT;
-		}
-		mutex_unlock(&audio_cal.cal_mutex[RINGTONE_PROFILE_TYPE]);
-		goto done;
-	case AUDIO_GET_RINGTONE_PROFILE:
-		mutex_lock(&audio_cal.cal_mutex[RINGTONE_PROFILE_TYPE]);
-		if (copy_to_user((void *)arg, &gRingtoneProfile,
-				sizeof(gRingtoneProfile))) {
-			pr_err("%s: Could not copy gRingtoneProfile to user\n", __func__);
-			ret = -EFAULT;
-		}
-		mutex_unlock(&audio_cal.cal_mutex[RINGTONE_PROFILE_TYPE]);
-		goto done;
-	case AUDIO_SET_SKYPE_STATE:
-		mutex_lock(&audio_cal.cal_mutex[SKYPE_STATE_TYPE]);
-		if (copy_from_user(&gSkypeState, (void *)arg,
-				sizeof(gSkypeState))) {
-			pr_err("%s: Could not copy gSkypeState from user\n", __func__);
-			ret = -EFAULT;
-		}
-		mutex_unlock(&audio_cal.cal_mutex[SKYPE_STATE_TYPE]);
-		goto done;
-	case AUDIO_GET_SKYPE_STATE:
-		mutex_lock(&audio_cal.cal_mutex[SKYPE_STATE_TYPE]);
-		if (copy_to_user((void *)arg, &gSkypeState,
-				sizeof(gSkypeState))) {
-			pr_err("%s: Could not copy gSkypeState to user\n", __func__);
-			ret = -EFAULT;
-		}
-		mutex_unlock(&audio_cal.cal_mutex[SKYPE_STATE_TYPE]);
-		goto done;
-	/* ASUS_BSP Paul --- */
-	//Sharon++
-	case AUDIO_SET_MODE:
-		mutex_lock(&audio_cal.cal_mutex[SET_MODE_TYPE]);
-		if (copy_from_user(&mode, (void *)arg, sizeof(mode))) {
-			pr_err("%s: Could not copy lmode to user\n", __func__);
-			ret = -EFAULT;
-		}
-		audio_mode = mode;
-		printk("%s: Audio mode status:audio_mode=%d\n", __func__, audio_mode);
-		mutex_unlock(&audio_cal.cal_mutex[SET_MODE_TYPE]);
-		goto done;
-	//Sharon--
 	default:
 		pr_err("%s: ioctl not found!\n", __func__);
 		ret = -EFAULT;
@@ -627,7 +494,13 @@ static long audio_cal_shared_ioctl(struct file *file, unsigned int cmd,
 			goto unlock;
 		if (data == NULL)
 			goto unlock;
-		if (copy_to_user((void *)arg, data,
+		if ((sizeof(data->hdr) + data->hdr.cal_type_size) > size) {
+			pr_err("%s: header size %zd plus cal type size %d are greater than data buffer size %d\n",
+				__func__, sizeof(data->hdr),
+				data->hdr.cal_type_size, size);
+			ret = -EFAULT;
+			goto unlock;
+		} else if (copy_to_user((void *)arg, data,
 			sizeof(data->hdr) + data->hdr.cal_type_size)) {
 			pr_err("%s: Could not copy cal type to user\n",
 				__func__);
@@ -640,18 +513,8 @@ unlock:
 	mutex_unlock(&audio_cal.cal_mutex[data->hdr.cal_type]);
 done:
 	kfree(data);
-	kfree(codec_reg); /* ASUS_BSP Paul +++ */
 	return ret;
 }
-
-//Sharon++
-int get_audiomode(void)
-{
-	printk("%s: Audio mode=%d\n", __func__, audio_mode);
-	return audio_mode;
-}
-EXPORT_SYMBOL(get_audiomode);
-//Sharon--
 
 static long audio_cal_ioctl(struct file *f,
 		unsigned int cmd, unsigned long arg)
@@ -673,25 +536,6 @@ static long audio_cal_ioctl(struct file *f,
 							204, compat_uptr_t)
 #define AUDIO_POST_CALIBRATION32	_IOWR(CAL_IOCTL_MAGIC, \
 							205, compat_uptr_t)
-/* ASUS_BSP Paul +++ */
-#define AUDIO_SET_CODEC_REG32		_IOWR(CAL_IOCTL_MAGIC, \
-							219, compat_uptr_t)
-#define AUDIO_GET_CODEC_REG32		_IOWR(CAL_IOCTL_MAGIC, \
-							220, compat_uptr_t)
-#define AUDIO_SET_RINGTONE_PROFILE32	_IOW(CAL_IOCTL_MAGIC, \
-							221, compat_uptr_t)
-#define AUDIO_GET_RINGTONE_PROFILE32	_IOR(CAL_IOCTL_MAGIC, \
-							222, compat_uptr_t)
-#define AUDIO_SET_SKYPE_STATE32	_IOW(CAL_IOCTL_MAGIC, \
-							223, compat_uptr_t)
-#define AUDIO_GET_SKYPE_STATE32	_IOR(CAL_IOCTL_MAGIC, \
-							224, compat_uptr_t)
-/* ASUS_BSP Paul --- */
-
-//Sharon++
-#define AUDIO_SET_MODE32	_IOWR(CAL_IOCTL_MAGIC, \
-							225, compat_uptr_t)
-//Sharon--
 
 static long audio_cal_compat_ioctl(struct file *f,
 		unsigned int cmd, unsigned long arg)
@@ -718,31 +562,6 @@ static long audio_cal_compat_ioctl(struct file *f,
 	case AUDIO_POST_CALIBRATION32:
 		cmd64 = AUDIO_POST_CALIBRATION;
 		break;
-	/* ASUS_BSP Paul +++ */
-	case AUDIO_SET_CODEC_REG32:
-		cmd64 = AUDIO_SET_CODEC_REG;
-		break;
-	case AUDIO_GET_CODEC_REG32:
-		cmd64 = AUDIO_GET_CODEC_REG;
-		break;
-	case AUDIO_SET_RINGTONE_PROFILE32:
-		cmd64 = AUDIO_SET_RINGTONE_PROFILE;
-		break;
-	case AUDIO_GET_RINGTONE_PROFILE32:
-		cmd64 = AUDIO_GET_RINGTONE_PROFILE;
-		break;
-	case AUDIO_SET_SKYPE_STATE32:
-		cmd64 = AUDIO_SET_SKYPE_STATE;
-		break;
-	case AUDIO_GET_SKYPE_STATE32:
-		cmd64 = AUDIO_GET_SKYPE_STATE;
-		break;
-	/* ASUS_BSP Paul --- */
-	//Sharon++
-	case AUDIO_SET_MODE32:
-		cmd64 = AUDIO_SET_MODE;
-		break;
-	//Sharon--
 	default:
 		pr_err("%s: ioctl not found!\n", __func__);
 		ret = -EFAULT;
@@ -775,7 +594,6 @@ static int __init audio_cal_init(void)
 {
 	int i = 0;
 	pr_debug("%s\n", __func__);
-	audio_mode = 0; //Sharon
 
 	memset(&audio_cal, 0, sizeof(audio_cal));
 	mutex_init(&audio_cal.common_lock);

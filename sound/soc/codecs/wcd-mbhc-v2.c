@@ -9,8 +9,6 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-#define DEBUG 1
-
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>
@@ -26,19 +24,11 @@
 #include <linux/kernel.h>
 #include <linux/input.h>
 #include <linux/firmware.h>
-#ifdef CONFIG_ASUS_ZC550KL_PROJECT
-#include <linux/debugfs.h>//mei_huang +++ for factory test headset insert check
-#endif
-#include <sound/pcm.h>
-#include <sound/pcm_params.h>
 #include <linux/completion.h>
 #include <glink_private.h>
 #include <sound/soc.h>
 #include <sound/jack.h>
 #include "wcd-mbhc-v2.h"
-#include "msm8x16_wcd_registers.h"
-#include "msm8916-wcd-irq.h"
-#include "msm8x16-wcd.h"
 #include "wcdcal-hwdep.h"
 
 #define WCD_MBHC_JACK_MASK (SND_JACK_HEADSET | SND_JACK_OC_HPHL | \
@@ -61,15 +51,6 @@
 #define MAX_IMPED 60000
 
 #define WCD_MBHC_BTN_PRESS_COMPL_TIMEOUT_MS  50
-
-#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-/* ASUS_BSP Paul +++ */
-int g_jack_det_invert = 0;
-extern int g_DebugMode;
-/* ASUS_BSP Paul --- */
-#endif
-
-static u16 swap_res_check;
 
 static int det_extn_cable_en;
 module_param(det_extn_cable_en, int,
@@ -137,7 +118,7 @@ static void wcd_program_hs_vref(struct wcd_mbhc *mbhc)
 	reg_val = ((plug_type_cfg->v_hs_max - HS_VREF_MIN_VAL) / 100);
 
 	dev_dbg(codec->dev, "%s: reg_val  = %x\n", __func__, reg_val);
-	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HS_VREF, 0x03);
+	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_HS_VREF, reg_val);
 }
 
 static void wcd_program_btn_threshold(const struct wcd_mbhc *mbhc, bool micbias)
@@ -521,195 +502,6 @@ static void wcd_mbhc_set_and_turnoff_hph_padac(struct wcd_mbhc *mbhc)
 	usleep_range(wg_time * 1000, wg_time * 1000 + 50);
 }
 
-static void wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
-	uint32_t *zr)
-{
-	struct snd_soc_codec *codec = mbhc->codec;
-	s16 impedance_l, impedance_r;
-	s16 impedance_l_fixed;
-	s16 reg0, reg1, reg2;
-	bool high = false;
-
-	pr_debug("%s: enter\n", __func__);
-
-	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
-	reg0 = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DBNC_TIMER);
-	reg1 = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN2_ZDETH_CTL);
-	reg2 = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2);
-
-	/* disable FSM */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x80, 0x00);
-	/*
-	 * Enable legacy electrical detection current sources
-	 * and disable fast ramp and enable manual switching
-	 * of extra capacitance
-	 */
-	pr_debug("%s: Setup for impedance det\n", __func__);
-
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2,
-			0x06, 0x02);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_DBNC_TIMER,
-			0x02, 0x02);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN2_ZDETH_CTL,
-			0x20, 0x00);
-
-	pr_debug("%s: Start performing impedance detection\n",
-		 __func__);
-
-	/* Enable ZDET_L_MEAS_EN */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x08, 0x08);
-	usleep_range(2000, 2100);
-	/* Read Left impedance value from Result1 */
-	impedance_l = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
-	/* Enable ZDET_R_MEAS_EN */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x0C, 0x04);
-	usleep_range(2000, 2100);
-	/* Read Right impedance value from Result1 */
-	impedance_r = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x04, 0x00);
-
-	if (impedance_l > 1) {
-		pr_debug("%s: impedance_l is %d, high == true\n", __func__, impedance_l);
-		high = true;
-		goto exit;
-	}
-
-	/*
-	 * As the result is 0 impedance is < 200 use
-	 * RAMP to measure impedance further.
-	 */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0xFF, 0x00);
-
-	/* Enable RAMP_L , RAMP_R & ZDET_CHG*/
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN0_ZDETL_CTL,
-			0x03, 0x03);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x02, 0x02);
-	usleep_range(50000, 50100);
-	/* Enable ZDET_DISCHG_CAP_CTL  to add extra capacitance */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x01, 0x01);
-	usleep_range(5000, 5100);
-
-	/* Enable ZDET_L_MEAS_EN */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x08, 0x08);
-	usleep_range(2000, 2100);
-	/* Read Left impedance value from Result1 */
-	impedance_l = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
-	/* Enable ZDET_R_MEAS_EN */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x0C, 0x04);
-	usleep_range(2000, 2100);
-	/* Read Right impedance value from Result1 */
-	impedance_r = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x04, 0x00);
-
-	if (!mbhc->mbhc_cfg->mono_stero_detection) {
-		/* Set ZDET_CHG to 0  to discharge ramp */
-		pr_debug("%s: mono_stero_detection is 0\n", __func__);
-		snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-				0x02, 0x00);
-		usleep_range(40000, 40100);
-		snd_soc_update_bits(codec,
-				MSM8X16_WCD_A_ANALOG_MBHC_BTN0_ZDETL_CTL,
-				0x03, 0x00);
-		goto exit;
-	}
-
-	/* Disable Set ZDET_CONN_RAMP_L and enable ZDET_CONN_FIXED_L */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN0_ZDETL_CTL,
-			0x02, 0x00);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN1_ZDETM_CTL,
-			0x02, 0x02);
-	/* Set ZDET_CHG to 0  */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x02, 0x00);
-	usleep_range(40000, 40100);
-
-	/* Set ZDET_CONN_RAMP_R to 0  */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN0_ZDETL_CTL,
-			0x01, 0x00);
-	/* Enable ZDET_L_MEAS_EN */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x08, 0x08);
-	usleep_range(2000, 2100);
-	/* Read Left impedance value from Result1 */
-	impedance_l_fixed = snd_soc_read(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
-	/* Disable ZDET_L_MEAS_EN */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x08, 0x00);
-	/*
-	 * impedance_l is equal to impedance_l_fixed then headset is stereo
-	 * otherwise headset is mono
-	 */
-
-	/* Enable ZDET_CHG  */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x02, 0x02);
-	usleep_range(10000, 10100);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN0_ZDETL_CTL,
-			0x02, 0x02);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN1_ZDETM_CTL,
-			0x02, 0x00);
-	/* Set ZDET_CHG to 0  to discharge HPHL */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0x02, 0x00);
-	usleep_range(40000, 40100);
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_BTN0_ZDETL_CTL,
-			0x02, 0x00);
-
-exit:
-	/*
-	 * Enable the FSM and button source back for
-	 * button detection.
-	 */
-	snd_soc_update_bits(codec,
-			MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
-			0xFF, 0xB0);
-	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN2_ZDETH_CTL, reg1);
-	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MBHC_DBNC_TIMER, reg0);
-	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2, reg2);
-	if (mbhc->mbhc_cb && mbhc->mbhc_cb->compute_impedance)
-		mbhc->mbhc_cb->compute_impedance(mbhc, zl, zr);
-
-	pr_debug("%s: RL %d milliohm, RR %d milliohm\n", __func__, *zl, *zr);
-	pr_debug("%s: Impedance detection completed\n", __func__);
-}
-
 int wcd_mbhc_get_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 			uint32_t *zr)
 {
@@ -727,7 +519,7 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 {
 	WCD_MBHC_RSC_ASSERT_LOCKED(mbhc);
 
-	printk("%s: enter insertion %d hph_status %x\n",
+	pr_debug("%s: enter insertion %d hph_status %x\n",
 		 __func__, insertion, mbhc->hph_status);
 	if (!insertion) {
 		/* Report removal */
@@ -761,7 +553,7 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 
 		mbhc->hph_type = WCD_MBHC_HPH_NONE;
 		mbhc->zl = mbhc->zr = 0;
-		printk("%s: Reporting removal %d(%x)\n", __func__,
+		pr_debug("%s: Reporting removal %d(%x)\n", __func__,
 			 jack_type, mbhc->hph_status);
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
 				mbhc->hph_status, WCD_MBHC_JACK_MASK);
@@ -823,8 +615,6 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 			mbhc->hph_status &= ~SND_JACK_HEADSET;
 
 		/* Report insertion */
-		mbhc->hph_status |= jack_type;
-
 		if (jack_type == SND_JACK_HEADPHONE)
 			mbhc->current_plug = MBHC_PLUG_TYPE_HEADPHONE;
 		else if (jack_type == SND_JACK_UNSUPPORTED)
@@ -836,17 +626,42 @@ static void wcd_mbhc_report_plug(struct wcd_mbhc *mbhc, int insertion,
 		else if (jack_type == SND_JACK_LINEOUT)
 			mbhc->current_plug = MBHC_PLUG_TYPE_HIGH_HPH;
 
-		if (mbhc->impedance_detect)
-			wcd_mbhc_calc_impedance(mbhc,
-					&mbhc->zl, &mbhc->zr);
-		pr_debug("%s: Reporting insertion %d(%x)", __func__, jack_type, mbhc->hph_status);
-		pr_debug("%s: zl %u, zr %u, linein_th %u\n",__func__, mbhc->zl, mbhc->zr, mbhc->mbhc_cfg->linein_th);
+		if (mbhc->impedance_detect &&
+			mbhc->mbhc_cb->compute_impedance &&
+			(mbhc->mbhc_cfg->linein_th != 0)) {
+				mbhc->mbhc_cb->compute_impedance(mbhc,
+						&mbhc->zl, &mbhc->zr);
+			if ((mbhc->zl > mbhc->mbhc_cfg->linein_th &&
+				mbhc->zl < MAX_IMPED) &&
+				(mbhc->zr > mbhc->mbhc_cfg->linein_th &&
+				 mbhc->zr < MAX_IMPED) &&
+				(jack_type == SND_JACK_HEADPHONE)) {
+				jack_type = SND_JACK_LINEOUT;
+				mbhc->current_plug = MBHC_PLUG_TYPE_HIGH_HPH;
+				if (mbhc->hph_status) {
+					mbhc->hph_status &= ~(SND_JACK_HEADSET |
+							SND_JACK_LINEOUT |
+							SND_JACK_UNSUPPORTED);
+					wcd_mbhc_jack_report(mbhc,
+							&mbhc->headset_jack,
+							mbhc->hph_status,
+							WCD_MBHC_JACK_MASK);
+				}
+				pr_debug("%s: Marking jack type as SND_JACK_LINEOUT\n",
+				__func__);
+			}
+		}
+
+		mbhc->hph_status |= jack_type;
+
+		pr_debug("%s: Reporting insertion %d(%x)\n", __func__,
+			 jack_type, mbhc->hph_status);
 		wcd_mbhc_jack_report(mbhc, &mbhc->headset_jack,
 				    (mbhc->hph_status | SND_JACK_MECHANICAL),
 				    WCD_MBHC_JACK_MASK);
 		wcd_mbhc_clr_and_turnon_hph_padac(mbhc);
 	}
-	printk("%s: leave hph_status %x\n", __func__, mbhc->hph_status);
+	pr_debug("%s: leave hph_status %x\n", __func__, mbhc->hph_status);
 }
 
 static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
@@ -867,7 +682,6 @@ static void wcd_mbhc_find_plug_and_report(struct wcd_mbhc *mbhc,
 		 * Nothing was reported previously
 		 * report a headphone or unsupported
 		 */
-		 pr_debug("sherry + %s:  reported  MBHC_PLUG_TYPE_HEADPHONE \n", __func__);
 		wcd_mbhc_report_plug(mbhc, 1, SND_JACK_HEADPHONE);
 	} else if (plug_type == MBHC_PLUG_TYPE_GND_MIC_SWAP) {
 			if (mbhc->current_plug == MBHC_PLUG_TYPE_HEADPHONE)
@@ -1299,13 +1113,6 @@ correct_plug_type:
 							__func__);
 					goto report;
 				}
-				if (mbhc->current_plug !=
-						MBHC_PLUG_TYPE_HEADSET &&
-						swap_res_check == 0xc) {
-					pr_debug("%s: cable is headset\n",
-							__func__);
-					goto report;
-				}
 			}
 			wrk_complete = false;
 		}
@@ -1327,24 +1134,10 @@ correct_plug_type:
 	if (plug_type == MBHC_PLUG_TYPE_HIGH_HPH &&
 		(!det_extn_cable_en)) {
 		if (wcd_is_special_headset(mbhc)) {
-			/*ASUS_BSP : detect impedance first*/
-			if (mbhc->impedance_detect &&
-				mbhc->mbhc_cb->compute_impedance){
-					mbhc->mbhc_cb->compute_impedance(mbhc,
-						&mbhc->zl, &mbhc->zr);
-			}
-			/*ASUS_BSP : check impedance is higher than 1000*/
-			if ((mbhc->zl >= 1000) && ( mbhc->zr >= 1000)) {
-				pr_debug("%s: plug in might be illigal headset \n",
-					__func__);
-				plug_type = MBHC_PLUG_TYPE_INVALID ;
-				goto exit;
-			} else {
-				pr_debug("%s: Special headset found %d\n",
-						__func__, plug_type);
-				plug_type = MBHC_PLUG_TYPE_HEADSET;
-				goto report;
-			}
+			pr_debug("%s: Special headset found %d\n",
+					__func__, plug_type);
+			plug_type = MBHC_PLUG_TYPE_HEADSET;
+			goto report;
 		}
 	}
 
@@ -1462,13 +1255,6 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 			mbhc->current_plug, detection_type);
 	wcd_cancel_hs_detect_plug(mbhc, &mbhc->correct_plug_swch);
 
-#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-	/* ASUS_BSP Paul +++ */
-	if (g_DebugMode)
-		goto exit;
-	/* ASUS_BSP Paul --- */
-#endif
-
 	if (mbhc->mbhc_cb->micbias_enable_status)
 		micbias1 = mbhc->mbhc_cb->micbias_enable_status(mbhc,
 						MIC_BIAS_1);
@@ -1559,9 +1345,6 @@ static void wcd_mbhc_swch_irq_handler(struct wcd_mbhc *mbhc)
 		WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_BTN_ISRC_CTL, 0);
 	}
 
-#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-exit: /* ASUS_BSP Paul +++ */
-#endif
 	mbhc->in_swch_irq_handler = false;
 	WCD_MBHC_RSC_UNLOCK(mbhc);
 	pr_debug("%s: leave\n", __func__);
@@ -1584,53 +1367,6 @@ static irqreturn_t wcd_mbhc_mech_plug_detect_irq(int irq, void *data)
 	pr_debug("%s: leave %d\n", __func__, r);
 	return r;
 }
-
-#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-/* ASUS_BSP Paul +++ */
-void wcd_mbhc_plug_detect_for_debug_mode(struct wcd_mbhc *mbhc, int debug_mode)
-{
-	if (debug_mode) {
-		if (mbhc->current_plug != MBHC_PLUG_TYPE_NONE) {
-			printk("%s: current_plug != MBHC_PLUG_TYPE_NONE, force removal\n", __func__);
-			mbhc->mbhc_cb->lock_sleep(mbhc, true);
-			wcd_mbhc_swch_irq_handler(mbhc);
-			mbhc->mbhc_cb->lock_sleep(mbhc, false);
-			g_jack_det_invert = 1;
-		}
-		mbhc->mbhc_cb->irq_control(mbhc->codec, mbhc->intr_ids->mbhc_btn_press_intr, false);
-		mbhc->mbhc_cb->irq_control(mbhc->codec, mbhc->intr_ids->mbhc_btn_release_intr, false);
-		mbhc->mbhc_cb->irq_control(mbhc->codec, mbhc->intr_ids->hph_left_ocp, false);
-		mbhc->mbhc_cb->irq_control(mbhc->codec, mbhc->intr_ids->hph_right_ocp, false);
-	} else {
-		bool detection_type;
-		mbhc->mbhc_cb->irq_control(mbhc->codec, mbhc->intr_ids->mbhc_btn_press_intr, true);
-		mbhc->mbhc_cb->irq_control(mbhc->codec, mbhc->intr_ids->mbhc_btn_release_intr, true);
-		mbhc->mbhc_cb->irq_control(mbhc->codec, mbhc->intr_ids->hph_left_ocp, true);
-		mbhc->mbhc_cb->irq_control(mbhc->codec, mbhc->intr_ids->hph_right_ocp, true);
-		WCD_MBHC_REG_READ(WCD_MBHC_MECH_DETECTION_TYPE, detection_type);
-		if (!g_jack_det_invert && !detection_type) {
-			printk("%s: g_jack_det_invert == 0, detect plug type\n", __func__);
-			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MECH_DETECTION_TYPE,
-					!detection_type);
-			mbhc->mbhc_cb->lock_sleep(mbhc, true);
-			wcd_mbhc_swch_irq_handler(mbhc);
-			mbhc->mbhc_cb->lock_sleep(mbhc, false);
-		} else if (g_jack_det_invert && !detection_type) {
-			printk("%s: current_plug == MBHC_PLUG_TYPE_NONE\n", __func__);
-			WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_MECH_DETECTION_TYPE,
-					!detection_type);
-		} else if (g_jack_det_invert && detection_type) {
-			printk("%s: g_jack_det_invert == 1, detect plug type\n", __func__);
-			mbhc->mbhc_cb->lock_sleep(mbhc, true);
-			wcd_mbhc_swch_irq_handler(mbhc);
-			mbhc->mbhc_cb->lock_sleep(mbhc, false);
-		}
-		g_jack_det_invert = 0;
-	}
-}
-EXPORT_SYMBOL(wcd_mbhc_plug_detect_for_debug_mode);
-/* ASUS_BSP Paul --- */
-#endif
 
 static int wcd_mbhc_get_button_mask(struct wcd_mbhc *mbhc)
 {
@@ -1947,7 +1683,6 @@ static irqreturn_t wcd_mbhc_btn_press_handler(int irq, void *data)
 				__func__);
 		goto done;
 	}
-
 	mask = wcd_mbhc_get_button_mask(mbhc);
 	mbhc->buttons_pressed |= mask;
 	mbhc->mbhc_cb->lock_sleep(mbhc, true);
@@ -1970,12 +1705,7 @@ static irqreturn_t wcd_mbhc_release_handler(int irq, void *data)
 	pr_debug("%s: enter\n", __func__);
 	WCD_MBHC_RSC_LOCK(mbhc);
 	if (wcd_swch_level_remove(mbhc)) {
-		pr_debug("%s: Switch level is low\n", __func__);
-		goto exit;
-	}
-
-	if (!mbhc->is_btn_press) {
-		pr_debug("%s: is_btn_press = false, goto exit\n", __func__);
+		pr_debug("%s: Switch level is low ", __func__);
 		goto exit;
 	}
 
@@ -2302,7 +2032,7 @@ int wcd_mbhc_start(struct wcd_mbhc *mbhc,
 			schedule_delayed_work(&mbhc->mbhc_firmware_dwork,
 				      usecs_to_jiffies(FW_READ_TIMEOUT));
 		else
-			pr_err("%s: Skipping to read mbhc fw, 0x%p %p\n",
+			pr_err("%s: Skipping to read mbhc fw, 0x%pK %pK\n",
 				 __func__, mbhc->mbhc_fw, mbhc->mbhc_cal);
 	}
 	pr_debug("%s: leave %d\n", __func__, rc);
@@ -2334,61 +2064,6 @@ void wcd_mbhc_stop(struct wcd_mbhc *mbhc)
 	pr_debug("%s: leave\n", __func__);
 }
 EXPORT_SYMBOL(wcd_mbhc_stop);
-
-#ifdef CONFIG_ASUS_ZC550KL_PROJECT
-//mei_huang +++ for factory test headset insert check
-ssize_t wcd_mbhc_debug_read(struct file *file, char __user *buff,
-			      size_t len, loff_t *off)
-{
-	struct wcd_mbhc *mbhc = file->private_data;
-	char messages[256];
-	bool val;
-
-	if (*off)
-		return 0;
-
-	memset(messages, 0, sizeof(messages));
-	if (len > 256)
-		len = 256;
-
-	val = !wcd_swch_level_remove(mbhc);
-
-	if (val)
-		sprintf(messages, "1\n");
-	else
-		sprintf(messages, "0\n");
-
-	if (copy_to_user(buff, messages, len))
-		return -EFAULT;
-
-	(*off)++;
-	return len;
-}
-
-static int wcd_debug_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-
-static const struct file_operations mbhc_debug_ops = {
-	.open = wcd_debug_open,
-	.read = wcd_mbhc_debug_read,
-};
-
-static void wcd9xxx_init_debugfs(struct wcd_mbhc *mbhc)
-{
-	mbhc->debugfs_mbhc =
-	    debugfs_create_file("wcd9xxx_mbhc", S_IFREG | S_IRUGO,
-				NULL, mbhc, &mbhc_debug_ops);
-}
-
-static void wcd9xxx_cleanup_debugfs(struct wcd_mbhc *mbhc)
-{
-	debugfs_remove(mbhc->debugfs_mbhc);
-}
-//mei_huang ---
-#endif
 
 /*
  * wcd_mbhc_init : initialize MBHC internal structures.
@@ -2479,15 +2154,6 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		ret = snd_jack_set_key(mbhc->button_jack.jack,
 				       SND_JACK_BTN_0,
 				       KEY_MEDIA);
-		ret = snd_jack_set_key(mbhc->button_jack.jack,
-				       SND_JACK_BTN_1,
-				       KEY_VOICE_ASSIST);
-		ret = snd_jack_set_key(mbhc->button_jack.jack,
-				       SND_JACK_BTN_2,
-				       KEY_VOLUMEUP);
-		ret = snd_jack_set_key(mbhc->button_jack.jack,
-				       SND_JACK_BTN_3,
-				       KEY_VOLUMEDOWN);
 		if (ret) {
 			pr_err("%s: Failed to set code for btn-0\n",
 				__func__);
@@ -2516,10 +2182,6 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 		}
 	}
 
-	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
-	wcd9xxx_init_debugfs(mbhc);//mei_huang +++ for factory test headset insert check
-	#endif
-	
 	init_waitqueue_head(&mbhc->wait_btn_press);
 	mutex_init(&mbhc->codec_resource_lock);
 
@@ -2638,9 +2300,6 @@ void wcd_mbhc_deinit(struct wcd_mbhc *mbhc)
 	if (mbhc->mbhc_cb && mbhc->mbhc_cb->register_notifier)
 		mbhc->mbhc_cb->register_notifier(codec, &mbhc->nblock, false);
 	mutex_destroy(&mbhc->codec_resource_lock);
-	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
-	wcd9xxx_cleanup_debugfs(mbhc);//mei_huang --- for factory test headset insert check
-	#endif
 }
 EXPORT_SYMBOL(wcd_mbhc_deinit);
 

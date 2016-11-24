@@ -1262,7 +1262,7 @@ static u32 mdss_mdp_res_init(struct mdss_data_type *mdata)
 
 	mdata->iclient = msm_ion_client_create(mdata->pdev->name);
 	if (IS_ERR_OR_NULL(mdata->iclient)) {
-		pr_err("msm_ion_client_create() return error (%p)\n",
+		pr_err("msm_ion_client_create() return error (%pK)\n",
 				mdata->iclient);
 		mdata->iclient = NULL;
 	}
@@ -1495,7 +1495,7 @@ static ssize_t mdss_mdp_store_max_limit_bw(struct device *dev,
 	struct mdss_data_type *mdata = dev_get_drvdata(dev);
 	u32 data = 0;
 
-	if (1 != sscanf(buf, "%d", &data)) {
+	if (kstrtouint(buf, 0, &data)) {
 		pr_info("Not able scan to bw_mode_bitmap\n");
 	} else {
 		mdata->bw_mode_bitmap = data;
@@ -1592,7 +1592,7 @@ static int mdss_mdp_probe(struct platform_device *pdev)
 	if (rc)
 		pr_debug("unable to map MDSS VBIF non-realtime base\n");
 	else
-		pr_debug("MDSS VBIF NRT HW Base addr=%p len=0x%x\n",
+		pr_debug("MDSS VBIF NRT HW Base addr=%pK len=0x%x\n",
 			mdata->vbif_nrt_io.base, mdata->vbif_nrt_io.len);
 
 	res = platform_get_resource(pdev, IORESOURCE_IRQ, 0);

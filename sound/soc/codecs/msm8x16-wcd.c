@@ -1,4 +1,4 @@
-/* Copyright (c) 2014-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2015-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -45,20 +45,12 @@
 #include "msm8916-wcd-irq.h"
 #include "msm8x16_wcd_registers.h"
 
-#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-/* ASUS_BSP Paul +++ */
-#include <linux/proc_fs.h>
-struct msm8x16_wcd_priv *g_msm8x16_wcd_priv;
-int g_DebugMode = 1;
-extern int g_gpio_audio_debug;
-/* ASUS_BSP Paul --- */
-#endif
-
 #ifdef CONFIG_ASUS_ZC550KL_PROJECT
 //mei_huang +++ enable speaker not need to enable mic
 extern int speaker_run;
 //mei_huang ---
 #endif
+
 #define MSM8X16_WCD_RATES (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 			SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000)
 #define MSM8X16_WCD_FORMATS (SNDRV_PCM_FMTBIT_S16_LE |\
@@ -110,10 +102,8 @@ enum {
 #define EAR_PMU 1
 #define SPK_PMD 2
 #define SPK_PMU 3
-/* ASUS_BSP Eric +++ */
+
 #define MICBIAS_DEFAULT_VAL 1800000
-//#define MICBIAS_DEFAULT_VAL 2800000
-/* ASUS_BSP Eric ---*/
 #define MICBIAS_MIN_VAL 1600000
 #define MICBIAS_STEP_SIZE 50000
 
@@ -319,7 +309,7 @@ struct msm8x16_wcd_spmi msm8x16_wcd_modules[MAX_MSM8X16_WCD_DEVICE];
 
 static void *modem_state_notifier;
 
-struct snd_soc_codec *registered_codec; /* ASUS_BSP Paul +++ */
+static struct snd_soc_codec *registered_codec;
 
 static int get_codec_version(struct msm8x16_wcd_priv *msm8x16_wcd)
 {
@@ -342,7 +332,7 @@ static void wcd_mbhc_meas_imped(struct snd_soc_codec *codec,
 				s16 *impedance_l, s16 *impedance_r)
 {
 	struct msm8x16_wcd_priv *msm8x16_wcd = snd_soc_codec_get_drvdata(codec);
-	printk("  wcd_mbhc_meas_imped enter \n ");
+
 	if ((msm8x16_wcd->imped_det_pin == WCD_MBHC_DET_BOTH) ||
 		(msm8x16_wcd->imped_det_pin == WCD_MBHC_DET_HPHL)) {
 		/* Enable ZDET_L_MEAS_EN */
@@ -351,7 +341,6 @@ static void wcd_mbhc_meas_imped(struct snd_soc_codec *codec,
 				0x08, 0x08);
 		/* Wait for 2ms for measurement to complete */
 		usleep_range(2000, 2100);
-		printk(" reg 0x151 val: 0x%x \n", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL) );
 		/* Read Left impedance value from Result1 */
 		*impedance_l = snd_soc_read(codec,
 				MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
@@ -359,7 +348,6 @@ static void wcd_mbhc_meas_imped(struct snd_soc_codec *codec,
 		snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
 				0x08, 0x00);
-		printk("  reg 0x158 val: 0x%x  impedance_l=%hd   \n",snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT), *impedance_l);
 	}
 	if ((msm8x16_wcd->imped_det_pin == WCD_MBHC_DET_BOTH) ||
 		(msm8x16_wcd->imped_det_pin == WCD_MBHC_DET_HPHR)) {
@@ -368,16 +356,13 @@ static void wcd_mbhc_meas_imped(struct snd_soc_codec *codec,
 				0x04, 0x04);
 		/* Wait for 2ms for measurement to complete */
 		usleep_range(2000, 2100);
-		printk(" reg 0x151 val: 0x%x  \n", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL) );
 		/* Read Right impedance value from Result1 */
 		*impedance_r = snd_soc_read(codec,
 				MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT);
 		snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL,
 				0x04, 0x00);
-		printk("  reg 0x158 val: 0x%x, impedance_r=%hd  \n", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN_RESULT),*impedance_r);
 	}
-		printk(" wcd_mbhc_meas_imped leave \n ");
 }
 
 static void msm8x16_set_ref_current(struct snd_soc_codec *codec,
@@ -472,7 +457,7 @@ static void msm8x16_wcd_compute_impedance(struct snd_soc_codec *codec, s16 l,
 	uint32_t rl = 0, rr = 0;
 	struct wcd_imped_i_ref R = msm8x16_wcd->imped_i_ref;
 	int codec_ver = get_codec_version(msm8x16_wcd);
-	printk(" msm8x16_wcd_compute_impedance codec_ver  %d \n", codec_ver);
+
 	switch (codec_ver) {
 	case TOMBAK_1_0:
 	case TOMBAK_2_0:
@@ -714,7 +699,6 @@ static void msm8x16_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 	bool min_range_used =  false;
 
 	pr_debug("%s: enter\n", __func__);
-	printk(" ###  msm8x16_wcd_mbhc_calc_impedance #### \n");
 	if (mbhc->skip_imped_detection) {
 		pr_debug("%s: Skip imped detect RL %d ohm, RR %d ohm\n",
 				__func__, mbhc->zl, mbhc->zr);
@@ -760,12 +744,7 @@ static void msm8x16_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 
 	pr_debug("%s: Start performing impedance detection\n",
 		 __func__);
-	printk(" will get meas imped  \n");
-	printk("reg :0x151 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL) );
-	printk("reg :0x144 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MICB_2_EN) );
-	printk("reg :0x155 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN2_ZDETH_CTL) );
-	printk("reg :0x152 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DBNC_TIMER));
-	printk("reg :0x150 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2));
+
 	wcd_mbhc_meas_imped(codec, &impedance_l, &impedance_r);
 
 	if (impedance_l > 2 || impedance_r > 2) {
@@ -815,7 +794,6 @@ static void msm8x16_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 					snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2,
 					0x06, 0x06);
-					printk("reg :0x150 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2) );
 					wcd_mbhc_meas_imped(codec, &impedance_l,
 							    &impedance_r);
 					if (impedance_r == impedance_l)
@@ -854,13 +832,8 @@ static void msm8x16_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 			0x01, 0x01);
 	/* wait for 5msec for the voltage to get stable */
 	usleep_range(5000, 5100);
- 	printk(" will get meas imped  \n");
-	printk("reg :0x151 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL) );
-	printk("reg :0x144 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MICB_2_EN) );
-	printk("reg :0x155 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN2_ZDETH_CTL) );
-	printk("reg :0x152 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DBNC_TIMER));
-	printk("reg :0x150 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2));
-	
+
+
 	wcd_mbhc_meas_imped(codec, &impedance_l, &impedance_r);
 
 	min_range_used = msm8x16_adj_ref_current(codec,
@@ -963,15 +936,9 @@ exit:
 	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN2_ZDETH_CTL, reg1);
 	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MBHC_DBNC_TIMER, reg0);
 	snd_soc_write(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2, reg2);
-	printk(" will compute impedance \n ");
-	printk("reg :0x151 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_FSM_CTL) );
-	printk("reg :0x144 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MICB_2_EN) );
-	printk("reg :0x155 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN2_ZDETH_CTL) );
-	printk("reg :0x152 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DBNC_TIMER));
-	printk("reg :0x150 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2));
 	msm8x16_wcd_compute_impedance(codec, impedance_l, impedance_r,
 				      zl, zr, high);
-	printk(" ###  msm8x16_wcd_mbhc_calc_impedance leave ## \n");
+
 	pr_debug("%s: RL %d ohm, RR %d ohm\n", __func__, *zl, *zr);
 skip_imped_detect:
 	pr_debug("%s: Impedance detection completed\n", __func__);
@@ -1411,7 +1378,7 @@ static void msm8x16_wcd_boost_on(struct snd_soc_codec *codec)
 	}
 	snd_soc_update_bits(codec,
 		MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL,
-		0x68, 0x68);
+		0x69, 0x69);
 	snd_soc_update_bits(codec,
 		MSM8X16_WCD_A_ANALOG_SPKR_DRV_DBG,
 		0x01, 0x01);
@@ -2201,56 +2168,6 @@ static int msm8x16_wcd_ext_spk_boost_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-static int msm8x16_wcd_spk_gain_get(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	u8 spk_pa_gain;
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-
-	spk_pa_gain = snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL);
-
-	spk_pa_gain = spk_pa_gain & 0x1;
-
-	if (spk_pa_gain == 0x00) {
-		ucontrol->value.integer.value[0] = 0;
-	} else if (spk_pa_gain == 0x01) {
-		ucontrol->value.integer.value[0] = 1;
-	} else  {
-		dev_err(codec->dev, "%s: ERROR: Unsupported SPK Gain = 0x%x\n",
-			__func__, spk_pa_gain);
-		return -EINVAL;
-	}
-
-	ucontrol->value.integer.value[0] = spk_pa_gain;
-	dev_dbg(codec->dev, "%s: spk_pa_gain = 0x%x\n", __func__, spk_pa_gain);
-	return 0;
-}
-
-static int msm8x16_wcd_spk_gain_put(struct snd_kcontrol *kcontrol,
-				struct snd_ctl_elem_value *ucontrol)
-{
-	u8 spk_pa_gain;
-	struct snd_soc_codec *codec = snd_kcontrol_chip(kcontrol);
-
-	dev_dbg(codec->dev, "%s: ucontrol->value.integer.value[0] = %ld\n",
-		__func__, ucontrol->value.integer.value[0]);
-
-	switch (ucontrol->value.integer.value[0]) {
-	case 0:
-		spk_pa_gain = 0x0;
-		break;
-	case 1:
-		spk_pa_gain = 0x1;
-		break;
-	default:
-		return -EINVAL;
-	}
-
-	snd_soc_update_bits(codec, MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL,
-			    0x01, spk_pa_gain);
-	return 0;
-}
-
 static int msm8x16_wcd_ext_spk_boost_set(struct snd_kcontrol *kcontrol,
 				struct snd_ctl_elem_value *ucontrol)
 {
@@ -2500,11 +2417,6 @@ static const char * const msm8x16_wcd_spk_boost_ctrl_text[] = {
 static const struct soc_enum msm8x16_wcd_spk_boost_ctl_enum[] = {
 		SOC_ENUM_SINGLE_EXT(2, msm8x16_wcd_spk_boost_ctrl_text),
 };
-static const char * const msm8x16_wcd_spk_gain_text[] = {
-		"POS_18_DB", "POS_12_DB"};
-static const struct soc_enum msm8x16_wcd_spk_gain_enum[] = {
-		SOC_ENUM_SINGLE_EXT(2, msm8x16_wcd_spk_gain_text),
-};
 
 static const char * const msm8x16_wcd_ext_spk_boost_ctrl_text[] = {
 		"DISABLE", "ENABLE"};
@@ -2545,9 +2457,6 @@ static const struct snd_kcontrol_new msm8x16_wcd_snd_controls[] = {
 
 	SOC_ENUM_EXT("Speaker Boost", msm8x16_wcd_spk_boost_ctl_enum[0],
 		msm8x16_wcd_spk_boost_get, msm8x16_wcd_spk_boost_set),
-
-	SOC_ENUM_EXT("Speaker Gain", msm8x16_wcd_spk_gain_enum[0],
-		msm8x16_wcd_spk_gain_get, msm8x16_wcd_spk_gain_put),
 
 	SOC_ENUM_EXT("Ext Spk Boost", msm8x16_wcd_ext_spk_boost_ctl_enum[0],
 		msm8x16_wcd_ext_spk_boost_get, msm8x16_wcd_ext_spk_boost_set),
@@ -3202,7 +3111,7 @@ static int msm8x16_wcd_codec_enable_spk_pa(struct snd_soc_dapm_widget *w,
 			if (msm8x16_wcd->spk_boost_set)
 				snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL,
-					0xEE, 0xEE);
+					0xEF, 0xEF);
 			else
 				snd_soc_update_bits(codec,
 					MSM8X16_WCD_A_ANALOG_SPKR_DAC_CTL,
@@ -3212,7 +3121,7 @@ static int msm8x16_wcd_codec_enable_spk_pa(struct snd_soc_dapm_widget *w,
 		case BOOST_ON_FOREVER:
 			snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL,
-				0xEE, 0xEE);
+				0xEF, 0xEF);
 			break;
 		case BYPASS_ALWAYS:
 			snd_soc_update_bits(codec,
@@ -3961,8 +3870,6 @@ void wcd_imped_config(struct snd_soc_codec *codec,
 		switch (codec_version) {
 		case TOMBAK_1_0:
 		case TOMBAK_2_0:
-			pr_debug("%s: Default gain is set\n", __func__);
-			break;
 		case CONGA:
 			/*
 			 * For 32Ohm load and higher loads, Set 0x19E
@@ -4344,12 +4251,13 @@ static const struct snd_soc_dapm_route audio_map[] = {
 	{"IIR2 INP1 MUX", "DEC2", "DEC2 MUX"},
 	{"MIC BIAS Internal1", NULL, "INT_LDO_H"},
 	{"MIC BIAS Internal2", NULL, "INT_LDO_H"},
+	{"MIC BIAS External", NULL, "INT_LDO_H"},
+	{"MIC BIAS External2", NULL, "INT_LDO_H"},
 	//mei_huang +++ power on micbias3
 	{"MIC BIAS Internal3", NULL, "INT_LDO_H"},
 	//mei_huang ---
-	{"MIC BIAS External", NULL, "INT_LDO_H"},
-	{"MIC BIAS External2", NULL, "INT_LDO_H"},
 	{"MIC BIAS Internal1", NULL, "MICBIAS_REGULATOR"},
+	{"MIC BIAS Internal2", NULL, "MICBIAS_REGULATOR"},
 	{"MIC BIAS Internal2", NULL, "MICBIAS_REGULATOR"},
 	//mei_huang +++ power on micbias3
 	{"MIC BIAS Internal3", NULL, "MICBIAS_REGULATOR"},
@@ -5036,7 +4944,7 @@ static const struct msm8x16_wcd_reg_mask_val msm8x16_wcd_reg_defaults_2_0[] = {
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_DIGITAL_PERPH_RESET_CTL3, 0x0F),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_TX_1_2_OPAMP_BIAS, 0x4F),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_NCP_FBCTRL, 0x28),
-	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL, 0x68),
+	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL, 0x69),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_SPKR_DRV_DBG, 0x01),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_BOOST_EN_CTL, 0x5F),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_SLOPE_COMP_IP_ZERO, 0x88),
@@ -5055,7 +4963,7 @@ static const struct msm8x16_wcd_reg_mask_val msm8909_wcd_reg_defaults[] = {
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_PERPH_RESET_CTL3, 0x0F),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_TX_1_2_OPAMP_BIAS, 0x4C),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_NCP_FBCTRL, 0x28),
-	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL, 0x68),
+	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_SPKR_DRV_CTL, 0x69),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_SPKR_DRV_DBG, 0x01),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_PERPH_SUBTYPE, 0x0A),
 	MSM8X16_WCD_REG_VAL(MSM8X16_WCD_A_ANALOG_SPKR_DAC_CTL, 0x03),
@@ -5140,7 +5048,7 @@ static const struct msm8x16_wcd_reg_mask_val
 	/* Initialize current threshold to 350MA
 	 * number of wait and run cycles to 4096
 	 */
-	{MSM8X16_WCD_A_ANALOG_RX_COM_OCP_CTL, 0xFF, 0x7F},
+	{MSM8X16_WCD_A_ANALOG_RX_COM_OCP_CTL, 0xFF, 0x12},
 	{MSM8X16_WCD_A_ANALOG_RX_COM_OCP_COUNT, 0xFF, 0xFF},
 };
 
@@ -5270,43 +5178,27 @@ static int msm8x16_wcd_device_up(struct snd_soc_codec *codec)
 {
 	struct msm8x16_wcd_priv *msm8x16_wcd_priv =
 		snd_soc_codec_get_drvdata(codec);
-	u32 reg;
 	int ret = 0;
 	dev_dbg(codec->dev, "%s: device up!\n", __func__);
 
 	mutex_lock(&codec->mutex);
 
 	clear_bit(BUS_DOWN, &msm8x16_wcd_priv->status_mask);
-
-	for (reg = 0; reg < ARRAY_SIZE(msm8x16_wcd_reset_reg_defaults);
-			reg++) {
-		if (msm8x16_wcd_reg_readable[reg]) {
-			if (get_codec_version(msm8x16_wcd_priv) != CAJON &&
-					cajon_digital_reg[reg])
-				continue;
-			msm8x16_wcd_write(codec,
-				reg, msm8x16_wcd_reset_reg_defaults[reg]);
-		}
-	}
-
-	if (codec->reg_def_copy) {
-		pr_debug("%s: Update ASOC cache", __func__);
-		kfree(codec->reg_cache);
-		codec->reg_cache = kmemdup(codec->reg_def_copy,
-						codec->reg_size, GFP_KERNEL);
-		if (!codec->reg_cache) {
-			pr_err("%s: Cache update failed!\n", __func__);
-			mutex_unlock(&codec->mutex);
-			return -ENOMEM;
-		}
-	}
-
 	snd_soc_card_change_online_state(codec->card, 1);
 	/* delay is required to make sure sound card state updated */
 	usleep_range(5000, 5100);
 
 	msm8x16_wcd_codec_init_reg(codec);
 	msm8x16_wcd_update_reg_defaults(codec);
+
+	codec->cache_sync = true;
+	snd_soc_cache_sync(codec);
+	codec->cache_sync = false;
+
+	msm8x16_wcd_write(codec, MSM8X16_WCD_A_DIGITAL_INT_EN_SET,
+				MSM8X16_WCD_A_DIGITAL_INT_EN_SET__POR);
+	msm8x16_wcd_write(codec, MSM8X16_WCD_A_DIGITAL_INT_EN_CLR,
+				MSM8X16_WCD_A_DIGITAL_INT_EN_CLR__POR);
 
 	msm8x16_wcd_set_boost_v(codec);
 
@@ -5453,199 +5345,6 @@ static void msm8x16_wcd_configure_cap(struct snd_soc_codec *codec,
 	}
 }
 
-#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-/* ASUS_BSP Paul +++ */
-#ifdef CONFIG_PROC_FS
-#define AUDIO_DEBUG_PROC_FILE "driver/audio_debug"
-#define CODEC_STATUS_PROC_FILE "driver/codec_status"
-
-static struct proc_dir_entry *audio_debug_proc_file;
-static struct proc_dir_entry *codec_status_proc_file;
-static mm_segment_t oldfs;
-
-static void initKernelEnv(void)
-{
-	oldfs = get_fs();
-	set_fs(KERNEL_DS);
-}
-
-static void deinitKernelEnv(void)
-{
-	set_fs(oldfs);
-}
-
-static ssize_t audio_debug_proc_write(struct file *filp, const char __user *buff, size_t len, loff_t *off)
-{
-	char messages[256];
-	memset(messages, 0, sizeof(messages));
-	printk("[Audio][Debug] audio_debug_proc_write\n");
-
-	if (len > 256)
-		len = 256;
-	if (copy_from_user(messages, buff, len))
-		return -EFAULT;
-
-	initKernelEnv();
-
-	if (strncmp(messages, "1", 1) == 0) {
-		if (!g_DebugMode) {
-			gpio_direction_output(g_gpio_audio_debug, 0); /* enable uart log, disable audio */
-			wcd_mbhc_plug_detect_for_debug_mode(&g_msm8x16_wcd_priv->mbhc, 1);
-			g_DebugMode = 1;
-		}
-		printk("[Audio][Debug] Audio debug mode!!\n");
-	} else if (strncmp(messages, "0", 1) == 0) {
-		if (g_DebugMode) {
-			gpio_direction_output(g_gpio_audio_debug, 1); /* disable uart log, enable audio */
-			g_DebugMode = 0;
-			wcd_mbhc_plug_detect_for_debug_mode(&g_msm8x16_wcd_priv->mbhc, 0);
-		}
-		printk("[Audio][Debug] Audio headset normal mode!!\n");
-	} else if (strncmp(messages, "read", strlen("read")) == 0) {
-		unsigned int reg, value;
-		sscanf(messages + 5, "%x", &reg);
-		value = snd_soc_read(registered_codec, reg);
-		printk("[Audio][codec] read register reg[0x%x]=[0x%x]\n", reg, value);
-	} else if (strncmp(messages, "write", strlen("write")) == 0) {
-		unsigned int reg, value;
-		sscanf(messages + 6, "%x %x", &reg, &value);
-		snd_soc_write(registered_codec, reg, value);
-		value = snd_soc_read(registered_codec, reg);
-		printk("[Audio][codec] write register reg[0x%x]=[0x%x]\n", reg, value);
-	} else if (strncmp(messages, "update", strlen("update")) == 0) {
-		unsigned int reg, mask, value;
-		sscanf(messages + 7, "%x %x %x", &reg, &mask, &value);
-		snd_soc_update_bits(registered_codec, reg, mask, value);
-		value = snd_soc_read(registered_codec, reg);
-		printk("[Audio][codec] update register reg[0x%x]=[0x%x]\n", reg, value);
-	} else if (strncmp(messages, "dump", strlen("dump")) == 0) {
-		unsigned int val;
-		int i;
-		for (i = 0; i < MSM8X16_WCD_CACHE_SIZE; i++) {
-			if (!snd_soc_codec_readable_register(registered_codec, i))
-				continue;
-			val = snd_soc_read(registered_codec, i);
-			printk("[Audio][codec] dump register reg[0x%x]=[0x%x]\n", i, val);
-		}
-	} else {
-		printk("[Audio][Debug] %s\n", messages);
-	}
-
-	deinitKernelEnv();
-	return len;
-}
-
-static ssize_t audio_debug_proc_read(struct file *filp, char __user *buff, size_t len, loff_t *off)
-{
-	char messages[256];
-
-	if (*off)
-		return 0;
-
-	memset(messages, 0, sizeof(messages));
-	if (len > 256)
-		len = 256;
-
-	if (g_DebugMode)
-		sprintf(messages, "Audio debug mode\n");
-	else {
-		switch (g_msm8x16_wcd_priv->mbhc.current_plug) {
-		case MBHC_PLUG_TYPE_HEADSET:
-			sprintf(messages, "1\n");
-			break;
-		case MBHC_PLUG_TYPE_HEADPHONE:
-			sprintf(messages, "2\n");
-			break;
-		case MBHC_PLUG_TYPE_HIGH_HPH:
-			sprintf(messages, "3\n");
-			break;
-		case MBHC_PLUG_TYPE_GND_MIC_SWAP:
-			sprintf(messages, "4\n");
-			break;
-		default:
-			sprintf(messages, "0\n");
-			break;
-		}
-	}
-
-	if (copy_to_user(buff, messages, len))
-		return -EFAULT;
-
-	(*off)++;
-	return len;
-}
-
-static ssize_t codec_status_proc_read(struct file *filp, char __user *buff, size_t len, loff_t *off)
-{
-	char messages[256];
-	int val;
-
-	if (*off)
-		return 0;
-
-	memset(messages, 0, sizeof(messages));
-	if (len > 256)
-		len = 256;
-
-	val = snd_soc_read(registered_codec, MSM8X16_WCD_A_DIGITAL_REVISION1);
-
-	if (val < 0)
-		sprintf(messages, "0\n");
-	else
-		sprintf(messages, "1\n");
-
-	if (copy_to_user(buff, messages, len))
-		return -EFAULT;
-
-	(*off)++;
-	return len;
-}
-
-static struct file_operations audio_debug_proc_ops = {
-	.read = audio_debug_proc_read,
-	.write = audio_debug_proc_write,
-};
-
-static struct file_operations codec_status_proc_ops = {
-	.read = codec_status_proc_read,
-};
-
-static void create_audio_debug_proc_file(void)
-{
-	printk("[Audio][Debug] create_audio_debug_proc_file\n");
-	audio_debug_proc_file = proc_create(AUDIO_DEBUG_PROC_FILE, 0666, NULL, &audio_debug_proc_ops);
-
-	if (audio_debug_proc_file == NULL)
-		printk("[Audio][Debug] create_audio_debug_proc_file failed\n");
-}
-
-static void create_codec_status_proc_file(void)
-{
-	printk("[Audio][Debug] create_codec_status_proc_file\n");
-	codec_status_proc_file = proc_create(CODEC_STATUS_PROC_FILE, 0666, NULL, &codec_status_proc_ops);
-
-	if (codec_status_proc_file == NULL)
-		printk("[Audio][Debug] create_codec_status_proc_file failed\n");
-}
-
-static void remove_audio_debug_proc_file(void)
-{
-	extern struct proc_dir_entry proc_root;
-	printk("[Audio][Debug] remove_audio_debug_proc_file\n");
-	remove_proc_entry(AUDIO_DEBUG_PROC_FILE, &proc_root);
-}
-
-static void remove_codec_status_proc_file(void)
-{
-	extern struct proc_dir_entry proc_root;
-	printk("[Audio][Debug] remove_codec_status_proc_file\n");
-	remove_proc_entry(CODEC_STATUS_PROC_FILE, &proc_root);
-}
-
-#endif /* #ifdef CONFIG_PROC_FS */
-/* ASUS_BSP Paul --- */
-#endif
-
 static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 {
 	struct msm8x16_wcd_priv *msm8x16_wcd_priv;
@@ -5782,24 +5481,6 @@ static int msm8x16_wcd_codec_probe(struct snd_soc_codec *codec)
 		registered_codec = NULL;
 		return -ENOMEM;
 	}
-
-	#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-	/* ASUS_BSP Paul +++ */
-	g_msm8x16_wcd_priv = msm8x16_wcd_priv;
-
-	ret = gpio_request(g_gpio_audio_debug, "AUDIO_DEBUG");
-	if (ret)
-		printk("%s: Failed to request gpio AUDIO_DEBUG %d\n", __func__, g_gpio_audio_debug);
-	else
-		gpio_direction_output(g_gpio_audio_debug, 0);
-
-#ifdef CONFIG_PROC_FS
-	create_audio_debug_proc_file();
-	create_codec_status_proc_file();
-#endif
-	/* ASUS_BSP Paul --- */
-	#endif
-
 	return 0;
 }
 
@@ -5816,15 +5497,6 @@ static int msm8x16_wcd_codec_remove(struct snd_soc_codec *codec)
 	iounmap(msm8x16_wcd->dig_base);
 	kfree(msm8x16_wcd_priv->fw_data);
 	kfree(msm8x16_wcd_priv);
-
-#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-/* ASUS_BSP Paul +++ */
-#ifdef CONFIG_PROC_FS
-	remove_audio_debug_proc_file();
-	remove_codec_status_proc_file();
-#endif
-/* ASUS_BSP Paul --- */
-#endif
 
 	return 0;
 }
@@ -6126,7 +5798,7 @@ static int msm8x16_wcd_spmi_probe(struct spmi_device *spmi)
 	}
 
 
-	dev_dbg(&spmi->dev, "%s(%d):start addr = 0x%pa\n",
+	dev_dbg(&spmi->dev, "%s(%d):start addr = 0x%pK\n",
 		__func__, __LINE__,  &wcd_resource->start);
 
 	if (wcd_resource->start != TOMBAK_CORE_0_SPMI_ADDR)
