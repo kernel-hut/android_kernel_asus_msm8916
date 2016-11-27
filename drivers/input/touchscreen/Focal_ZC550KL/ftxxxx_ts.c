@@ -67,35 +67,35 @@
 #ifdef FTS_GESTRUE
 /*zax 20140922*/
 #define KEY_GESTURE_U		KEY_POWER
-#define KEY_GESTURE_UP		KEY_UP
-#define KEY_GESTURE_DOWN		KEY_DOWN
-#define KEY_GESTURE_LEFT		KEY_LEFT
-#define KEY_GESTURE_RIGHT		KEY_RIGHT
-#define KEY_GESTURE_M		KEY_M
-#define KEY_GESTURE_L		KEY_L
+#define KEY_GESTURE_UP		257
+#define KEY_GESTURE_DOWN	258
+#define KEY_GESTURE_LEFT	259
+#define KEY_GESTURE_RIGHT	260
+#define KEY_GESTURE_M		261
+#define KEY_GESTURE_L		262
 /*asus use*/
-#define KEY_GESTURE_V		KEY_V
-#define KEY_GESTURE_Z		KEY_Z
-#define KEY_GESTURE_C		KEY_C
-#define KEY_GESTURE_E		KEY_E
-#define KEY_GESTURE_S		KEY_S
-#define KEY_GESTURE_W		KEY_W
+#define KEY_GESTURE_V		263
+#define KEY_GESTURE_Z		264
+#define KEY_GESTURE_C		265
+#define KEY_GESTURE_E		266
+#define KEY_GESTURE_S		267
+#define KEY_GESTURE_W		268
 /*asus use*/
 
 #define GESTURE_DOUBLECLICK	0x24
 #define GESTURE_LEFT		0x20
 #define GESTURE_RIGHT		0x21
-#define GESTURE_UP			0x22
+#define GESTURE_UP		0x22
 #define GESTURE_DOWN		0x23
-#define GESTURE_M			0x32
-#define GESTURE_L			0x44
-#define GESTURE_S			0x46
-#define GESTURE_V			0x54
-#define GESTURE_Z			0x65
-#define GESTURE_C			0x34
-#define GESTURE_E			0x33
-#define GESTURE_O			0x30
-#define GESTURE_W			0x31
+#define GESTURE_M		0x32
+#define GESTURE_L		0x44
+#define GESTURE_S		0x46
+#define GESTURE_V		0x54
+#define GESTURE_Z		0x65
+#define GESTURE_C		0x34
+#define GESTURE_E		0x33
+#define GESTURE_O		0x30
+#define GESTURE_W		0x31
 
 #define FTS_GESTURE_POINTS 255
 #define FTS_GESTURE_POINTS_ONETIME 62
