@@ -747,10 +747,9 @@ static int msm_lsm_ioctl_shared(struct snd_pcm_substream *substream,
 			dev_err(rtd->dev,
 				"%s: lsm open failed, %d\n",
 				__func__, ret);
-			q6lsm_client_free(prtd->lsm_client);
-			kfree(prtd);
 			return ret;
 		}
+		prtd->lsm_client->opened = true;
 		dev_dbg(rtd->dev, "%s: Session_ID = %d, APP ID = %d\n",
 			__func__,
 			prtd->lsm_client->session,
@@ -1773,6 +1772,7 @@ static int msm_lsm_close(struct snd_pcm_substream *substream)
 	prtd->event_status = NULL;
 	spin_unlock_irqrestore(&prtd->event_lock, flags);
 	kfree(prtd);
+	runtime->private_data = NULL;
 
 	return 0;
 }
