@@ -662,10 +662,13 @@ static void ftxxxx_report_value(struct ftxxxx_ts_data *data)
 	struct ts_event *event = &data->event;
 	int i,j;
 	int uppoint = 0;
+	bool report_point=true;
 	int touchs = 0;
 //protocol B
 	for (i = 0; i < event->touch_point; i++) {
-		if(virtual_keys_abs_y && !ftxxxx_ts->keypad_mode_enable && event->au16_y[i] >= virtual_keys_abs_y)
+		report_point=true;
+		if(!report_point || (virtual_keys_abs_y && !ftxxxx_ts->keypad_mode_enable && event->au16_y[i] >= virtual_keys_abs_y))
+		continue;
 		input_mt_slot(data->input_dev, event->au8_finger_id[i]);
 		if (event->au8_touch_event[i]== 0 || event->au8_touch_event[i] == 2) {
 			input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER,true);/* touch down*/
