@@ -50,7 +50,7 @@
 #define SYSFS_DEBUG
 /*#define FTS_APK_DEBUG		not support now*/
 #define FTS_PM
-#define FTS_CTL_IIC 
+#define FTS_CTL_IIC
 
 #define FTS_GESTRUE
 
@@ -150,9 +150,9 @@ u8 FTS_gesture_register_d2;
 u8 FTS_gesture_register_d5;
 u8 FTS_gesture_register_d6;
 u8 FTS_gesture_register_d7;
-//ASUS_BSP : Freeman add for print touch location +++ 
+//ASUS_BSP : Freeman add for print touch location +++
 //int report_touch_locatoin_count[10];
-//ASUS_BSP : Freeman add for print touch location --- 
+//ASUS_BSP : Freeman add for print touch location ---
 
 //ASUS_BSP : Freeman add for reconfig double tap parameter +++ */
 bool ReConfigDoubleTap = false;
@@ -171,6 +171,7 @@ void ftxxxx_ts_suspend(void);
 void ftxxxx_ts_resume(void);
 #endif
 struct ftxxxx_ts_data *ftxxxx_ts;
+static int virtual_keys_abs_y = 0;
 //static bool touch_down_up_status;
 
 #define TOUCH_MAX_X						720
@@ -178,7 +179,7 @@ struct ftxxxx_ts_data *ftxxxx_ts;
 
 #define ANDROID_INPUT_PROTOCOL_B
 
-//ASUS_BSP Freeman: add for i2c retey and if i2c error countor > 10 reset IC 
+//ASUS_BSP Freeman: add for i2c retey and if i2c error countor > 10 reset IC
 #define IICReadWriteRetryTime	3
 static int IICErrorCountor = 0;
 /*ASUS_BSP Freeman: add for i2c retey  and if i2c error countor > 10 reset IC */
@@ -302,7 +303,7 @@ int ftxxxx_i2c_Write(struct i2c_client *client, char *writebuf, int writelen)
 		if (IICErrorCountor >= 10) {
 			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s: i2c read/write error over 10 times !! \n", __func__);
 			dev_err(&client->dev, "[FT5X46][TOUCH_ERR] %s: excute reset IC process !! \n", __func__);
-			//ASUSEvtlog("[Touch] touch i2c read/write error over 10 times, reset IC \n");			
+			//ASUSEvtlog("[Touch] touch i2c read/write error over 10 times, reset IC \n");
 			queue_work(ftxxxx_ts->reset_wq, &ftxxxx_ts->reset_ic_work);
 			return ret;
 		}
@@ -319,7 +320,9 @@ int ftxxxx_i2c_Write(struct i2c_client *client, char *writebuf, int writelen)
 #define MAX_LEN		200
 static ssize_t focalTP_virtual_keys_register(struct kobject *kobj, struct kobj_attribute *attr, char *buf)
 {
-	char *virtual_keys = 	__stringify(EV_KEY) ":" __stringify(KEY_BACK) ":140:1328:160:80" "\n" \
+	char *virtual_keys ;
+	virtual_keys_abs_y = 1328 - 80/2;
+	virtual_keys = 	__stringify(EV_KEY) ":" __stringify(KEY_BACK) ":140:1328:160:80" "\n" \
 				__stringify(EV_KEY) ":" __stringify(KEY_HOME) ":360:1328:180:80" "\n" \
 				__stringify(EV_KEY) ":" __stringify(KEY_MENU)   ":580:1328:160:80" "\n" ;
 	return snprintf(buf, strnlen(virtual_keys, MAX_LEN) + 1 , "%s",	virtual_keys);
@@ -655,13 +658,14 @@ static int ftxxxx_read_Touchdata(struct ftxxxx_ts_data *data)
 *report the point information
 */
 static void ftxxxx_report_value(struct ftxxxx_ts_data *data)
-{	
+{
 	struct ts_event *event = &data->event;
 	int i,j;
 	int uppoint = 0;
 	int touchs = 0;
 //protocol B
 	for (i = 0; i < event->touch_point; i++) {
+		if(virtual_keys_abs_y && !ftxxxx_ts->keypad_mode_enable && event->au16_y[i] >= virtual_keys_abs_y)
 		input_mt_slot(data->input_dev, event->au8_finger_id[i]);
 		if (event->au8_touch_event[i]== 0 || event->au8_touch_event[i] == 2) {
 			input_mt_report_slot_state(data->input_dev, MT_TOOL_FINGER,true);/* touch down*/
@@ -807,7 +811,7 @@ void ftxxxx_nosync_irq_disable(struct i2c_client *client)
 	struct ftxxxx_ts_data *ts_data;
 	unsigned long irqflags;
 	ts_data = i2c_get_clientdata(client);
-	
+
     spin_lock_irqsave(&ts_data->irq_lock, irqflags);
 	atomic_inc(&ftxxxx_ts->irq_ref_cnt);	//ASUS_BSP : Freeman add for check irq dis/enable status
     if (!ts_data->irq_lock_status) {
@@ -824,7 +828,7 @@ void ftxxxx_irq_disable(struct i2c_client *client)
 	struct ftxxxx_ts_data *ts_data;
 	unsigned long irqflags;
 	ts_data = i2c_get_clientdata(client);
-	
+
     spin_lock_irqsave(&ts_data->irq_lock, irqflags);
 	atomic_inc(&ftxxxx_ts->irq_ref_cnt);	//ASUS_BSP : Freeman add for check irq dis/enable status
     if (!ts_data->irq_lock_status) {
@@ -851,7 +855,7 @@ void ftxxxx_irq_enable(struct i2c_client *client)
 			} else {
 			printk("[FT5X46][Touch] %s : already enable skip ! \n", __func__);
 			}
-			atomic_set(&ftxxxx_ts->irq_ref_cnt, 0);			
+			atomic_set(&ftxxxx_ts->irq_ref_cnt, 0);
 		}
     spin_unlock_irqrestore(&ts_data->irq_lock, irqflags);
 }
@@ -893,7 +897,7 @@ int ftxxxx_read_tp_id(void)
 }*/
 void asus_check_touch_mode(void)
 {
-	uint8_t buf[2] = {0};	
+	uint8_t buf[2] = {0};
 	int err = 0;
 	if (ftxxxx_ts->init_success == 1) {
 		if (ftxxxx_ts->usb_status == 1) {
@@ -1161,6 +1165,42 @@ void focal_glove_switch(bool plugin)
 
 }
 
+void focal_keypad_switch(bool plugin)
+{
+	if (ftxxxx_ts == NULL) {
+		printk("[Focal][Touch] %s : ftxxxx_ts is null, skip \n", __func__);
+		return;
+	}
+
+	wake_lock(&ftxxxx_ts->wake_lock);
+
+	mutex_lock(&ftxxxx_ts->g_device_mutex);
+
+	if (ftxxxx_ts->init_success == 1) {
+		if (plugin) {
+			// Enable keypad
+			set_bit(KEY_BACK, ftxxxx_ts->input_dev->keybit);
+			set_bit(KEY_HOME, ftxxxx_ts->input_dev->keybit);
+			set_bit(KEY_APPSELECT, ftxxxx_ts->input_dev->keybit);
+
+			ftxxxx_ts->keypad_mode_enable = true;
+		} else {
+			// Disable keypad
+			clear_bit(KEY_BACK, ftxxxx_ts->input_dev->keybit);
+			clear_bit(KEY_HOME, ftxxxx_ts->input_dev->keybit);
+			clear_bit(KEY_APPSELECT, ftxxxx_ts->input_dev->keybit);
+
+			ftxxxx_ts->keypad_mode_enable = false;
+		}
+	}
+
+	input_sync(ftxxxx_ts->input_dev);
+
+	mutex_unlock(&ftxxxx_ts->g_device_mutex);
+
+	wake_unlock(&ftxxxx_ts->wake_lock);
+}
+
 static void focal_reset_ic_work(struct work_struct *work)
 {
 
@@ -1223,7 +1263,7 @@ static void focal_suspend_work(struct work_struct *work)
 
 		return;
 	}
-	
+
 #ifdef FTS_GESTRUE/*zax 20140922*/
 	if ((ftxxxx_ts->dclick_mode_eable == 1) | (ftxxxx_ts->gesture_mode_eable == 1)) {
 			printk("[FT5X46][Touch] %s : Touch gesture mode \n", __func__);
@@ -1526,7 +1566,7 @@ static void focal_init_check_ic_work(struct work_struct *work)
 	ftxxxx_irq_enable(ftxxxx_ts->client);
 
 	if (tmp_err) {
-		
+
 		//ASUSEvtlog("[FT5X46][TOUCH_ERROR] FW update error, reset IC \n");
 		queue_work(ftxxxx_ts->reset_wq, &ftxxxx_ts->reset_ic_work);
 
@@ -1606,7 +1646,7 @@ static int fts_power_init(struct device *dev,
 			goto reg_vdd_put;
 		}
 	}
-	
+
 	pdata->vcc = devm_regulator_get(dev, "vcc_i2c");
 	if (IS_ERR( pdata->vcc)) {
 		rc = PTR_ERR(pdata->vcc);
@@ -1656,7 +1696,7 @@ static int fts_init_gpio_hw(struct ftxxxx_ts_data *ftxxxx_ts)
 			__func__, FTXXXX_RESET_PIN_NAME, ret);
 		return ret;
 	}
-	
+
 	ret = gpio_direction_output(ftxxxx_ts->pdata->rst_gpio, 1);	/*asus change reset set output high*/
 	if (ret) {
 		printk("[FT5X46][TOUCH_ERR] %s: set %s gpio to out put high failed, ret = %d\n",
@@ -1671,7 +1711,7 @@ static void fts_un_init_gpio_hw(struct ftxxxx_ts_data *ftxxxx_ts)
 	gpio_free(ftxxxx_ts->pdata->rst_gpio);
 }
 
-//ASUS_BSP : Freeman add for pars dt info +++ 
+//ASUS_BSP : Freeman add for pars dt info +++
 static int ft5x46_get_dt_coords(struct device *dev, char *name,
 				struct focal_i2c_platform_data *pdata)
 {
@@ -1733,7 +1773,7 @@ static int ft5x46_parse_dt(struct device *dev,
 	rc = ft5x46_get_dt_coords(dev, "focaltech,display-coords", pdata);
 	if (rc)
 		return rc;
-	
+
 	/* +++reset, irq gpio info+++ */
 	pdata->rst_gpio = of_get_named_gpio_flags(np, "focaltech,reset-gpio",
 				0, &pdata->rst_gpio_flag);
@@ -1841,6 +1881,7 @@ static int ftxxxx_ts_probe(struct i2c_client *client, const struct i2c_device_id
 	ftxxxx_ts->gesture_mode_eable = 0;
 	ftxxxx_ts->irq_wakeup_eable = 0;
 	ftxxxx_ts->gesture_mode_type = 0;
+	ftxxxx_ts->keypad_mode_enable = true;
 	ftxxxx_ts->pdata = pdata;
 	ftxxxx_ts->x_max = pdata->abs_x_max;
 	ftxxxx_ts->y_max = pdata->abs_y_max;
@@ -1961,7 +2002,7 @@ static int ftxxxx_ts_probe(struct i2c_client *client, const struct i2c_device_id
 		printk("[FT5X46][TOUCH_ERR] %s: create init_check_ic workqueue failed\n", __func__);
 		goto err_create_wq_failed;
 	}
-	
+
 	INIT_DELAYED_WORK(&ftxxxx_ts->init_check_ic_work, focal_init_check_ic_work);
 
 	INIT_DELAYED_WORK(&ftxxxx_ts->glove_mode_switch_work, focal_glove_mode_switch_work);
@@ -1977,7 +2018,7 @@ static int ftxxxx_ts_probe(struct i2c_client *client, const struct i2c_device_id
 	{
 		printk("[FT5X46][TOUCH_ERR] %s: failed to register switch_dev \n", __func__);
 		goto exit_err_sdev_register_fail;
-	} 
+	}
 //ASUS BSP Freeman: /sys/class/switch/touch ----
 
 /*ASUS_BSP Freeman: add for creating virtual_key_maps +++*/
@@ -2025,7 +2066,7 @@ static int ftxxxx_ts_probe(struct i2c_client *client, const struct i2c_device_id
 		ftxxxx_ts->init_success = 1;
 		printk("[FT5X46][Touch] touch threshold is %d.\n", uc_reg_value * 4);
 		}
-		
+
 	uc_reg_addr = FTXXXX_REG_VENDOR_ID;
 	err = ftxxxx_i2c_Read(client, &uc_reg_addr, 1, &uc_reg_value, 1);
 	if (err < 0)
@@ -2050,7 +2091,7 @@ static int ftxxxx_ts_probe(struct i2c_client *client, const struct i2c_device_id
 	/*
 	auc_i2c_write_buf[0] = 0xd0;
 	auc_i2c_write_buf[1] = 0x00;
-	ftxxxx_i2c_Write(client, auc_i2c_write_buf, 2);	//let fw close gestrue function 
+	ftxxxx_i2c_Write(client, auc_i2c_write_buf, 2);	//let fw close gestrue function
 	*/
 
 	/* ++++ touch gesture mode support part in ZC550KL ++++ */

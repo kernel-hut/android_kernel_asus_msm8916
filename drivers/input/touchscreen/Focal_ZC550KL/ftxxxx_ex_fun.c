@@ -1,7 +1,7 @@
-/* 
+/*
 * drivers/input/touchscreen/ftxxxx_ex_fun.c
 *
-* FocalTech ftxxxx expand function for debug. 
+* FocalTech ftxxxx expand function for debug.
 *
 * Copyright (c) 2014  Focaltech Ltd.
 *
@@ -243,7 +243,7 @@ int fts_ctpm_auto_upgrade(struct i2c_client *client, u8 *fw_buf)
 	ftxxxx_read_reg(client, FTXXXX_REG_FW_VER, &uc_tp_fm_ver);
 	uc_host_fm_ver = fts_ctpm_get_i_file_ver(fw_buf);
 	printk("[FT5X46][Touch] %s : uc_tp_fm_ver = 0x%x, uc_host_fm_ver = 0x%x \n", __func__, uc_tp_fm_ver, uc_host_fm_ver);
-	
+
 	if (uc_tp_fm_ver == FTXXXX_REG_FW_VER ||	/*the firmware in touch panel maybe corrupted*/
 		uc_tp_fm_ver != uc_host_fm_ver /*the firmware in host flash is new, need upgrade*/
 		) {
@@ -923,6 +923,27 @@ static ssize_t switch_gesture_mode_show(struct device *dev, struct device_attrib
 
 }
 
+static ssize_t switch_keypad_mode_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	int tmp = 0;
+	tmp = buf[0] - 48;
+
+	if (tmp == 0) {
+		focal_keypad_switch(0);
+		printk("[Focal][Touch] keypad_mode_disable ! \n");
+	} else if (tmp == 1) {
+		focal_keypad_switch(1);
+		printk("[Focal][Touch] keypad_mode_enable ! \n");
+	}
+
+	return count;
+}
+
+static ssize_t switch_keypad_mode_show(struct device *dev, struct device_attribute *attr, char *buf)
+{
+	return sprintf(buf, "%d\n", ftxxxx_ts->keypad_mode_enable);
+}
+
 static ssize_t enable_proximity_check_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
 {
 	int tmp = 0;
@@ -1502,7 +1523,7 @@ static ssize_t DoubleTapConfig_show(struct device *dev, struct device_attribute 
 	ftxxxx_i2c_Read(ftxxxx_ts->client, chck_buf, 1, chck_buf, 4);
 
 	count += sprintf(buf, "Touch Slop = %x, Touch Distance = %x, Time Gap = %x, Int Delay Time = %x \n", chck_buf[0], chck_buf[1], chck_buf[2], chck_buf[3]);
-	
+
 	return count;
 }
 
@@ -1536,19 +1557,19 @@ static ssize_t DoubleTapConfig_store(struct device *dev, struct device_attribute
 				regaddr = wmreg>>8;
 				regvalue = wmreg;
 				switch(regaddr) {
-				case 0xe2 : 
+				case 0xe2 :
 					g_touch_slop = regvalue;
 					ReConfigDoubleTap = true;
 					break;
-				case 0xe3 : 
+				case 0xe3 :
 					g_touch_distance = regvalue;
 					ReConfigDoubleTap = true;
 					break;
-				case 0xe4 : 
+				case 0xe4 :
 					g_time_gap = regvalue;
 					ReConfigDoubleTap = true;
 					break;
-				case 0xe5 : 
+				case 0xe5 :
 					g_int_time = regvalue;
 					ReConfigDoubleTap = true;
 					break;
@@ -1819,7 +1840,7 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 			total_item++;
 		}
 	}
-	
+
 	for(i=2;i<4;i++)
 	{
 		if((flag[2*i]+flag[2*i+1])>0)
@@ -1859,7 +1880,7 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 	printk("[FT5X46][%s]	123 data result = %d !\n", __func__, err);
 
 	for (i = 0; i < TX_NUM; i++) {
-		
+
 		for (j = 0; j < RX_NUM; j++) {
 
 			count += snprintf(tmpbuf + count, BufLen - count, "%5d, ", TPrawdata[i][j]);
@@ -1869,10 +1890,10 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 		count += snprintf(tmpbuf + count, BufLen - count, "\n");
 	}
 
-	for (i = 0; i < TX_NUM; i++) 
+	for (i = 0; i < TX_NUM; i++)
 	{
-		
-		for (j = 0; j < RX_NUM; j++) 
+
+		for (j = 0; j < RX_NUM; j++)
 		{
 			count += snprintf(tmpbuf + count, BufLen - count,"%5d, ",  TxLinearity[i][j]);
 			//msleep(2000);
@@ -1881,10 +1902,10 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 		count += snprintf(tmpbuf + count, BufLen - count,"\n");
 	}
 
-	for (i = 0; i < TX_NUM; i++) 
+	for (i = 0; i < TX_NUM; i++)
 	{
-		
-		for (j = 0; j < RX_NUM; j++) 
+
+		for (j = 0; j < RX_NUM; j++)
 		{
 			count += snprintf(tmpbuf + count, BufLen - count,"%5d, ",  RxLinearity[i][j]);
 			//msleep(2000);
@@ -1893,20 +1914,20 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 		count += snprintf(tmpbuf + count, BufLen - count,"\n");
 	}
 
-	for (i = TX_NUM; i < TX_NUM+8; i++) 
+	for (i = TX_NUM; i < TX_NUM+8; i++)
 	{
 		if(i>=TX_NUM && flag[i-TX_NUM]==0)
-		{			
+		{
 			continue;
 		}
-		for (j = 0; j < RX_NUM; j++) 
+		for (j = 0; j < RX_NUM; j++)
 		{
 			if(i>=TX_NUM && j==TX_NUM && ((i-TX_NUM)%2)==1)
-			{			
+			{
 				break;
 			}
-			
-				
+
+
 			count += snprintf(tmpbuf + count, BufLen - count,"%5d, ",  TPrawdata[i][j]);
 			//msleep(2000);
 		}
@@ -1934,7 +1955,7 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 	printk("[FT5X46][%s]	dump data to CVS count = %d !\n", __func__, count);
 	count = 0;
 	for (i = 0; i < TX_NUM; i++) {
-		
+
 		for (j = 0; j < RX_NUM; j++) {
 
 			count += snprintf(tmpbuf + count, BufLen - count, "%5d, ", TPrawdata[i][j]);
@@ -1944,10 +1965,10 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 		count += snprintf(tmpbuf + count, BufLen - count, "\n");
 	}
 
-	for (i = 0; i < TX_NUM; i++) 
+	for (i = 0; i < TX_NUM; i++)
 	{
-		
-		for (j = 0; j < RX_NUM; j++) 
+
+		for (j = 0; j < RX_NUM; j++)
 		{
 			count += snprintf(tmpbuf + count, BufLen - count,"%5d, ",  TxLinearity[i][j]);
 			//msleep(2000);
@@ -1956,10 +1977,10 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 		count += snprintf(tmpbuf + count, BufLen - count,"\n");
 	}
 
-	for (i = 0; i < TX_NUM; i++) 
+	for (i = 0; i < TX_NUM; i++)
 	{
-		
-		for (j = 0; j < RX_NUM; j++) 
+
+		for (j = 0; j < RX_NUM; j++)
 		{
 			count += snprintf(tmpbuf + count, BufLen - count,"%5d, ",  RxLinearity[i][j]);
 			//msleep(2000);
@@ -1968,20 +1989,20 @@ static ssize_t ftxxxx_ftsscaptest_show(struct device *dev, struct device_attribu
 		count += snprintf(tmpbuf + count, BufLen - count,"\n");
 	}
 
-	for (i = TX_NUM; i < TX_NUM+8; i++) 
+	for (i = TX_NUM; i < TX_NUM+8; i++)
 	{
 		if(i>=TX_NUM && flag[i-TX_NUM]==0)
-		{			
+		{
 			continue;
 		}
-		for (j = 0; j < RX_NUM; j++) 
+		for (j = 0; j < RX_NUM; j++)
 		{
 			if(i>=TX_NUM && j==TX_NUM && ((i-TX_NUM)%2)==1)
-			{			
+			{
 				break;
 			}
-			
-				
+
+
 			count += snprintf(tmpbuf + count, BufLen - count,"%5d, ",  TPrawdata[i][j]);
 			//msleep(2000);
 		}
@@ -2107,6 +2128,7 @@ static DEVICE_ATTR(glove_mode, Focal_RW_ATTR, switch_glove_mode_show, switch_glo
 static DEVICE_ATTR(cover_mode, Focal_RW_ATTR, switch_cover_mode_show, switch_cover_mode_store);
 static DEVICE_ATTR(dclick_mode, Focal_RW_ATTR, switch_dclick_mode_show, switch_dclick_mode_store);
 static DEVICE_ATTR(gesture_mode, Focal_RW_ATTR, switch_gesture_mode_show, switch_gesture_mode_store);
+static DEVICE_ATTR(keypad_mode, Focal_RW_ATTR, switch_keypad_mode_show, switch_keypad_mode_store);
 static DEVICE_ATTR(IRQ_status, Focal_RW_ATTR, irq_status_show, NULL);
 static DEVICE_ATTR(Enable_Proximyty_Check, Focal_RW_ATTR, enable_proximity_check_show, enable_proximity_check_store);
 //ASUS_BSP Freeman: add node for show FW vendor ID ++++
@@ -2122,7 +2144,7 @@ static struct attribute *ftxxxx_attributes[] = {
 	&dev_attr_ftsgetprojectcode.attr,
 #ifdef FTS_SELF_TEST
 	&dev_attr_ftsscaptest.attr,
-#endif 
+#endif
 	&dev_attr_ftresetic.attr,
 	&dev_attr_touch_status.attr,
 	&dev_attr_dump_tp_raw_data.attr,
@@ -2135,6 +2157,7 @@ static struct attribute *ftxxxx_attributes[] = {
 	&dev_attr_glove_mode.attr,
 	&dev_attr_cover_mode.attr,
 	&dev_attr_gesture_mode.attr,
+	&dev_attr_keypad_mode.attr,
 	&dev_attr_dclick_mode.attr,
 	&dev_attr_IRQ_status.attr,
 	&dev_attr_Enable_Proximyty_Check.attr,
