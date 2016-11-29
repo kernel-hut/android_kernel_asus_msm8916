@@ -121,6 +121,11 @@ static void msm_actuator_parse_i2c_params(struct msm_actuator_ctrl_t *a_ctrl,
 					i2c_byte2 = value & 0xFF;
 					CDBG("byte1:0x%x, byte2:0x%x\n",
 						i2c_byte1, i2c_byte2);
+					if (a_ctrl->i2c_tbl_index >
+						a_ctrl->total_steps) {
+						pr_err("failed:i2c table index out of bound\n");
+						break;
+					}
 					i2c_tbl[a_ctrl->i2c_tbl_index].
 						reg_addr = i2c_byte1;
 					i2c_tbl[a_ctrl->i2c_tbl_index].
@@ -140,6 +145,10 @@ static void msm_actuator_parse_i2c_params(struct msm_actuator_ctrl_t *a_ctrl,
 			i2c_byte1 = write_arr[i].reg_addr;
 			i2c_byte2 = (hw_dword & write_arr[i].hw_mask) >>
 				write_arr[i].hw_shift;
+		}
+		if (a_ctrl->i2c_tbl_index > a_ctrl->total_steps) {
+			pr_err("failed: i2c table index out of bound\n");
+			break;
 		}
 		CDBG("i2c_byte1:0x%x, i2c_byte2:0x%x\n", i2c_byte1, i2c_byte2);
 		i2c_tbl[a_ctrl->i2c_tbl_index].reg_addr = i2c_byte1;
@@ -1615,7 +1624,7 @@ static int __init msm_actuator_init_module(void)
 	CDBG("Enter\n");
 	msm_actuator_create_workqueue();//ASUS_BSP PJ_Ma+++
 	create_position_proc_file();
-	
+
 	rc = platform_driver_probe(&msm_actuator_platform_driver,
 		msm_actuator_platform_probe);
 	if (!rc)
@@ -1682,7 +1691,7 @@ static struct msm_actuator msm_hvcm_actuator_table = {
 
 static int rear_position_proc_read(struct seq_file *buf, void *v)
 {
-   	seq_printf(buf, "%d\n", g_position);				
+   	seq_printf(buf, "%d\n", g_position);
     return 0;
 }
 
@@ -1702,7 +1711,7 @@ static const struct file_operations position_fops = {
 
 static void create_position_proc_file(void)
 {
-    if(!g_camera_position_created) {   
+    if(!g_camera_position_created) {
         position_proc_file = proc_create(POSITION_REAR_PROC_FILE, 0666, NULL, &position_fops);
 		if(position_proc_file) {
 			CDBG("Stimber: %s sucessed!\n", __func__);
@@ -1710,10 +1719,10 @@ static void create_position_proc_file(void)
 	    } else {
 			pr_err("Stimber: %s failed!\n", __func__);
 			g_camera_position_created = 0;
-	    }  
-    } else {  
-        pr_info("File Exist!\n");  
-    }  
+	    }
+    } else {
+        pr_info("File Exist!\n");
+    }
 }
 //ASUS_BSP Stimber_Hsueh ---
 //ASUS_BSP PJ_Ma+++

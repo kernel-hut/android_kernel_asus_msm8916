@@ -168,7 +168,7 @@ static ssize_t panel_debug_base_reg_write(struct file *file,
 	for (i = 0; i < len; i++) {
 		p = buf + i * 3;
 		p[2] = 0;
-		pr_debug("p[%d] = %p:%s\n", i, p, p);
+		pr_debug("p[%d] = %pK:%s\n", i, p, p);
 		cnt = sscanf(p, "%x", &tmp);
 		reg[i] = tmp;
 		pr_debug("reg[%d] = %x\n", i, (int)reg[i]);
@@ -1051,7 +1051,7 @@ void mdss_dump_reg(char __iomem *base, int len)
 		x4 = readl_relaxed(addr+0x4);
 		x8 = readl_relaxed(addr+0x8);
 		xc = readl_relaxed(addr+0xc);
-		pr_info("%p : %08x %08x %08x %08x\n", addr, x0, x4, x8, xc);
+		pr_info("%pK : %08x %08x %08x %08x\n", addr, x0, x4, x8, xc);
 		addr += 16;
 	}
 	mdss_mdp_clk_ctrl(MDP_BLOCK_POWER_OFF);
@@ -1171,7 +1171,7 @@ static inline struct mdss_mdp_misr_map *mdss_misr_get_map(u32 block_id,
 		return NULL;
 	}
 
-	pr_debug("MISR Module(%d) CTRL(0x%x) SIG(0x%x) intf_base(0x%p)\n",
+	pr_debug("MISR Module(%d) CTRL(0x%x) SIG(0x%x) intf_base(0x%pK)\n",
 			block_id, map->ctrl_reg, map->value_reg, intf_base);
 	return map;
 }
@@ -1212,6 +1212,12 @@ int mdss_misr_set(struct mdss_data_type *mdata,
 	u32 mixer_num = 0;
 	bool is_valid_wb_mixer = true;
 	bool use_mdp_up_misr = false;
+
+	if (!mdata || !req || !ctl) {
+		pr_err("Invalid input params: mdata = %pK req = %pK ctl = %pK",
+			mdata, req, ctl);
+		return -EINVAL;
+	}
 
 	map = mdss_misr_get_map(req->block_id, ctl, mdata);
 

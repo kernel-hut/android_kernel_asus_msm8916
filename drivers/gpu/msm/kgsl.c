@@ -2871,7 +2871,8 @@ static int kgsl_setup_useraddr(struct kgsl_mem_entry *entry,
 	struct dma_buf *dmabuf = NULL;
 	struct vm_area_struct *vma = NULL;
 
-	if (param->offset != 0 || param->hostptr == 0
+	if (param->len == 0 || param->offset != 0
+		|| param->hostptr == 0
 		|| !KGSL_IS_PAGE_ALIGNED(param->hostptr)
 		|| !KGSL_IS_PAGE_ALIGNED(param->len))
 		return -EINVAL;

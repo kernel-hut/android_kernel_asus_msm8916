@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2016, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -958,7 +958,7 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	pr_debug("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
+	pr_debug("%s: ctrl=%pK ndx=%d\n", __func__, ctrl, ctrl->ndx);
 	printk("[Display] %s: ++\n", __func__);
 
 	if (pinfo->dcs_cmd_by_left) {
@@ -970,7 +970,7 @@ static int mdss_dsi_panel_on(struct mdss_panel_data *pdata)
 		mdss_dsi_panel_cmds_send(ctrl, &ctrl->on_cmds);
 #ifndef CONFIG_ASUS_ZC550KL_PROJECT
     set_tcon_cmd(cabc_mode, ARRAY_SIZE(cabc_mode)); //ASUS_BSP: Louis+++, restore cabc level
-	
+
 	rt4532_resume();/*Austin+++*/
 
 	ftxxxx_ts_resume();/*Jacob+++*/
@@ -1005,7 +1005,7 @@ static int mdss_dsi_post_panel_on(struct mdss_panel_data *pdata)
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	pr_debug("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
+	pr_debug("%s: ctrl=%pK ndx=%d\n", __func__, ctrl, ctrl->ndx);
 
 	pinfo = &pdata->panel_info;
 	if (pinfo->dcs_cmd_by_left) {
@@ -1015,7 +1015,7 @@ static int mdss_dsi_post_panel_on(struct mdss_panel_data *pdata)
 
 	on_cmds = &ctrl->post_panel_on_cmds;
 
-	pr_debug("%s: ctrl=%p cmd_cnt=%d\n", __func__, ctrl, on_cmds->cmd_cnt);
+	pr_debug("%s: ctrl=%pK cmd_cnt=%d\n", __func__, ctrl, on_cmds->cmd_cnt);
 
 	if (on_cmds->cmd_cnt) {
 		msleep(50);	/* wait for 3 vsync passed */
@@ -1041,7 +1041,7 @@ static int mdss_dsi_panel_off(struct mdss_panel_data *pdata)
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	pr_debug("%s: ctrl=%p ndx=%d\n", __func__, ctrl, ctrl->ndx);
+	pr_debug("%s: ctrl=%pK ndx=%d\n", __func__, ctrl, ctrl->ndx);
 	printk("[Display] %s: ++\n", __func__);
 #ifndef CONFIG_ASUS_ZC550KL_PROJECT
 
@@ -1087,7 +1087,7 @@ static int mdss_dsi_panel_low_power_config(struct mdss_panel_data *pdata,
 	ctrl = container_of(pdata, struct mdss_dsi_ctrl_pdata,
 				panel_data);
 
-	pr_debug("%s: ctrl=%p ndx=%d enable=%d\n", __func__, ctrl, ctrl->ndx,
+	pr_debug("%s: ctrl=%pK ndx=%d enable=%d\n", __func__, ctrl, ctrl->ndx,
 		enable);
 
 	/* Any panel specific low power commands/config */
@@ -1167,7 +1167,7 @@ static u32 dump_TM_chip_uniqueId(void)
 	cmdreq.rbuf = rbuffer;
 	cmdreq.cb = NULL;
 	mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
-	printk("[Display] TM id: 0x%x, 0x%x, 0x%x, 0x%x\n", *(cmdreq.rbuf), *(cmdreq.rbuf+1), 
+	printk("[Display] TM id: 0x%x, 0x%x, 0x%x, 0x%x\n", *(cmdreq.rbuf), *(cmdreq.rbuf+1),
 								*(cmdreq.rbuf+2), *(cmdreq.rbuf+3));
 
 	kfree(rbuffer);
@@ -1193,7 +1193,7 @@ static ssize_t unique_id_proc_write(struct file *filp, const char *buff, size_t 
 		dump_TM_chip_uniqueId();
 
 
-    deinitKernelEnv(); 
+    deinitKernelEnv();
     return len;
 }
 
@@ -1335,9 +1335,9 @@ static char display_mode_r[2] = {0x0D, 0x00};
 static char signal_mode_r[2] = {0x0E, 0x00};
 static char self_diagnostic_r[2] = {0x0F, 0x00};
 static char memory_start_r[2] = {0x2E, 0x00};
-static char bl_value_r[2] = {0x52, 0x00}; 
+static char bl_value_r[2] = {0x52, 0x00};
 static char init_cabc1_r[2] = {0x54, 0x00};
-static char IE_CABC_r[2] = {0x56, 0x00}; 
+static char IE_CABC_r[2] = {0x56, 0x00};
 static char CABC_min_bl_r[2] = {0x5F, 0x0};
 static char id1[2] = {0xDA, 0x0};
 static char id2[2] = {0xDB, 0x0};
@@ -1363,7 +1363,7 @@ static struct dsi_cmd_desc dump_panel_reg_cmd[] = {
 
 static bool write_lcd_reg_val(char *dump_result)
 {
-    struct file *fp = NULL; 
+    struct file *fp = NULL;
     loff_t pos_lsts = 0;
     mm_segment_t old_fs;
 
@@ -1402,7 +1402,7 @@ static ssize_t dump_asus_panel_register(char *dump_result)
 		for (i=0; i < ARRAY_SIZE(dump_panel_reg_cmd); i++) {
 			memset(&cmdreq, 0, sizeof(cmdreq));
 			rbuffer = kmalloc(sizeof(ctrl_pdata->rx_buf.len), GFP_KERNEL);
-	
+
 			cmdreq.cmds = &dump_panel_reg_cmd[i];
 			cmdreq.cmds_cnt = 1;
 			cmdreq.flags = CMD_REQ_RX | CMD_REQ_COMMIT;
@@ -1410,7 +1410,7 @@ static ssize_t dump_asus_panel_register(char *dump_result)
 			cmdreq.rbuf = rbuffer;
 			cmdreq.cb = dump_register_cb;
 			mdss_dsi_cmdlist_put(ctrl_pdata, &cmdreq);
-	
+
 			addr = (char) (dump_panel_reg_cmd[i].payload)[0];
 			len += sprintf(buf, "addr: 0x%x = (0x%x)\n", addr, *(cmdreq.rbuf));
 			strcat(dump_result, buf);
@@ -1448,7 +1448,7 @@ static ssize_t lcd_reg_write(struct file *filp, const char *buff, size_t len, lo
 		write_lcd_reg_val(reg_buf);
     }
 
-    deinitKernelEnv(); 
+    deinitKernelEnv();
     return len;
 }
 
@@ -1549,7 +1549,7 @@ static ssize_t lcd_reg_rw(struct file *filp, const char *buff, size_t len, loff_
             }
 
             if(cur != NULL) {
-                if (*(tmp+str_len) == 'w') 
+                if (*(tmp+str_len) == 'w')
                     flag = true;
                 else if (*(tmp+str_len) == 'r')
                     flag = false;
