@@ -860,7 +860,7 @@ static void msm8x16_wcd_mbhc_calc_impedance(struct wcd_mbhc *mbhc, uint32_t *zl,
 	printk("reg :0x155 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_BTN2_ZDETH_CTL) );
 	printk("reg :0x152 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DBNC_TIMER));
 	printk("reg :0x150 val : 0x%x \n ", snd_soc_read(codec, MSM8X16_WCD_A_ANALOG_MBHC_DET_CTL_2));
-	
+
 	wcd_mbhc_meas_imped(codec, &impedance_l, &impedance_r);
 
 	min_range_used = msm8x16_adj_ref_current(codec,
@@ -4110,8 +4110,13 @@ static int msm8x16_wcd_hph_pa_event(struct snd_soc_dapm_widget *w,
 		if (w->shift == 5)
 			msm8x16_notifier_call(codec,
 					WCD_EVENT_PRE_HPHL_PA_ON);
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
+		else if (w->shift == 4) {
+#endif
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		else if (w->shift == 4)
 			if (speaker_run == 0) {
+#endif
 				msm8x16_notifier_call(codec,
 						WCD_EVENT_PRE_HPHR_PA_ON);
 			}
@@ -4151,10 +4156,14 @@ static int msm8x16_wcd_hph_pa_event(struct snd_soc_dapm_widget *w,
 			snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_RX_HPH_R_TEST, 0x04, 0x00);
 			msm8x16_wcd->mute_mask |= HPHR_PA_DISABLE;
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 			if (speaker_run == 0) {
+#endif
 				msm8x16_notifier_call(codec,
 					WCD_EVENT_PRE_HPHR_PA_OFF);
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 			}
+#endif
 		}
 		if (get_codec_version(msm8x16_wcd) >= CAJON) {
 			snd_soc_update_bits(codec,
@@ -4171,10 +4180,14 @@ static int msm8x16_wcd_hph_pa_event(struct snd_soc_dapm_widget *w,
 		} else if (w->shift == 4) {
 			clear_bit(WCD_MBHC_HPHR_PA_OFF_ACK,
 				&msm8x16_wcd->mbhc.hph_pa_dac_state);
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 			if (speaker_run == 0) {
+#endif
 				msm8x16_notifier_call(codec,
 						WCD_EVENT_POST_HPHR_PA_OFF);
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 			}
+#endif
 		}
 		usleep_range(4000, 4100);
 
@@ -6291,4 +6304,3 @@ module_exit(msm8x16_wcd_codec_exit);
 MODULE_DESCRIPTION("MSM8x16 Audio codec driver");
 MODULE_LICENSE("GPL v2");
 MODULE_DEVICE_TABLE(of, msm8x16_wcd_spmi_id_table);
-
