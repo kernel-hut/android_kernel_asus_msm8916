@@ -6699,7 +6699,10 @@ void show_state_filter(unsigned long state_filter)
 	if (!state_filter)
 		debug_show_all_locks();
 }
+
+#ifndef CONFIG_MODULES
 EXPORT_SYMBOL(sched_setscheduler_nocheck);
+#endif
 
 void __cpuinit init_idle_bootup_task(struct task_struct *idle)
 {
