@@ -124,6 +124,7 @@ int ftxxxx_read_tp_id(void);
 u8 get_focal_tp_fw(void);
 void focal_glove_switch(bool plugin);
 void focal_cover_switch(bool plugin);
+void focal_keypad_switch(bool plugin);
 void ftxxxx_Enable_IRQ(struct i2c_client *client, int enable);
 // int focal_get_HW_ID(void); not support in Android M branch
 void ftxxxx_nosync_irq_disable(struct i2c_client *client);
@@ -155,6 +156,7 @@ struct ftxxxx_ts_data {
 	bool cover_mode_eable;
 	bool dclick_mode_eable;
 	bool gesture_mode_eable;
+	bool keypad_mode_enable;
 	bool irq_wakeup_eable;
 	u8 gesture_mode_type;
 	bool reset_pin_status;
@@ -178,7 +180,7 @@ struct ftxxxx_ts_data {
 	struct delayed_work init_check_ic_work;
 	struct delayed_work glove_mode_switch_work;
 	struct delayed_work cover_mode_switch_work;
-	
+
 	/* Wakelock Protect */
 	struct wake_lock wake_lock;
 	/* Wakelock Protect */
