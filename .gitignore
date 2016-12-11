@@ -32,6 +32,9 @@ modules.builtin
 *.lzo
 *.patch
 *.gcno
+*.zip
+dtb
+zImage
 
 #
 # Top-level generic files
