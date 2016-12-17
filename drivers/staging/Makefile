@@ -61,5 +61,10 @@ obj-$(CONFIG_FIREWIRE_SERIAL)	+= fwserial/
 obj-$(CONFIG_ZCACHE)		+= zcache/
 obj-$(CONFIG_GOLDFISH)		+= goldfish/
 obj-$(CONFIG_USB_DWC2)		+= dwc2/
-obj-$(CONFIG_PRIMA_WLAN)	+= prima/
-obj-$(CONFIG_PRONTO_WLAN)	+= prima/
+ifneq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
+obj-$(CONFIG_PRIMA_WLAN)	+= prima-Z00/
+obj-$(CONFIG_PRONTO_WLAN)	+= prima-Z00/
+else
+obj-$(CONFIG_PRIMA_WLAN)	+= prima-Z010/
+obj-$(CONFIG_PRONTO_WLAN)	+= prima-Z010/
+endif
