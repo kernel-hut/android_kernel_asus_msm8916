@@ -21,7 +21,7 @@
 
 #include <trace/events/power.h>
 
-static int touchboost = 1;
+static int touchboost = 0;
 
 static struct mutex managed_cpus_lock;
 
