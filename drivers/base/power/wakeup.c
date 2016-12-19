@@ -934,12 +934,10 @@ void print_active_locks(void)
             ASUSEvtlog("[PM] active wake lock: %s\n", ws->name);
             if (pmsp_flag == 1) { 
                 if(strncmp(ws->name, "PowerManagerService", strlen("PowerManagerService")) == 0) 
-                	pmsp_print();
 				//dump cpuinfo
 				printk("[PM] pm_stay_unattended_period: %d\n", pm_stay_unattended_period);
 				if( pm_stay_unattended_period >= PM_UNATTENDED_TIMEOUT*3 ) {
 					pm_stay_unattended_period = 0;
-					print_pm_cpuinfo();
                 }
 			}
             pmsp_flag = 0;
