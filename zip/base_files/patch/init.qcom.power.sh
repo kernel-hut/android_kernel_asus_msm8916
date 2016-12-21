@@ -47,6 +47,20 @@ case "$soc_id" in
 	echo Y > /sys/module/msm_thermal/parameters/enabled
 	echo Y > /sys/module/workqueue/parameters/power_efficient
 
+	# Enable Reaper Darkness Features	
+	echo performance > /sys/devices/soc.0/1c00000.qcom,kgsl-3d0/devfreq/1c00000.qcom,kgsl-3d0/governor
+	echo 258 > /sys/devices/platform/kcal_ctrl.0/kcal_val
+	echo 265 > /sys/devices/platform/kcal_ctrl.0/kcal_cont
+	echo 280 > /sys/devices/platform/kcal_ctrl.0/kcal_sat
+	echo 1 > /proc/sys/vm/laptop_mod
+	echo 5 5 > /sys/kernel/sound_control_3/gpl_speaker_gain
+	echo 5 5 245 > /sys/kernel/sound_control_3/gpl_speaker_gain
+	swapoff /dev/block/zram0 > /dev/null 2>&1
+	echo 1 > /dev/block/zram0/reset
+	echo 534773760 > /sys/block/zram0/disksize
+	mkswap /dev/block/zram0 > /dev/null 2>&1
+	swapon /dev/block/zram0 > /dev/null 2>&1
+
         # Enable governor
         echo 1 > /sys/devices/system/cpu/cpu0/online
         echo "interactive" > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
@@ -54,12 +68,10 @@ case "$soc_id" in
         echo "25000 1094400:50000" > /sys/devices/system/cpu/cpufreq/interactive/above_hispeed_delay
         echo 90 > /sys/devices/system/cpu/cpufreq/interactive/go_hispeed_load
         echo 30000 > /sys/devices/system/cpu/cpufreq/interactive/timer_rate
-        echo 998400 > /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq
+        echo 800000 > /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq
         echo 0 > /sys/devices/system/cpu/cpufreq/interactive/io_is_busy
-        echo "1 400000:85 998400:90 1094400:80" > /sys/devices/system/cpu/cpufreq/interactive/target_loads
+        echo "1 533333:85 998400:90 400000:80" > /sys/devices/system/cpu/cpufreq/interactive/target_loads
         echo 50000 > /sys/devices/system/cpu/cpufreq/interactive/min_sample_time
-        echo 1401000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_max_freq
-        echo 200000 > /sys/devices/system/cpu/cpu0/cpufreq/scaling_min_freq
     ;;
     "239" | "241" | "263" | "268" | "269" | "270" | "271")
         # Apply MSM8939 specific Sched & Governor settings
