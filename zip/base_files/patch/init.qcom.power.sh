@@ -65,12 +65,12 @@ case "$soc_id" in
         echo 1 > /sys/devices/system/cpu/cpu0/online
         echo "interactive" > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor
 
-        echo "25000 1094400:50000" > /sys/devices/system/cpu/cpufreq/interactive/above_hispeed_delay
+        echo "25000 1209600:50000" > /sys/devices/system/cpu/cpufreq/interactive/above_hispeed_delay
         echo 90 > /sys/devices/system/cpu/cpufreq/interactive/go_hispeed_load
         echo 30000 > /sys/devices/system/cpu/cpufreq/interactive/timer_rate
-        echo 800000 > /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq
+        echo 1152000 > /sys/devices/system/cpu/cpufreq/interactive/hispeed_freq
         echo 0 > /sys/devices/system/cpu/cpufreq/interactive/io_is_busy
-        echo "1 533333:85 998400:90 400000:80" > /sys/devices/system/cpu/cpufreq/interactive/target_loads
+        echo "1 200000:85 1094400:90 800000:80" > /sys/devices/system/cpu/cpufreq/interactive/target_loads
         echo 50000 > /sys/devices/system/cpu/cpufreq/interactive/min_sample_time
     ;;
     "239" | "241" | "263" | "268" | "269" | "270" | "271")
