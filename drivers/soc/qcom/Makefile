@@ -80,5 +80,7 @@ obj-$(CONFIG_MSM_SYSTEM_HEALTH_MONITOR) += system_health_monitor.o
 obj-$(CONFIG_MSM_RTB) += msm_rtb-hotplug.o
 obj-$(CONFIG_QCOM_EARLY_RANDOM)	+= early_random.o
 obj-$(CONFIG_MSM_PACMAN)        += msm_pacman.o
+obj-$(CONFIG_STATE_NOTIFIER)		+= state_notifier.o
+obj-$(CONFIG_STATE_HELPER)		+= state_helper.o
 obj-$(CONFIG_BOOTINFO)		+= bootinfo.o
 obj-$(CONFIG_FORCE_FAST_CHARGE) += fastchg.o

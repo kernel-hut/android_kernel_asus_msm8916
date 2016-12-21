@@ -581,6 +581,13 @@ config MSM_PERFORMANCE_HOTPLUG_ON
 
 source "drivers/soc/qcom/memshare/Kconfig"
 
+config STATE_NOTIFIER
+        bool "State Notifier"
+
+config STATE_HELPER
+        bool "State Helper"
+	depends on STATE_NOTIFIER
+
 config BOOTINFO
 	bool "Boot Information Feature"
 	default n

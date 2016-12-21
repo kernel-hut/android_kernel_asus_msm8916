@@ -30,6 +30,9 @@
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/completion.h>
 #include <linux/pm_wakeup.h>
+#ifdef CONFIG_STATE_HELPER
+#include <linux/state_helper.h>
+#endif
 
 //asus report capacity frank ++++
 #include <asm/uaccess.h>
@@ -2119,6 +2122,9 @@ static int smb1360_battery_get_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
 		val->intval = smb1360_get_prop_batt_capacity(chip);
+        #ifdef CONFIG_STATE_HELPER
+		batt_level_notify(val->intval);
+        #endif
 		if(val->intval == 0 && smb1360_get_prop_batt_temp(chip) < 0 && g_ASUS_bootmode == USER_MODE)
 		{
 			val->intval = 50;
