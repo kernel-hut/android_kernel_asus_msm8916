@@ -17,18 +17,18 @@
 #include <trace/events/power.h>
 #include <linux/moduleparam.h>
 
-static bool enable_si_ws = true;
+static bool enable_si_ws = false;
 module_param(enable_si_ws, bool, 0644);
-static bool enable_msm_hsic_ws = true;
+static bool enable_msm_hsic_ws = false;
 module_param(enable_msm_hsic_ws, bool, 0644);
-static bool enable_wlan_rx_wake_ws = true;
+static bool enable_wlan_rx_wake_ws = false;
 module_param(enable_wlan_rx_wake_ws, bool, 0644);
-static bool enable_wlan_ctrl_wake_ws = true;
+static bool enable_wlan_ctrl_wake_ws = false;
 module_param(enable_wlan_ctrl_wake_ws, bool, 0644);
-static bool enable_wlan_wake_ws = true;
+static bool enable_wlan_wake_ws = false;
 module_param(enable_wlan_wake_ws, bool, 0644);
-static bool enable_smb135x_wake_ws = true;
-module_param(enable_smb135x_wake_ws, bool, 0644);
+static bool enable_smb136x_wake_ws = false;
+module_param(enable_smb136x_wake_ws, bool, 0644);
 
 #include "power.h"
 //[+++]Debug for active wakelock before entering suspend
