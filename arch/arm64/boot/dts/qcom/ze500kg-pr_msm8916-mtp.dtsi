@@ -174,7 +174,6 @@
 		qcom,msm-mclk-freq = <9600000>;
 		qcom,msm-mbhc-hphl-swh = <0>;
 		qcom,msm-mbhc-gnd-swh = <0>;
-		qcom,msm-micbias1-ext-cap;
 		qcom,msm-hs-micbias-type = "internal";
 		qcom,audio-routing =
 			"RX_BIAS", "MCLK",
@@ -303,6 +302,7 @@
 	vdd-supply = <&pm8916_l8>;
 	qcom,vdd-voltage-level = <2900000 2900000>;
 	qcom,vdd-current-level = <200 400000>;
+	qcom,vdd-always-on;		/*ASUS_BSP Deeo : make sure eMMC VDD alawys on even suspend*/
 
 	vdd-io-supply = <&pm8916_l5>;
 	qcom,vdd-io-always-on;
