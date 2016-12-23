@@ -2880,9 +2880,9 @@ static int msm8x16_setup_hs_jack(struct platform_device *pdev,
 
 	#ifndef CONFIG_ASUS_ZC550KL_PROJECT
 	/* ASUS_BSP Paul +++ */
-	g_gpio_audio_debug = of_get_named_gpio(pdev->dev.of_node, "AUDIO_DEBUG", 0);
-	if (g_gpio_audio_debug < 0)
-		printk("%s: property AUDIO_DEBUG not found\n", __func__);
+	// g_gpio_audio_debug = of_get_named_gpio(pdev->dev.of_node, "AUDIO_DEBUG", 0);
+//	if (g_gpio_audio_debug < 0)
+//		printk("%s: property AUDIO_DEBUG not found\n", __func__);
 	/* ASUS_BSP Paul --- */
 	#endif
 
