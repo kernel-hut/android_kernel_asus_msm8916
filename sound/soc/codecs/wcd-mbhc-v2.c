@@ -950,12 +950,12 @@ static int wcd_check_cross_conn(struct wcd_mbhc *mbhc)
 	 */
 	WCD_MBHC_REG_READ(WCD_MBHC_HPHL_SCHMT_RESULT, hphl_sch_res);
 	WCD_MBHC_REG_READ(WCD_MBHC_HPHR_SCHMT_RESULT, hphr_sch_res);
-	if (!(hphl_sch_res || hphr_sch_res)) {
-		plug_type = MBHC_PLUG_TYPE_GND_MIC_SWAP;
-		pr_debug("%s: Cross connection identified\n", __func__);
-	} else {
-		pr_debug("%s: No Cross connection found\n", __func__);
-	}
+	//if (!(hphl_sch_res || hphr_sch_res)) {
+	//	plug_type = MBHC_PLUG_TYPE_GND_MIC_SWAP;
+	//	pr_debug("%s: Cross connection identified\n", __func__);
+	//} else {
+	//	pr_debug("%s: No Cross connection found\n", __func__);
+	//}
 
 	/* Disable schmitt trigger and restore micbias */
 	WCD_MBHC_REG_UPDATE_BITS(WCD_MBHC_ELECT_SCHMT_ISRC, reg1);

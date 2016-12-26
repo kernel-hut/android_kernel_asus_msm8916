@@ -3714,20 +3714,30 @@ static int smb1360_check_batt_profile(struct smb1360_chip *chip)
 						loaded_profile, new_profile);
 		}
 	}*/
-	/*if(loaded_profile == 0)
+	if(loaded_profile == 0)
 	{
-		pr_info("loaded profile is profile A ,skip ! \n");
-		return 0;
-	}*/
-	if(check_CSIR_function() == 0x2334 )
-	{
-		pr_info("load battery profile A! \n");
-		bid_mask = BATT_PROFILEA_MASK;
-	}	
+		if(check_CSIR_function() == 0x2334 )
+		{
+			pr_info("loaded profile is profile A ,skip ! \n");
+			return 0;
+		}
+		else
+		{
+			pr_info("must load battery profile B! \n");
+			bid_mask = BATT_PROFILEB_MASK;
+		}
+	}
 	else
-	{
-		pr_info("load battery profile B! \n");
-		bid_mask = BATT_PROFILEB_MASK;
+	{	if(check_CSIR_function() == 0x2334 )
+		{
+			pr_info("must load battery profile A! \n");
+			bid_mask = BATT_PROFILEA_MASK;
+		}
+		else
+		{
+			pr_info("loaded profile is profileB ,skip ! \n");
+			return 0;
+		}
 	}	
 	/* set the BID mask */
 	rc = smb1360_masked_write(chip, CFG_FG_BATT_CTRL_REG,
