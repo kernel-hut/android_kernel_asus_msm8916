@@ -107,9 +107,9 @@
 			qcom,fg-auto-recharge-soc = <99>;
 			qcom,smb1360-vadc = <&pm8916_vadc>;
 			qcom,otg-batt-curr-limit = <550>;
-			//qcom,config-hard-thresholds;
-			//qcom,hot-bat-decidegc = <600>;
-			//qcom,cold-bat-decidegc = <0>;
+			qcom,config-hard-thresholds;
+			qcom,hot-bat-decidegc = <600>;
+			qcom,cold-bat-decidegc = <0>;
 			// asus bsp frank add soft jeita for cool and warm +++
 			qcom,soft-jeita-supported;
 			qcom,warm-bat-decidegc = <500>;
@@ -119,9 +119,6 @@
 			qcom,warm-bat-ma = <1500>;
 			qcom,cool-bat-ma = <450>;
 			// asus bsp frank add soft jeita for cool and warm ---
-			qcom,otp-hard-jeita-config;
-			qcom,otp-hot-bat-decidegc = <600>;
-			qcom,otp-cold-bat-decidegc = <0>;
 			qcom,shdn-after-pwroff;
 			regulator-name = "smb1360_otg_vreg";
 			qcom,fg-batt-capacity-mah = <4850>;
@@ -129,6 +126,7 @@
 			qcom,fg-cc-to-cv-mv = <4360>;
 			qcom,thermistor-c1-coeff = <0x86DA>;
 			qcom,otp-rslow-cfg;
+			otp_jeita_hard_config;
 			qcom,rsense-10mhom;
 			qcom,charging-timeout = <0>;
 		};

@@ -505,6 +505,7 @@ struct smb1360_chip {
 	bool				fet_gain_enabled;
 	bool				otp_rslow_config;
 	int				otg_fet_enable_gpio;
+	bool				otp_jeita_hard_config;
 
 	/* status tracking */
 	int				voltage_now;
@@ -2737,6 +2738,67 @@ static int smb1360_otp_rslow_cfg(struct smb1360_chip *chip)
 
 	return 0;
 }
+
+static int smb1360_otp_jeita_hard_config(struct smb1360_chip *chip)
+{
+	int rc, i;
+	u8 address, data;
+	u8 reg_val_mapping_standalone[][2] = {
+			{0xE0, 0x13},
+			{0xE1, 0x5A}, /* hot @ 60C */
+			{0xF0, 0x40},
+	};
+
+	u8 reg_val_mapping_w_rsense[][2] = {
+			{0xE4, 0x13},
+			{0xE5, 0x5A}, /* hoy @ 60C */
+			{0xF0, 0x54}
+	};
+
+	u8 reg_val_mapping_w_rslow[][2] = {
+			{0xE8, 0x13},
+			{0xE9, 0x5A}, /* hoy @ 60C */
+			{0xF1, 0x40}
+	};
+
+	u8 reg_val_mapping_w_rsense_rslow[][2] = {
+			{0xEC, 0x13},
+			{0xED, 0x5A},
+			{0xF1, 0xA4},
+	};
+
+	pr_debug("Setting hard-jeita rsense=%d otg_fet_gain=%d\n",
+				chip->rsense_10mohm, chip->otg_fet_present);
+
+	for (i = 0; i < ARRAY_SIZE(reg_val_mapping_standalone); i++) {
+
+		if (!chip->rsense_10mohm && !chip->otg_fet_present) {
+			address = reg_val_mapping_standalone[i][0];
+			data = reg_val_mapping_standalone[i][1];
+		} else if (chip->rsense_10mohm && chip->otg_fet_present) {
+			address = reg_val_mapping_w_rsense_rslow[i][0];
+			data = reg_val_mapping_w_rsense_rslow[i][1];
+		} else if (chip->rsense_10mohm && !chip->otg_fet_present) {
+			address = reg_val_mapping_w_rsense[i][0];
+			data = reg_val_mapping_w_rsense[i][1];
+		} else if (!chip->rsense_10mohm && chip->otg_fet_present) {
+			address = reg_val_mapping_w_rslow[i][0];
+			data = reg_val_mapping_w_rslow[i][1];
+		}
+
+		pr_debug("Writing reg_add=%x value=%x\n", address, data);
+
+		rc = smb1360_fg_write(chip, address, data);
+		if (rc) {
+			pr_err("Write fg address 0x%x failed, rc = %d\n",
+						address, rc);
+			return rc;
+		}
+	}
+
+	return 0;
+}
+
 static int smb1360_otp_gain_config(struct smb1360_chip *chip, int gain_factor)
 {
 	int rc = 0;
@@ -2765,6 +2827,14 @@ static int smb1360_otp_gain_config(struct smb1360_chip *chip, int gain_factor)
 		rc = smb1360_otp_rslow_cfg(chip);
 		if (rc) {
 			pr_err("Unable configure OTP for rlsow rc=%d\n", rc);
+			goto restore_fg;
+		}
+	}
+
+	if (chip->otp_jeita_hard_config) {
+		rc = smb1360_otp_jeita_hard_config(chip);
+		if (rc) {
+			pr_err("Unable configure OTP for jeita rc=%d\n", rc);
 			goto restore_fg;
 		}
 	}
@@ -3714,20 +3784,30 @@ static int smb1360_check_batt_profile(struct smb1360_chip *chip)
 						loaded_profile, new_profile);
 		}
 	}*/
-	/*if(loaded_profile == 0)
+	if(loaded_profile == 0)
 	{
-		pr_info("loaded profile is profile A ,skip ! \n");
-		return 0;
-	}*/
-	if(check_CSIR_function() == 0x2334 )
-	{
-		pr_info("load battery profile A! \n");
-		bid_mask = BATT_PROFILEA_MASK;
-	}	
+		if(check_CSIR_function() == 0x2334 )
+		{
+			pr_info("loaded profile is profile A ,skip ! \n");
+			return 0;
+		}
+		else
+		{
+			pr_info("must load battery profile B! \n");
+			bid_mask = BATT_PROFILEB_MASK;
+		}
+	}
 	else
-	{
-		pr_info("load battery profile B! \n");
-		bid_mask = BATT_PROFILEB_MASK;
+	{	if(check_CSIR_function() == 0x2334 )
+		{
+			pr_info("must load battery profile A! \n");
+			bid_mask = BATT_PROFILEA_MASK;
+		}
+		else
+		{
+			pr_info("loaded profile is profileB ,skip ! \n");
+			return 0;
+		}
 	}	
 	/* set the BID mask */
 	rc = smb1360_masked_write(chip, CFG_FG_BATT_CTRL_REG,
@@ -4301,6 +4381,9 @@ static int smb1360_otp_gain_init(struct smb1360_chip *chip)
 		otp_gain_config = true;
 	}
 
+	if (chip->otp_jeita_hard_config)
+		otp_gain_config = true;
+
 	mutex_lock(&chip->otp_gain_lock);
 	if (chip->otg_fet_present) {
 		/*
@@ -4850,7 +4933,7 @@ static int smb1360_parse_jeita_params(struct smb1360_chip *chip)
 			chip->hot_hysteresis = temp[1];
 		}
 
-		pr_info("otp_hard_jeita_config = %d, otp_cold_bat_decidegc = %d\n"
+		pr_debug("otp_hard_jeita_config = %d, otp_cold_bat_decidegc = %d\n"
 			"otp_hot_bat_decidegc = %d, cold_hysteresis = %d\n"
 			"hot_hysteresis = %d\n",
 			chip->otp_hard_jeita_config,
@@ -4926,7 +5009,7 @@ static int smb1360_parse_jeita_params(struct smb1360_chip *chip)
 		}
 	}
 
-	pr_info("soft-jeita-enabled = %d, warm-bat-decidegc = %d, cool-bat-decidegc = %d, cool-bat-mv = %d, warm-bat-mv = %d, cool-bat-ma = %d, warm-bat-ma = %d\n",
+	pr_debug("soft-jeita-enabled = %d, warm-bat-decidegc = %d, cool-bat-decidegc = %d, cool-bat-mv = %d, warm-bat-mv = %d, cool-bat-ma = %d, warm-bat-ma = %d\n",
 		chip->soft_jeita_supported, chip->warm_bat_decidegc,
 		chip->cool_bat_decidegc, chip->cool_bat_mv, chip->warm_bat_mv,
 		chip->cool_bat_ma, chip->warm_bat_ma);
@@ -4982,6 +5065,8 @@ static int smb_parse_dt(struct smb1360_chip *chip)
 	chip->rsense_10mohm = of_property_read_bool(node, "qcom,rsense-10mhom");
 	chip->otp_rslow_config = of_property_read_bool(node,
 						"qcom,otp-rslow-cfg");
+	chip->otp_jeita_hard_config = of_property_read_bool(node,
+						"qcom,otp-jeita-hard");
 	if (of_property_read_bool(node, "qcom,batt-profile-select")) {
 		rc = smb_parse_batt_id(chip);
 		if (rc < 0) {
