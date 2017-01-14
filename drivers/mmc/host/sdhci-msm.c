@@ -3367,6 +3367,7 @@ static void sdhci_set_default_hw_caps(struct sdhci_msm_host *msm_host,
 }
 
 extern void create_emmc_health_proc_file(void);  //ASUS_BSP lei_guo : add proc file node for eMMC health +++
+extern void create_storage_health_proc_file(void); //ASUS_BSP Hank2_Liu 20161202 : Add proc file node to read emmc health status +++
 static int sdhci_msm_probe(struct platform_device *pdev)
 {
 	struct sdhci_host *host;
@@ -3783,6 +3784,7 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	//ASUS BSP lei_guo : create proc file +++
 	if (!strcmp("mmc0",mmc_hostname(host->mmc))) {
 		create_emmc_health_proc_file();
+		create_storage_health_proc_file();
 	}
 	//ASUS BSP lei_guo : create proc file ---
 

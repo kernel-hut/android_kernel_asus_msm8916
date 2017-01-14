@@ -28,6 +28,7 @@
 #include "mmc_config.h"		//ASUS_BSP Deeo : eMMC porting
 static int mmc_can_poweroff_notify(const struct mmc_card *card);	//ASUS_BSP Deeo : eMMC porting
 static u8 life_time_B;
+static u8  storage_primary_health;
 
 static const unsigned int tran_exp[] = {
 	10000,		100000,		1000000,	10000000,
@@ -801,6 +802,9 @@ static int mmc_read_ext_csd(struct mmc_card *card, u8 *ext_csd)
 		card->ext_csd.device_life_time[0] = ext_csd[268];
 		card->ext_csd.device_life_time[1] = ext_csd[269];
 		life_time_B = ext_csd[269];
+		//ASUS_BSP Hank2_Liu 20161213 : Add proc file node to read emmc health status +++
+		storage_primary_health = ext_csd[267];
+		//ASUS_BSP Hank2_Liu 20161213 : Add proc file node to read emmc health status ---
 		//printk("lei==>:ext_csd[268]=0x%02x，and ext_csd[269]=%x\n",ext_csd[268],ext_csd[269]);
 	}
 
@@ -2421,3 +2425,32 @@ void create_emmc_health_proc_file(void)
 }
 EXPORT_SYMBOL(create_emmc_health_proc_file);
 //ASUS_BSP lei_guo : Add proc file node ---
+
+//ASUS_BSP Hank2_Liu 20161202 : Add proc file node to read emmc health status +++
+static int storage_health_proc_read(struct seq_file *buf, void *v)
+{
+
+	return seq_printf(buf, "0x%02x", storage_primary_health);
+}
+
+static int storage_health_proc_open(struct inode *inode, struct  file *file)
+{
+    return single_open(file, storage_health_proc_read, NULL);
+}
+
+void create_storage_health_proc_file(void)
+{
+	static const struct file_operations proc_fops = {
+		.owner = THIS_MODULE,
+		.open =  storage_health_proc_open,
+		.read = seq_read,
+	};
+	struct proc_dir_entry *proc_file = proc_create("storage_primary_health", 0444, NULL, &proc_fops);
+
+	if (!proc_file) {
+		printk("[eMMC]%s failed!\n", __FUNCTION__);
+	}
+	return;
+}
+EXPORT_SYMBOL(create_storage_health_proc_file);
+//ASUS_BSP Hank2_Liu 20161202 : Add proc file node to read emmc health status ---

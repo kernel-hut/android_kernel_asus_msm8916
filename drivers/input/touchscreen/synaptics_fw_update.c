@@ -16,7 +16,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
-
+#include <linux/ctype.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -693,7 +693,6 @@ static int fwu_wait_for_idle(int timeout_ms)
 static enum flash_area fwu_go_nogo(void)
 {
 	int retval = 0;
-	int index = 0;
 	int deviceFirmwareID;
 	int imageConfigID;
 	int deviceConfigID;
@@ -798,6 +797,8 @@ static enum flash_area fwu_go_nogo(void)
 			__func__);
 		imageFirmwareID = img->firmware_id;
 	} else {
+		size_t index, max_index;
+
 		if (!fwu->image_name) {
 			dev_info(&i2c_client->dev,
 				"%s: Unknown image file name\n",
@@ -813,9 +814,11 @@ static enum flash_area fwu_go_nogo(void)
 				"found in image file name...\n");
 			goto exit;
 		}
-
+		max_index = min((ptrdiff_t)(MAX_FIRMWARE_ID_LEN - 1),
+				&fwu->image_name[NAME_BUFFER_SIZE] - strptr);
+		index = 0;
 		strptr += 2;
-		while (strptr[index] >= '0' && strptr[index] <= '9') {
+		while (index < max_index && isdigit(strptr[index])) {
 			imagePR[index] = strptr[index];
 			index++;
 		}
@@ -1699,6 +1702,13 @@ static ssize_t fwu_sysfs_store_image(struct file *data_file,
 		struct kobject *kobj, struct bin_attribute *attributes,
 		char *buf, loff_t pos, size_t count)
 {
+	if (count > fwu->image_size - fwu->data_pos) {
+		dev_err(&fwu->rmi4_data->i2c_client->dev,
+				"%s: Not enough space in buffer\n",
+				__func__);
+		return -EINVAL;
+	}
+
 	memcpy((void *)(&fwu->ext_data_source[fwu->data_pos]),
 			(const void *)buf,
 			count);

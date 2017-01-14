@@ -1412,7 +1412,7 @@ int msm_isp_axi_reset(struct vfe_device *vfe_dev,
 	struct msm_isp_bufq *bufq = NULL;
 
 	if (!reset_cmd) {
-		pr_err("%s: NULL pointer reset cmd %p\n", __func__, reset_cmd);
+		pr_err("%s: NULL pointer reset cmd %pK\n", __func__, reset_cmd);
 		rc = -1;
 		return rc;
 	}

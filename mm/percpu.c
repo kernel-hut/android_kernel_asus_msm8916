@@ -174,7 +174,7 @@ static int pcpu_reserved_chunk_limit;
  * allocation path might be referencing the chunk with only
  * pcpu_alloc_mutex locked.
  */
-static DEFINE_MUTEX(pcpu_alloc_mutex);	/* protects whole alloc and reclaim */
+static DEFINE_MUTEX(pcpu_alloc_mutex);	/* chunk create/destroy, [de]pop, map ext */
 static DEFINE_SPINLOCK(pcpu_lock);	/* protects index data structures */
 
 static struct list_head *pcpu_slot __read_mostly; /* chunk list slots */
@@ -384,6 +384,8 @@ static int pcpu_extend_area_map(struct pcpu_chunk *chunk, int new_alloc)
 	int *old = NULL, *new = NULL;
 	size_t old_size = 0, new_size = new_alloc * sizeof(new[0]);
 	unsigned long flags;
+
+	lockdep_assert_held(&pcpu_alloc_mutex);
 
 	new = pcpu_mem_zalloc(new_size);
 	if (!new)
@@ -720,6 +722,7 @@ static void __percpu *pcpu_alloc(size_t size, size_t align, bool reserved)
 	}
 
 	mutex_lock(&pcpu_alloc_mutex);
+
 	spin_lock_irqsave(&pcpu_lock, flags);
 
 	/* serve reserved allocations from the reserved chunk if available */

@@ -433,6 +433,7 @@ int pm_suspend(suspend_state_t state)
 //ASUS_BSP+++ Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
 	asus_otg_host_power_off();
 //ASUS_BSP--- Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
+		mdelay(200);
 
 	pm_suspend_marker("entry");
 	printk("[PM] entering_state: %d\n", state);

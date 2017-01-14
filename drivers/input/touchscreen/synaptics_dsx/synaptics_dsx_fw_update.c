@@ -1530,6 +1530,13 @@ static ssize_t fwu_sysfs_store_image(struct file *data_file,
 		struct kobject *kobj, struct bin_attribute *attributes,
 		char *buf, loff_t pos, size_t count)
 {
+	if (count > (fwu->image_size - fwu->data_pos)) {
+		dev_err(fwu->rmi4_data->pdev->dev.parent,
+				"%s: Not enough space in buffer\n",
+				__func__);
+		return -EINVAL;
+	}
+
 	memcpy((void *)(&fwu->ext_data_source[fwu->data_pos]),
 			(const void *)buf,
 			count);
@@ -1705,6 +1712,13 @@ static ssize_t fwu_sysfs_image_name_show(struct device *dev,
 static ssize_t fwu_sysfs_image_name_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
+	if (!buf || count > MAX_IMAGE_NAME_LEN) {
+		dev_err(fwu->rmi4_data->pdev->dev.parent,
+				"%s: Failed to copy image file name\n",
+				__func__);
+		return -EINVAL;
+	}
+
 	if (sscanf(buf, "%s", fwu->image_name) != 1)
 		return -EINVAL;
 
