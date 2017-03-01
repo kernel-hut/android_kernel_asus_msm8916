@@ -5840,7 +5840,7 @@ int sched_setscheduler_nocheck(struct task_struct *p, int policy,
 	};
 	return __sched_setscheduler(p, &attr, false);
 }
-EXPORT_SYMBOL(sched_setscheduler_nocheck);
+EXPORT_SYMBOL_GPL(sched_setscheduler_nocheck);
 
 static int
 do_sched_setscheduler(pid_t pid, int policy, struct sched_param __user *param)
@@ -6699,7 +6699,6 @@ void show_state_filter(unsigned long state_filter)
 	if (!state_filter)
 		debug_show_all_locks();
 }
-EXPORT_SYMBOL(sched_setscheduler_nocheck);
 
 void __cpuinit init_idle_bootup_task(struct task_struct *idle)
 {
