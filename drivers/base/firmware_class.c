@@ -30,6 +30,7 @@
 #include <linux/io.h>
 
 #include <generated/utsrelease.h>
+#include <soc/qcom/socinfo.h>
 
 #include "base.h"
 
@@ -350,6 +351,31 @@ static bool fw_read_file_contents(struct file *file, struct firmware_buf *fw_buf
 	return true;
 }
 
+int modem_fw_path_applied = 0;
+
+static void __apply_volte_modem_fw_path(void) {
+	modem_fw_path_applied = 1;
+
+	if (asus_PRJ_ID != ASUS_ZC550KL) {
+		return;
+	}
+
+	if (cpu_is_msm8916()) {
+		strcpy(fw_path_para, "/etc/firmware/8916_volte_modem");
+	} else if (cpu_is_msm8939()) {
+		strcpy(fw_path_para, "/etc/firmware/8939_volte_modem");
+	} else {
+		printk(KERN_ERR "%s:unknown cpu id\n", __func__);
+	}
+	pr_debug("%s: volte_modem_path=%s\n", __func__, fw_path_para);
+}
+
+static void apply_volte_modem_fw_path(void) {
+	if (modem_fw_path_applied == 0) {
+		__apply_volte_modem_fw_path();
+	}
+}
+
 static bool fw_get_filesystem_firmware(struct device *device,
 				       struct firmware_buf *buf,
 				       phys_addr_t dest_addr, size_t dest_size)
@@ -357,6 +383,7 @@ static bool fw_get_filesystem_firmware(struct device *device,
 	int i;
 	bool success = false;
 	char *path = __getname();
+	apply_volte_modem_fw_path();
 
 	for (i = 0; i < ARRAY_SIZE(fw_path); i++) {
 		struct file *file;

@@ -66,6 +66,14 @@ enum DEVICE_HWID
 // --- ASUS_BSP : add for miniporting
 extern int g_ASUS_laserID;  //ASUS_BSP  Deka "support laser sensor 2nd source"
 
+extern int asus_PRJ_ID;
+
+enum project_pcbid {
+	ASUS_ZC550KL,
+	ASUS_ZE500KL,
+	ASUS_ZE500KG,
+};
+
 //+++ ASUS_BSP: Yan_Sun
 enum CPU_FEATUREID
 {
@@ -100,7 +108,7 @@ enum {
 	ZE500KL_LCD_BOE,
 	A500_HSD
 };
-extern int g_asus_lcdID; 
+extern int g_asus_lcdID;
 //ASUS_BSP: Louis ---
 
 extern bool g_Charger_mode; //ASUS BSP Austin_T +++
