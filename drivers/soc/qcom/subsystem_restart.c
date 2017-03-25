@@ -329,7 +329,7 @@ module_param(ssr_panic, charp, 0644);
 #define MAX_SSR_REASON_LEN (128)
 static char *ssr_reason = NULL;
 
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 #define REASON_EXCEPTION_A "0: task Exception detected"
 #define REASON_EXCEPTION_B "##3424*9"
 #define DEFAULT_TURBO_TARGET_COUNT 2
@@ -944,7 +944,7 @@ static void device_restart_work_hdlr(struct work_struct *work)
 	struct subsys_device *dev = container_of(work, struct subsys_device,
 							device_restart_work);
 
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 	uint32_t turbo_require_count;
 	uint32_t turbo_require_reset_time;
 	uint32_t turbo_target_count;
@@ -1055,7 +1055,7 @@ int subsystem_restart_dev(struct subsys_device *dev)
 * 1.Record crash count.
 * 2.Reboot device directly.
 * */
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 	if (strstr(ssr_reason, REASON_EXCEPTION_A) != NULL ||
 			strstr(ssr_reason, REASON_EXCEPTION_B) != NULL)
 	{
@@ -1214,7 +1214,7 @@ static const struct file_operations subsys_debugfs_fops = {
 };
 
 //ASUS_BSP +++ jeff_gu [ZC550KL][SSR][N/A][MODIFY]workaround for Exception 0
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 static ssize_t modem_crash_count_debugfs_read(struct file *filp, char __user *ubuf,
 		size_t cnt, loff_t *ppos)
 {
@@ -1398,7 +1398,7 @@ static int __init subsys_debugfs_init(void)
 {
 	subsys_base_dir = debugfs_create_dir("msm_subsys", NULL);
 	//ASUS_BSP +++ jeff_gu [ZC550KL][SSR][N/A][MODIFY]workaround for Exception 0
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 	if(subsys_base_dir)
 	{
 		debugfs_create_file("modem_crash_count",
