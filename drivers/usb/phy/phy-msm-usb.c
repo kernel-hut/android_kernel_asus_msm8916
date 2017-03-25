@@ -195,7 +195,7 @@ int static old_id_state = -1;
 //ASUS_BSP--- Landice "[ZE500KL][USBH][NA][Spec] Enable manual mode switching"
 
 //ASUS_BSP+++ ShowWang "set otg current as requirement"
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 static int g_support_device = 0;
 static int NEW_PCB = 1;
 extern int set_otg_battery_current_limit(int value);
@@ -203,7 +203,7 @@ extern int set_otg_battery_current_limit(int value);
 //ASUS_BSP--- ShowWang "set otg current as requirement"
 
 //ASUS_BSP+++ ShowWang "read HW ID"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 #include <linux/asus_global.h>
 static int HW_ID = 0;
 static bool otg_current_sdp = 1;
@@ -651,7 +651,7 @@ const struct file_operations asus_otg_proc_otg_boot_check_fops = {
 //ASUS_BSP--- ShowWang "add otg check at boot"
 
 //ASUS_BSP+++ ShowWang "send otg id event to framework"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 #include <linux/switch.h>
 //ASUS_BSP+++ ShowWang "send otg status event to framework"
 struct switch_dev asus_msm_otg_status;
@@ -714,7 +714,7 @@ static int AsusOtgIdNotifyInitialize(void)
 //ASUS_BSP--- ShowWang "send otg id event to framework"
 
 //ASUS_BSP+++ ShowWang "set otg current type as user switch"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 static bool asus_otg_support_reverse_charging(void) {
 		if ((HW_ID == ZC550KL_8939_ER || HW_ID == ZC550KL_8939_PR) && !otg_current_sdp) {
 			return true;
@@ -954,7 +954,7 @@ static int asus_otg_procfs_init(struct msm_otg *motg)
 //ASUS_BSP--- ShowWang "Enable otg poweron switching"
 
 //ASUS_BSP+++ ShowWang "set otg current type as user switch"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	proc_entry = proc_create_data("otg_chargetype", S_IRUGO |S_IWUSR, asus_otg_proc_root,
 			&asus_otg_proc_otg_chargetype_fops, motg);
 	if (!proc_entry) {
@@ -1341,7 +1341,7 @@ void asus_otg_host_power_off(void)
 		if (!g_host_none_mode) {
 			g_suspend_delay_work_run = 1;
 //ASUS_BSP+++ ShowWang "set otg current as requirement"
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 			if ( gpio_get_value(NEW_PCB) && g_support_device ) {
 				set_otg_battery_current_limit(550);
 				g_support_device = 0;
@@ -1353,7 +1353,7 @@ void asus_otg_host_power_off(void)
 				asus_otg_set_charger(DISABLE_5V);
 			}
 //ASUS_BSP--- ShowWang "Enable otg poweron switching"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 			if(asus_otg_support_reverse_charging()) {
 				if (g_CHG_mode != 2) {
 					asus_otg_chargetype_set(0);
@@ -1396,7 +1396,7 @@ static void asus_otg_early_suspend_delay_work(struct work_struct *w)
 		if (!g_keep_power_on) {
 			g_suspend_delay_work_run = 1;
 //ASUS_BSP+++ ShowWang "set otg current as requirement"
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 			if ( gpio_get_value(NEW_PCB) && g_support_device ) {
 				set_otg_battery_current_limit(550);
 				g_support_device = 0;
@@ -1408,7 +1408,7 @@ static void asus_otg_early_suspend_delay_work(struct work_struct *w)
 				asus_otg_set_charger(DISABLE_5V);
 			}
 //ASUS_BSP--- ShowWang "Enable otg poweron switching"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 			if(asus_otg_support_reverse_charging()) {
 				if (g_CHG_mode != 2) {
 					asus_otg_chargetype_set(0);
@@ -1443,7 +1443,7 @@ static void asus_otg_late_resume_work(struct work_struct *w)
 	struct usb_otg *otg = motg->phy.otg;
 
 	dev_info(motg->phy.dev, "%s()+++\n", __func__);
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	if ((HW_ID == ZC550KL_8939_ER || HW_ID == ZC550KL_8939_PR) && g_CHG_mode !=2) {
 		asus_otg_chargetype_set(1);
 	}
@@ -1456,7 +1456,7 @@ static void asus_otg_late_resume_work(struct work_struct *w)
 		dev_err(motg->phy.dev, "not b_idle state, skip host auto switch (%d)\n", otg->phy->state);
 		return;
 	}
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 			if(!asus_otg_support_reverse_charging()){
 				asus_otg_host_auto_switch(HOST_AUTO_HOST);
 			}
@@ -3505,7 +3505,7 @@ static void msm_otg_start_host(struct usb_otg *otg, int on)
 }
 
 //ASUS_BSP+++ ShowWang "set otg current as requirement"
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 static bool  asus_otg_support_usbdevices(struct usb_device *udev )
 {
 	struct usb_interface_descriptor	*desc = NULL;
@@ -3594,7 +3594,7 @@ static int msm_otg_usbdev_notify(struct notifier_block *self,
 			}
 #endif
 //ASUS_BSP--- ShowWang "support charging for Iphone when otg poweron"
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 //ASUS_BSP+++ ShowWang "set otg current as requirement"
 			if ( gpio_get_value(NEW_PCB) ) {
 				if (asus_otg_support_usbdevices(udev)) {
@@ -3632,7 +3632,7 @@ static int msm_otg_usbdev_notify(struct notifier_block *self,
 //ASUS_BSP--- ShowWang "support charging for Iphone when otg poweron"
 
 //ASUS_BSP+++ ShowWang "set otg current as requirement"
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 		if ( gpio_get_value(NEW_PCB)  && g_support_device && !test_bit(ID, &motg->inputs)) {
 			set_otg_battery_current_limit(550);
 			g_support_device = 0;
@@ -3675,7 +3675,7 @@ static void msm_hsusb_vbus_power(struct msm_otg *motg, bool on)
 
 //ASUS_BSP+++ ShowWang "add otg check at boot"
 #ifdef CONFIG_SMB1360_CHARGER_FG
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	if (!g_otg_check_at_boot && g_CHG_mode != 2 && g_ASUS_bootmode != FFBM_MODE) {
 		printk("[usb_otg] not handle ID events before boot completed \n");
 		return;
@@ -5900,7 +5900,7 @@ static void msm_id_status_w(struct work_struct *w)
 
 //ASUS_BSP+++ ShowWang "add otg check at boot"
 #ifdef CONFIG_SMB1360_CHARGER_FG
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	if (!g_otg_check_at_boot && g_CHG_mode != 2 && g_ASUS_bootmode != FFBM_MODE) {
 		printk("[usb_otg] not handle ID events before boot completed \n");
 		return;
@@ -5977,7 +5977,7 @@ static void msm_id_status_w(struct work_struct *w)
 		work = 1;
 		motg->host_mode = false;
 		asus_otg_host_mode_cleanup();
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	if ( (HW_ID == ZC550KL_8939_ER || HW_ID == ZC550KL_8939_PR) && g_CHG_mode != 2) {
 		asus_otg_chargetype_set(1);
 	}
@@ -6010,7 +6010,7 @@ static void msm_id_status_w(struct work_struct *w)
 //ASUS_BSP--- Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
 	old_id_state = id_state;
 //ASUS_BSP+++ ShowWang "send otg id event to framework"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	if (HW_ID == ZC550KL_8939_ER || HW_ID == ZC550KL_8939_PR) {
 		switch_set_state(&asus_msm_otg_id, !old_id_state);
 		printk("[usb_otg] %s - send otg id cable plug %s\n", __func__, !id_state?"in":"out");
@@ -6034,7 +6034,7 @@ static void msm_id_status_w(struct work_struct *w)
 }
 
 //ASUS_BSP+++ ShowWang "set USB status gpio irq"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 static irqreturn_t asus_otg_status_irq(int irq, void *data)
 {
 	struct msm_otg *motg = data;
@@ -7174,7 +7174,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 	void __iomem *tcsr;
 	int id_irq = 0;
 //ASUS_BSP+++ ShowWang "set USB controller mode"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	struct pinctrl_state *set_state_tps2546_ctl3;
 	int rev_tps2546_ctl3;
 	struct pinctrl_state *set_state_tps2546_status;
@@ -7186,7 +7186,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 //ASUS_BSP--- ShowWang "set USB controller mode"
 
 //ASUS_BSP+++ ShowWang "set otg current as requirement"
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 	struct pinctrl_state *set_state;
 	int rev;
 #endif
@@ -7196,7 +7196,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 //ASUS_BSP--- Landice "[ZE500KL][USBH] Enable/Disable VBUS output on ID events"
 
 //ASUS_BSP+++ ShowWang "read HW ID"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
         HW_ID = get_zc550kl_pcb_rev();
 #endif
 //ASUS_BSP--- ShowWang "read HW ID"
@@ -7554,7 +7554,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 		motg->phy_pinctrl = NULL;
 	}
 //ASUS_BSP+++ ShowWang "set USB controller mode"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	else {
 		if (HW_ID == ZC550KL_8939_ER || HW_ID == ZC550KL_8939_PR) {
 			set_state_tps2546_ctl3 = pinctrl_lookup_state(motg->phy_pinctrl , "tps2546_ctl3");
@@ -7599,7 +7599,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 			printk("%s: request tps2546_ctl3_gpio fail!\n", __func__);
 		}
 
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 		if(g_CHG_mode !=2) {
 			asus_otg_chargetype_set(1);
 		}
@@ -7650,7 +7650,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 }
 #endif
 //ASUS_BSP--- ShowWang "set USB controller mode"
-#if defined(ASUS_ZC550KL8916_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 	else {
 		set_state = pinctrl_lookup_state(motg->phy_pinctrl , "new_pcb");
 		if (IS_ERR(set_state)) {
@@ -7999,7 +7999,7 @@ static int msm_otg_probe(struct platform_device *pdev)
 //ASUS_BSP--- ShowWang "add otg check at boot"
 
 //ASUS_BSP+++ ShowWang "send otg id event to framework"
-#if defined(ASUS_ZC550KL8939_PROJECT)
+#if defined(CONFIG_ASUS_ZC550KL8939_PROJECT)
 	if (HW_ID == ZC550KL_8939_ER || HW_ID == ZC550KL_8939_PR) {
 		AsusOtgIdNotifyInitialize();
 		//ASUS_BSP+++ ShowWang "send otg status event to framework"
