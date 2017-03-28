@@ -347,25 +347,6 @@ EXPORT_SYMBOL(g_ASUS_hwID);
 #endif
 //--- ASUS_BSP : miniporting
 
-//+++ ASUS_BSP :  Add for project id @wigman_sun
-int asus_PRJ_ID = 0;
-EXPORT_SYMBOL(asus_PRJ_ID);
-static int set_project_id(char *str)
-{
-    printk("prj_id = %s\n", str);
-	if( strcmp("0", str) == 0 ){
-		asus_PRJ_ID = ASUS_ZC550KL;
-	}else if( strcmp("1", str) == 0 ){
-		asus_PRJ_ID = ASUS_ZE500KL;
-	}else if( strcmp("2", str) == 0 ){
-		asus_PRJ_ID = ASUS_ZE500KG;
-	}
-
-    return 0;
-}
-__setup("PRJ_ID=", set_project_id);
-//--- ASUS_BSP :  Add for project id
-
 //+++ ASUS_BSP : Add for FM ID
 int g_ASUS_fmID = 1;
 
