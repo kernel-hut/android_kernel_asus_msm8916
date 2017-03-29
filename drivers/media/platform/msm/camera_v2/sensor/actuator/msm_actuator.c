@@ -1,4 +1,4 @@
-/* Copyright (c) 2011-2015, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -272,6 +272,12 @@ static int32_t msm_actuator_piezo_move_focus(
 	if (num_steps <= 0 || num_steps > MAX_NUMBER_OF_STEPS) {
 		pr_err("num_steps out of range = %d\n",
 			num_steps);
+		return -EFAULT;
+	}
+
+	if (dest_step_position > a_ctrl->total_steps) {
+		pr_err("Step pos greater than total steps = %d\n",
+			dest_step_position);
 		return -EFAULT;
 	}
 
@@ -1640,7 +1646,7 @@ static int __init msm_actuator_init_module(void)
 	CDBG("Enter\n");
 	msm_actuator_create_workqueue();//ASUS_BSP PJ_Ma+++
 	create_position_proc_file();
-	
+
 	rc = platform_driver_probe(&msm_actuator_platform_driver,
 		msm_actuator_platform_probe);
 	if (!rc)
@@ -1707,7 +1713,7 @@ static struct msm_actuator msm_hvcm_actuator_table = {
 
 static int rear_position_proc_read(struct seq_file *buf, void *v)
 {
-   	seq_printf(buf, "%d\n", g_position);				
+   	seq_printf(buf, "%d\n", g_position);
     return 0;
 }
 
@@ -1727,7 +1733,7 @@ static const struct file_operations position_fops = {
 
 static void create_position_proc_file(void)
 {
-    if(!g_camera_position_created) {   
+    if(!g_camera_position_created) {
         position_proc_file = proc_create(POSITION_REAR_PROC_FILE, 0666, NULL, &position_fops);
 		if(position_proc_file) {
 			CDBG("Stimber: %s sucessed!\n", __func__);
@@ -1735,10 +1741,10 @@ static void create_position_proc_file(void)
 	    } else {
 			pr_err("Stimber: %s failed!\n", __func__);
 			g_camera_position_created = 0;
-	    }  
-    } else {  
-        pr_info("File Exist!\n");  
-    }  
+	    }
+    } else {
+        pr_info("File Exist!\n");
+    }
 }
 //ASUS_BSP Stimber_Hsueh ---
 //ASUS_BSP PJ_Ma+++
