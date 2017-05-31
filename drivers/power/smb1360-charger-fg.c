@@ -30,6 +30,7 @@
 #include <linux/qpnp/qpnp-adc.h>
 #include <linux/completion.h>
 #include <linux/pm_wakeup.h>
+#include <linux/switch.h>
 
 //asus report capacity frank ++++
 #include <asm/uaccess.h>
@@ -263,6 +264,9 @@
 #define SMB1360_POWERON_DELAY_MS	2000
 #define SMB1360_FG_RESET_DELAY_MS	1500
 
+#define BATTERYLIFE_MAX_CAP		0xcd
+#define BATTERYLIFE_ENABLE_CAP	0x66
+
 #if defined(ASUS_ZC550KL8939_PROJECT)
 #define THERMAL_DCP_LEVEL	5
 #define THERMAL_SDP_LEVEL	0
@@ -343,6 +347,15 @@ int64_t check_battery_id(void);
 #define	Battery_440V	1
 #define	Battery_438V	2
 
+#define BATTERYLIFE_FILE "/persist/batterylife_enable"
+#define BATTERYLIFE_STATUS "/persist/batterylife_status"
+#define	batterylife_enable_PROC_FILE	"driver/batterylife_enable"
+#define BATTERYFLIFE_PROPERTY "/data/property/persist.sys.extbatterylife"
+static DEFINE_SPINLOCK(batterylife_slock);
+static int asus_switch_state = 0;
+static void batterylife_wakelock_charger_mode(struct smb1360_chip *chip);
+static void exit_batterylife(struct smb1360_chip *chip);
+
 //ASUS_BSP frank for ChargerDriver stress test +++
 #ifdef CONFIG_I2C_STRESS_TEST
 #include <linux/i2c_testcase.h>
@@ -374,7 +387,8 @@ enum {
 	PARALLEL_CURRENT = BIT(1),
 	PARALLEL_JEITA_SOFT = BIT(2),
 	PARALLEL_JEITA_HARD = BIT(3),
-	PARALLEL_EOC = BIT(4),
+	PARALLEL_BATTERYLIFE = BIT(4),
+	PARALLEL_EOC = BIT(5),
 };
 
 enum fg_i2c_access_type {
@@ -560,6 +574,18 @@ struct smb1360_chip {
 	int				otp_hot_bat_decidegc;
 	u8				hard_jeita_otp_reg;
 	struct work_struct		jeita_hysteresis_work;
+	struct delayed_work	 batterylife_work;
+	struct delayed_work batterylife_wakeup;
+	struct wake_lock batterylife_wakelock;
+	struct alarm batterylife_alarm;
+	struct mutex batterylife_lock;
+	struct switch_dev batterylife_switch;
+	int switch_status;
+	int batterylife_disable_charger;
+	int batterylife_pre;
+	int batterylife_enable;
+    int batterylife_val_status;
+	int batterylife_probe;
 	int				cold_hysteresis;
 	int				hot_hysteresis;
 
@@ -1335,6 +1361,31 @@ static int smb1360_get_prop_batt_health(struct smb1360_chip *chip)
 	return ret.intval;
 }
 
+#define START_CAPACITY 40
+#define END_CAPACITY 80
+static int batterylife_get_prop_batt_capacity(u8 reg, struct smb1360_chip *chip)
+{
+	int soc = 0;
+	int temp_soc;
+	u32 temp = 0;
+//	u32 temp1 = 0;
+	int target_cap = 100-START_CAPACITY;
+	int sorce_cap = END_CAPACITY-START_CAPACITY;
+
+	if(reg >= 0xcc){ //soc = 80 when reg=0xcc stop charger
+		temp_soc = 100;
+	}else{
+		soc = (100 * reg) / MAX_8_BITS;
+		temp_soc = START_CAPACITY + ((soc-START_CAPACITY)*target_cap)/sorce_cap;
+		//temp1 = ((soc-BATTERYLIFE_ENABLE_CAP)*target_cap)%sorce_cap;
+		//temp = (100 * reg) % MAX_8_BITS + temp1*100;
+		temp = (100 * reg) % MAX_8_BITS;
+		if (temp > (MAX_8_BITS / 2))
+				temp_soc += 1;
+	}
+	return temp_soc;
+}
+
 static int smb1360_get_prop_batt_capacity(struct smb1360_chip *chip)
 {
 	u8 reg;
@@ -1357,11 +1408,22 @@ static int smb1360_get_prop_batt_capacity(struct smb1360_chip *chip)
 		pr_err("Failed to read FG_MSYS_SOC rc=%d\n", rc);
 		return rc;
 	}
-	soc = (100 * reg) / MAX_8_BITS;
+	if(reg >= 0x66 && chip->batterylife_enable == 1){ //soc = 40 when reg=0x66 mapping table
+		soc = batterylife_get_prop_batt_capacity(reg, chip);
+	}else{
+		soc = (100 * reg) / MAX_8_BITS;
+		temp = (100 * reg) % MAX_8_BITS;
+		if (temp > (MAX_8_BITS / 2))
+			soc += 1;
+	}
 
-	temp = (100 * reg) % MAX_8_BITS;
-	if (temp > (MAX_8_BITS / 2))
-		soc += 1;
+	if(chip->batterylife_enable == 1 && reg < 0x66 && !chip->usb_present){
+		if(chip->switch_status != asus_switch_state && chip->batterylife_val_status ==  0){
+			switch_set_state(&chip->batterylife_switch, 0);
+			asus_switch_state = 0;
+			chip->switch_status = asus_switch_state;
+		}
+	}
 
 	pr_debug("msys_soc_reg=0x%02x, fg_soc=%d batt_full = %d\n", reg,
 						soc, chip->batt_full);
@@ -1608,7 +1670,8 @@ static void smb1360_parallel_work(struct work_struct *work)
 		goto exit_work;
 	}
 	pr_debug("STATUS_1 (aicl status)=0x%x\n", reg);
-	if ((reg & AICL_CURRENT_STATUS_MASK) == AICL_LIMIT_1000MA && runin_switch_control_off == false) {
+	if ((reg & AICL_CURRENT_STATUS_MASK) == AICL_LIMIT_1000MA && runin_switch_control_off == false
+		 && chip->batterylife_disable_charger != 1) {
 		/* Strong Charger - Enable parallel path */
 		/* find the new fastchg current */
 		chip->fastchg_current += (chip->max_parallel_chg_current / 2);
@@ -2471,6 +2534,27 @@ static int chg_fastchg_handler(struct smb1360_chip *chip, u8 rt_stat)
 	return 0;
 }
 
+//+++judge batterylife charger status when cable insert
+static void	batterylife_stop_charger_cablein(struct smb1360_chip *chip)
+{
+	/*
+	if(chip->batterylife_enable == 1){
+		if(chip->batterylife_disable_charger == 1){
+			smb1360_charging_disable(chip, USER, true);
+			BAT_DBG("%s::batterylife stop charger\n", __func__);
+		}
+		else if(chip->batterylife_disable_charger == 0){
+			smb1360_charging_disable(chip, USER, false);
+		}
+	}*/
+	if(chip->batterylife_val_status || chip->batterylife_enable){
+		cancel_delayed_work(&chip->batterylife_work);
+		schedule_delayed_work(&chip->batterylife_work, 0);
+		batterylife_wakelock_charger_mode(chip);
+	}
+}
+//---judge batterylife charger status when cable insert
+
 static int usbin_uv_handler(struct smb1360_chip *chip, u8 rt_stat)
 {
 	bool usb_present = !rt_stat;
@@ -2483,6 +2567,10 @@ static int usbin_uv_handler(struct smb1360_chip *chip, u8 rt_stat)
 		power_supply_set_present(chip->usb_psy, usb_present);
 		focal_usb_detection(false);
 		plugout_time = current_kernel_time();
+		if(chip->batterylife_val_status || chip->batterylife_enable){
+			cancel_delayed_work(&chip->batterylife_work);
+			cancel_delayed_work(&chip->batterylife_wakeup);
+		}
 	}
 
 	if (!chip->usb_present && usb_present) {
@@ -2507,8 +2595,11 @@ static int usbin_uv_handler(struct smb1360_chip *chip, u8 rt_stat)
 			//usbin_check_count = 0;
 			usbin_voltage_poor = false;
 		}
+
+		batterylife_stop_charger_cablein(chip);
+
 	}
-	
+
 	if(smb1360_probe_success == true)
 		wake_lock_timeout(&usbin_wake_lock, 3*HZ);
 	else
@@ -5507,11 +5598,317 @@ static int asus_print_all(void)
 	g_last_print_time = current_kernel_time();
 	return 0;
 }
+
 void asus_polling_battery_data_work(int time)
 {
 	cancel_delayed_work(&battery_poll_data_work);
 	schedule_delayed_work(&battery_poll_data_work, time * HZ);
 }
+
+static void batterylife_wakelock_charger_mode(struct smb1360_chip *chip)
+{
+	if(chip->usb_present == true) {
+		cancel_delayed_work(&chip->batterylife_wakeup);
+		schedule_delayed_work(&chip->batterylife_wakeup, 0);
+	}
+}
+
+static int read_batterylife(const char *name){
+	struct file *fp = NULL;
+	mm_segment_t old_fs;
+	char buf[8] = "";
+	loff_t post_lsts = 0;
+	int readlen = 0;
+	int result_val = -1;
+
+	fp = filp_open(name, O_RDONLY, S_IRWXU | S_IRWXG | S_IRWXO);
+	if(IS_ERR_OR_NULL(fp)){
+		BAT_DBG_E("%s :open %s failed!\n", __func__, name);
+		return -ENOENT;
+	}
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	if(fp->f_op != NULL && fp->f_op->read != NULL){
+		post_lsts = 0;
+		readlen = fp->f_op->read(fp, buf, 6, &post_lsts);
+		buf[readlen] = '\0';
+	}else{
+		BAT_DBG_E("%s:f_op=NULL or f_op->read=NULL", __func__);
+		return -ENXIO;
+	}
+
+	set_fs(old_fs);
+	filp_close(fp, NULL);
+
+	sscanf(buf, "%d", &result_val);
+	if(result_val < 0){
+		BAT_DBG_E("%s:%s FAIL. (%s:%d)\n", __func__, name, buf, result_val);
+		return 0;
+	}else{
+		BAT_DBG("%s:%s reasult value is %d\n", __func__, name, result_val);
+	}
+
+	return result_val;
+}
+static void save_batterylife(const char *name, int val){
+	struct file *fp = NULL;
+	mm_segment_t old_fs;
+	char buf[8] = "";
+	loff_t post_lsts = 0;
+	int writelen = 0;
+
+	fp = filp_open(name, O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
+	if(IS_ERR_OR_NULL(fp)){
+		BAT_DBG_E("%s :open %s failed!\n", __func__, name);
+		return ;
+	}
+
+	sprintf(buf, "%d", val);
+
+	old_fs = get_fs();
+	set_fs(KERNEL_DS);
+
+	if(fp->f_op != NULL && fp->f_op->write != NULL){
+		post_lsts = 0;
+		writelen = fp->f_op->write(fp, buf, strlen(buf), &post_lsts);
+	}else{
+		BAT_DBG_E("%s:f_op=NULL or f_op->write=NULL", __func__);
+		return ;
+	}
+
+	set_fs(old_fs);
+	filp_close(fp, NULL);
+}
+
+static int judge_factory_reboot_status(struct smb1360_chip *chip)
+{
+	struct file *filp  = NULL;
+	int ret = -1;
+
+	//skip charger mode
+	if(g_Charger_mode == true){
+		ret = 0;
+		BAT_DBG("%s:charger mode, skip judge property value!\n", __func__);
+		return ret;
+	}
+
+	filp = filp_open(BATTERYFLIFE_PROPERTY, O_RDONLY, S_IRWXU | S_IRWXG | S_IRWXO);
+	if(IS_ERR_OR_NULL(filp)){
+		if(1 == read_batterylife(BATTERYLIFE_FILE)){
+			save_batterylife(BATTERYLIFE_FILE, 0);
+			BAT_DBG("%s: set batterylife_enable file value is 0!\n", __func__);
+		}
+		if(1 == read_batterylife(BATTERYLIFE_STATUS)){
+			save_batterylife(BATTERYLIFE_STATUS, 0);
+			BAT_DBG("%s: set batterylife_status file value is 0!\n", __func__);
+		}
+	}else{
+		filp_close(filp, NULL);
+		ret = 0;
+	}
+
+	return ret;
+}
+
+static int judge_last_battery_status(struct smb1360_chip *chip)
+{
+	int temp_enable = -1;
+	int ret = -1;
+
+	if(chip->batterylife_probe == 1){
+		chip->batterylife_probe = 0;
+		ret = judge_factory_reboot_status(chip);
+		if(ret < 0){
+			BAT_DBG("persist property is not exist!\n");
+			return ret;
+		}
+
+		chip->batterylife_val_status = read_batterylife(BATTERYLIFE_STATUS);
+		if(chip->batterylife_val_status < 0){
+			BAT_DBG_E("can not get batterylife status value!\n");
+			return chip->batterylife_val_status;
+		}
+
+		temp_enable = read_batterylife(BATTERYLIFE_FILE);
+		if(temp_enable <= 0){
+			chip->batterylife_enable = 0;
+			asus_switch_state = 0;
+			switch_set_state(&chip->batterylife_switch, 0);
+		}else{
+			chip->batterylife_enable = 1;
+			asus_switch_state = 1;
+			switch_set_state(&chip->batterylife_switch, 1);
+		}
+
+		temp_enable = chip->batterylife_val_status | chip->batterylife_enable;
+		if(temp_enable)
+			batterylife_wakelock_charger_mode(chip);
+
+		BAT_DBG("%s: get status val %d\n", __func__, temp_enable);
+
+		return temp_enable;
+	}
+
+	return 1;
+}
+
+static int batterylife_get_capacity(struct smb1360_chip *chip)
+{
+	u8 reg=0;
+	int rc;
+
+	mutex_lock(&chip->batterylife_lock);
+	rc = smb1360_read(chip, SHDW_FG_MSYS_SOC, &reg);
+	if (rc) {
+		pr_err("Failed to read capacity rc=%d\n", rc);
+		reg = rc;
+		goto ERROR;
+	}
+
+ERROR:
+	mutex_unlock(&chip->batterylife_lock);
+	return reg;
+}
+
+void batterylife_work_fun(struct work_struct *work){
+	int capacity_temp;
+	int temp_enable;
+	int temp_last_status;
+	struct smb1360_chip *chip = container_of(work,
+						struct smb1360_chip,
+						batterylife_work.work);
+	if(!chip){
+		BAT_DBG_E("%s:can not get chip struct!\n", __func__);
+		return ;
+	}
+
+	temp_last_status = judge_last_battery_status(chip);
+	if(temp_last_status <= 0){
+		BAT_DBG("%s:do not enable batterylife fun!\n", __func__);
+		return ;
+	}
+
+	capacity_temp = batterylife_get_capacity(chip);
+	if(capacity_temp < 0){
+		BAT_DBG_E("%s:get capacity value failed!\n", __func__);
+		goto DONE;
+	}
+
+	temp_enable = chip->batterylife_enable;
+
+	//judge if not exit batterylife
+	if(chip->batterylife_val_status == 0 && chip->batterylife_enable == 1){
+		pr_debug("%s:judge if not exit batterylife!\n", __func__);
+		if(capacity_temp < BATTERYLIFE_ENABLE_CAP){
+			asus_switch_state = 0;
+			switch_set_state(&chip->batterylife_switch, 0);
+			exit_batterylife(chip);
+			BAT_DBG("%s::exit batterylife mode!\n", __func__);
+			return ;
+		}else{
+			goto IFSTOP;
+		}
+	}
+
+	if(chip->batterylife_enable == 0 && chip->batterylife_val_status == 1){
+		if(capacity_temp < BATTERYLIFE_ENABLE_CAP){
+			pr_debug("battery life pre enable!\n");
+			chip->batterylife_pre = 1;
+		}
+		//enable batterylife
+		if(chip->batterylife_pre == 1 && capacity_temp >= BATTERYLIFE_ENABLE_CAP){
+			pr_debug("battery life enable!\n");
+			chip->batterylife_enable = 1;
+			chip->batterylife_pre = 0;
+		}
+	}
+
+	if(chip->batterylife_enable == 1 && temp_enable != chip->batterylife_enable){
+		//save the batterylife enable status one time
+		BAT_DBG("save battery life enable status!\n");
+		save_batterylife(BATTERYLIFE_FILE, chip->batterylife_enable);
+		asus_switch_state = 1;
+		switch_set_state(&chip->batterylife_switch, 1);
+	}
+
+	//control stop/enable charger
+IFSTOP:
+	//stop charger
+	if(chip->batterylife_enable == 1 && capacity_temp >= BATTERYLIFE_MAX_CAP){
+		chip->batterylife_disable_charger = 1;
+		if(chip->usb_present == 1 && !chip->charging_disabled_status){
+			pr_info("batterylife stop charger\n");
+			smb1360_charging_disable(chip, USER, true);
+			if(g_Charger_mode == 1 && chip->parallel_charging == true){
+				//smb1360_parallel_charger_enable(chip, PARALLEL_BATTERYLIFE, false);
+				aicl_done_handler(chip,true);
+			}
+		}
+	}
+
+	//enable charger
+	if(chip->batterylife_disable_charger == 1 && capacity_temp < BATTERYLIFE_MAX_CAP){
+		chip->batterylife_disable_charger = 0;
+		if(chip->usb_present == 1 && chip->charging_disabled_status){
+			pr_info("batterylife enable charger\n");
+			smb1360_charging_disable(chip, USER, false);
+			if(g_Charger_mode == 1 && chip->parallel_charging == true){
+				//smb1360_parallel_charger_enable(chip, PARALLEL_BATTERYLIFE, true);
+				aicl_done_handler(chip,true);
+			}
+		}
+	}
+
+DONE:
+	if(chip->usb_present)
+		schedule_delayed_work(&chip->batterylife_work, 30*HZ);
+}
+
+void batterylife_wakeup_fun(struct work_struct *work)
+{
+	struct smb1360_chip *chip = container_of(work,
+						struct smb1360_chip,
+						batterylife_wakeup.work);
+	unsigned long batterylife_flags;
+	struct timespec new_Alarm_time;
+	struct timespec mtNow;
+	int RTCSetInterval = 60;
+
+	if (!chip) {
+		BAT_DBG_E("%s: can not get strtuct chip!\n", __FUNCTION__);
+		return;
+	}
+
+	mtNow = current_kernel_time();
+	new_Alarm_time.tv_sec = 0;
+	new_Alarm_time.tv_nsec = 0;
+
+	RTCSetInterval = 60;
+
+	new_Alarm_time.tv_sec = mtNow.tv_sec + RTCSetInterval;
+	pr_debug("alarm start after %d s\n", RTCSetInterval);
+	spin_lock_irqsave(&batterylife_slock, batterylife_flags);
+	alarm_start(&chip->batterylife_alarm, timespec_to_ktime(new_Alarm_time));
+	spin_unlock_irqrestore(&batterylife_slock, batterylife_flags);
+}
+
+static enum alarmtimer_restart batterylife_Alarm_handler(struct alarm *alarm, ktime_t now)
+{
+
+	if(!smb1360_dev){
+		BAT_DBG_E("%s: can not get strtuct chip!\n", __FUNCTION__);
+		return ALARMTIMER_NORESTART;
+	}
+
+	if(smb1360_dev->usb_present == true){
+		wake_lock_timeout(&smb1360_dev->batterylife_wakelock, 5*HZ);
+		batterylife_wakelock_charger_mode(smb1360_dev);
+	}
+	return ALARMTIMER_NORESTART;
+}
+
 void asus_polling_data(struct work_struct *dat)
 {
 	int ret;
@@ -5536,7 +5933,6 @@ void asus_polling_data(struct work_struct *dat)
 		asus_polling_battery_data_work(5);
 	}
 }
-
 static inline int get_battery_rsoc(int *rsoc)
 {
 	struct power_supply *psy;
@@ -6203,6 +6599,71 @@ static void create_ac_current_proc_file(void)
 	return;
 }
 
+static int batterylife_enable_proc_read(struct seq_file *buf, void *v)
+{
+	int ret = -1;
+	ret = smb1360_dev->batterylife_enable;
+	seq_printf(buf, "batterylife enable:%d; val staus:%d; discharger=%d\n",
+		ret, smb1360_dev->batterylife_val_status, smb1360_dev->batterylife_disable_charger);
+	return 0;
+}
+static int batterylife_enable_proc_open(struct inode *inode, struct  file *file)
+{
+    return single_open(file, batterylife_enable_proc_read, NULL);
+}
+static ssize_t batterylife_enable_proc_write(struct file *filp, const char __user *buff,
+	size_t len, loff_t *data)
+{
+	int val;
+	char messages[256];
+
+	if(!smb1360_dev){
+		BAT_DBG_E("%s:smb130_dev is NULL!\n", __func__);
+		return -ENODEV;
+	}
+
+	if (len > 256)
+	{
+		len = 256;
+	}
+
+	if (copy_from_user(messages, buff, len))
+	{
+		return -EFAULT;
+	}
+
+	val = (int)simple_strtol(messages, NULL, 10);
+	save_batterylife(BATTERYLIFE_STATUS, val);
+	smb1360_dev->batterylife_val_status = val;
+	cancel_delayed_work(&smb1360_dev->batterylife_work);
+	schedule_delayed_work(&smb1360_dev->batterylife_work, 0);
+	batterylife_wakelock_charger_mode(smb1360_dev);
+
+	printk("[smb] set val =%d, batterylife enable %d\n",val, smb1360_dev->batterylife_enable);
+
+	return len;
+}
+
+
+static const struct file_operations batterylife_enable_fops = {
+	.owner = THIS_MODULE,
+	.open = batterylife_enable_proc_open,
+	.write = batterylife_enable_proc_write,
+	.read = seq_read,
+};
+
+static void create_batterylife_enable_proc_file(void)
+{
+	struct proc_dir_entry *batterylife_enable_proc_file = proc_create(batterylife_enable_PROC_FILE, 0666, NULL, &batterylife_enable_fops);
+
+	if (batterylife_enable_proc_file) {
+		printk("[BAT][CHG][SMB][Proc]batterylife_enable_current_proc_file create ok!\n");
+	} else{
+		printk("[BAT][CHG][SMB][Proc]batterylife_enable_current_proc_file create failed!\n");
+	}
+	return;
+}
+
 //ASUS_BSP frank for ChargerDriver stress test +++
 #ifdef CONFIG_I2C_STRESS_TEST
 static int TestSmb1360ChargerReadWrite(struct i2c_client *client)
@@ -6495,6 +6956,73 @@ void adaptor_10W_check(struct work_struct *dat)
 	}
 }
 #endif
+
+static ssize_t batterylife_switch_name(struct switch_dev *sdev, char *buf)
+{
+	return sprintf(buf, "exttable\n");
+}
+
+static ssize_t batterylife_switch_state(struct switch_dev *sdev, char *buf)
+{
+	return sprintf(buf, "%d\n", asus_switch_state);
+}
+
+
+static int batterylife_create_switch(struct smb1360_chip *chip)
+{
+	int ret = 0;
+
+	if(!chip){
+		pr_err("chip is NULL!\n");
+		return -1;
+	}
+	printk(" %s: register batterylife switch dev! %d\n", __FUNCTION__, ret);
+	chip->batterylife_switch.name = "exttable";
+	chip->batterylife_switch.print_state = batterylife_switch_state;
+	chip->batterylife_switch.print_name = batterylife_switch_name;
+	ret = switch_dev_register(&chip->batterylife_switch);
+	if (ret < 0) {
+		pr_err("Unable to register batterylife switch dev! %d\n", ret);
+		return -1;
+	}
+	return 0;
+}
+
+static void exit_batterylife(struct smb1360_chip *chip){
+	cancel_delayed_work(&smb1360_dev->batterylife_work);
+	cancel_delayed_work(&smb1360_dev->batterylife_wakeup);
+	smb1360_dev->batterylife_enable = 0;
+	smb1360_dev->batterylife_pre = 0;
+	chip->switch_status = 0;
+	//save_batterylife(BATTERYLIFE_STATUS, val);//set " /perisist/batterylife_status = 0"
+	save_batterylife(BATTERYLIFE_FILE, smb1360_dev->batterylife_enable); //set "/perisist/batterylife_enable = 0"
+	if(smb1360_dev->batterylife_disable_charger == 1){
+		smb1360_charging_disable(smb1360_dev, USER, 0);//enable charger
+	}
+	smb1360_dev->batterylife_disable_charger = -1;
+}
+
+static void init_batterylife(struct smb1360_chip *chip)
+{
+	int time = 30;
+	chip->batterylife_disable_charger = -1;
+	chip->batterylife_pre = 0;
+	chip->batterylife_enable = 0;
+    chip->batterylife_val_status=0;
+	chip->batterylife_probe = 1;
+	chip->switch_status = 0;
+	mutex_init(&chip->batterylife_lock);
+	wake_lock_init(&chip->batterylife_wakelock, WAKE_LOCK_SUSPEND, "batterylife_alarm_wake");
+	alarm_init(&chip->batterylife_alarm, ALARM_REALTIME, batterylife_Alarm_handler);
+	INIT_DELAYED_WORK(&chip->batterylife_work, batterylife_work_fun);
+	INIT_DELAYED_WORK(&chip->batterylife_wakeup, batterylife_wakeup_fun);
+	if(g_Charger_mode == true){
+		time = 10;
+	}
+	schedule_delayed_work(&chip->batterylife_work, time*HZ);
+	batterylife_create_switch(chip);
+}
+
 static int smb1360_probe(struct i2c_client *client,
 				const struct i2c_device_id *id)
 {
@@ -6803,6 +7331,9 @@ static int smb1360_probe(struct i2c_client *client,
 	create_battery_id_proc_file();
 
 	create_ac_current_proc_file();
+	create_batterylife_enable_proc_file();
+
+	init_batterylife(chip);
 
 //ASUS_BSP frank for ChargerDriver stress test +++
 #ifdef CONFIG_I2C_STRESS_TEST
@@ -6844,11 +7375,14 @@ static int smb1360_remove(struct i2c_client *client)
 	mutex_destroy(&chip->irq_complete);
 	mutex_destroy(&chip->otp_gain_lock);
 	mutex_destroy(&chip->fg_access_request_lock);
+	mutex_destroy(&chip->batterylife_lock);
 	debugfs_remove_recursive(chip->debug_root);
 	wake_lock_destroy(&usbin_wake_lock);
 #if defined(ASUS_ZC550KL8939_PROJECT)
 	wake_lock_destroy(&adaptor_10W_check_wake_lock);
 #endif
+	wake_lock_destroy(&chip->batterylife_wakelock);
+	switch_dev_unregister(&chip->batterylife_switch);
 	return 0;
 }
 
@@ -6857,6 +7391,9 @@ static int smb1360_suspend(struct device *dev)
 	int i, rc;
 	struct i2c_client *client = to_i2c_client(dev);
 	struct smb1360_chip *chip = i2c_get_clientdata(client);
+
+	if(chip->usb_present)
+		cancel_delayed_work(&chip->batterylife_work);
 
 	/* Save the current IRQ config */
 	for (i = 0; i < 3; i++) {
@@ -6946,6 +7483,9 @@ static int smb1360_resume(struct device *dev)
 	}
 
 	power_supply_changed(&chip->batt_psy);
+
+	if(chip->usb_present)
+		schedule_delayed_work(&chip->batterylife_work, 0);
 
 	return 0;
 }

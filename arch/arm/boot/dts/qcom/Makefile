@@ -76,7 +76,8 @@ dtb-$(CONFIG_ARCH_MSM8909) += msm8909-sim.dtb \
 ifeq ($(ASUS_BUILD_PROJECT), ZC550KL)
 dtb-$(CONFIG_ARCH_MSM8916) += zc550kl_msm8916-mtp.dtb \
 	zc550kl_msm8939-SR-v3.0-cdp.dtb \
-	zc550kl_msm8939-ER-v3.0-cdp.dtb
+	zc550kl_msm8939-ER-v3.0-cdp.dtb \
+	zc550kl_msm8939-ER-cdp.dtb
 else
 dtb-$(CONFIG_ARCH_MSM8916) += msm8916-cdp.dtb \
 	msm8916-mtp.dtb \

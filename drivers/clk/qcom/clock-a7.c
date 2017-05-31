@@ -29,9 +29,12 @@
 #include <linux/pm_opp.h>
 #include <soc/qcom/clock-local2.h>
 #include <dt-bindings/clock/msm-clocks-a7.h>
+#include <linux/proc_fs.h>
 
 #include "clock.h"
 
+#define ASUS_SPEED_BIN_PROC_FILE "driver/asus_speed_bin"
+static int asus_speed_bin = -1;
 DEFINE_VDD_REGS_INIT(vdd_cpu, 1);
 
 static struct mux_div_clk a7ssmux = {
@@ -320,6 +323,7 @@ static void get_speed_bin_b(struct platform_device *pdev, int *bin,
 	devm_iounmap(&pdev->dev, base);
 
 	*bin = (pte_efuse >> shift) & mask;
+	asus_speed_bin = *bin;
 
 	dev_info(&pdev->dev, "Speed bin: %d PVS Version: %d\n", *bin,
 								*version);
@@ -360,6 +364,33 @@ static int of_get_clk_src(struct platform_device *pdev, struct clk_src *parents)
 }
 
 static struct platform_device *cpu_clock_a7_dev;
+
+static int asus_speed_bin_proc_read(struct seq_file *buf, void *data)
+{
+	seq_printf(buf, "%d\n", asus_speed_bin);
+	return 0;
+}
+
+static int asus_speed_bin_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, asus_speed_bin_proc_read, NULL);
+}
+
+static const struct file_operations asus_speed_bin_fops = {
+	.owner = THIS_MODULE,
+	.open = asus_speed_bin_proc_open,
+	.read = seq_read,
+};
+
+static void create_asus_speed_bin_proc_file(void)
+{
+	struct proc_dir_entry *asus_speed_bin_proc_file = proc_create(ASUS_SPEED_BIN_PROC_FILE, 0444, NULL, &asus_speed_bin_fops);
+	if (asus_speed_bin_proc_file) {
+		printk("asus_speed_bin_proc_file create ok!\n");
+	} else{
+		printk("asus_speed_bin_proc_file create failed!\n");
+	}
+}
 
 static int clock_a7_probe(struct platform_device *pdev)
 {
@@ -460,6 +491,8 @@ static int clock_a7_probe(struct platform_device *pdev)
 						"qcom,enable-opp");
 	if (opp_enable)
 		cpu_clock_a7_dev = pdev;
+
+	create_asus_speed_bin_proc_file();
 
 	return 0;
 }
