@@ -3725,12 +3725,6 @@ static int smb1360_check_batt_profile(struct smb1360_chip *chip)
 		bid_mask = BATT_PROFILEA_MASK;
 	}	
 	else
-<<<<<<< HEAD
-	{
-		pr_info("load battery profile B! \n");
-		bid_mask = BATT_PROFILEB_MASK;
-	}	
-=======
 	{	if(check_CSIR_function() == 0x2334 )
 		{
 			pr_info("must load battery profile A! \n");
@@ -3742,7 +3736,6 @@ static int smb1360_check_batt_profile(struct smb1360_chip *chip)
 			return 0;
 		}
 	}
->>>>>>> 1c8dac8... leftover aosp-build fix-continue
 	/* set the BID mask */
 	rc = smb1360_masked_write(chip, CFG_FG_BATT_CTRL_REG,
 				BATT_PROFILE_SELECT_MASK, bid_mask);
