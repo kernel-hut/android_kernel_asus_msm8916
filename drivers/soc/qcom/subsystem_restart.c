@@ -29,7 +29,6 @@
 #include <linux/spinlock.h>
 #include <linux/device.h>
 #include <linux/idr.h>
-#include <linux/debugfs.h>
 #include <linux/interrupt.h>
 #include <linux/of_gpio.h>
 #include <linux/cdev.h>
@@ -146,7 +145,6 @@ struct restart_log {
  * @restart_level: restart level (0 - panic, 1 - related, 2 - independent, etc.)
  * @restart_order: order of other devices this devices restarts with
  * @crash_count: number of times the device has crashed
- * @dentry: debugfs directory for this device
  * @do_ramdump_on_put: ramdump on subsystem_put() if true
  * @err_ready: completion variable to record error ready from subsystem
  * @crashed: indicates if subsystem has crashed
@@ -168,9 +166,6 @@ struct subsys_device {
 	int restart_level;
 	int crash_count;
 	struct subsys_soc_restart_order *restart_order;
-#ifdef CONFIG_DEBUG_FS
-	struct dentry *dentry;
-#endif
 	bool do_ramdump_on_put;
 	struct cdev char_dev;
 	dev_t dev_no;
@@ -306,10 +301,11 @@ static struct device_attribute subsys_attrs[] = {
 	__ATTR_NULL,
 };
 
-static struct bus_type subsys_bus_type = {
+struct bus_type subsys_bus_type = {
 	.name		= "msm_subsys",
 	.dev_attrs	= subsys_attrs,
 };
+EXPORT_SYMBOL(subsys_bus_type);
 
 static DEFINE_IDA(subsys_ida);
 
@@ -1055,6 +1051,7 @@ int subsystem_restart_dev(struct subsys_device *dev)
 * 1.Record crash count.
 * 2.Reboot device directly.
 * */
+#if 0
 #if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
 	if (strstr(ssr_reason, REASON_EXCEPTION_A) != NULL ||
 			strstr(ssr_reason, REASON_EXCEPTION_B) != NULL)
@@ -1067,6 +1064,7 @@ int subsystem_restart_dev(struct subsys_device *dev)
 	}
 #endif
 //ASUS_BSP Ken_Gan --- [ZC550KL][SSR][N/A][MODIFY]workaround for Exception 0
+#endif
 
 	switch (dev->restart_level) {
 
@@ -1167,6 +1165,7 @@ void notify_proxy_unvote(struct device *device)
 		notify_each_subsys_device(&dev, 1, SUBSYS_PROXY_UNVOTE, NULL);
 }
 
+#if 0
 #ifdef CONFIG_DEBUG_FS
 static ssize_t subsys_debugfs_read(struct file *filp, char __user *ubuf,
 		size_t cnt, loff_t *ppos)
@@ -1444,6 +1443,7 @@ static int __init subsys_debugfs_init(void) { return 0; };
 static void subsys_debugfs_exit(void) { }
 static int subsys_debugfs_add(struct subsys_device *subsys) { return 0; }
 static void subsys_debugfs_remove(struct subsys_device *subsys) { }
+#endif
 #endif
 
 static int subsys_device_open(struct inode *inode, struct file *file)
@@ -1852,10 +1852,6 @@ struct subsys_device *subsys_register(struct subsys_desc *desc)
 
 	mutex_init(&subsys->track.lock);
 
-	ret = subsys_debugfs_add(subsys);
-	if (ret)
-		goto err_debugfs;
-
 	ret = device_register(&subsys->dev);
 	if (ret) {
 		device_unregister(&subsys->dev);
@@ -1907,8 +1903,6 @@ err_setup_irqs:
 	if (ofnode)
 		subsys_remove_restart_order(ofnode);
 err_register:
-	subsys_debugfs_remove(subsys);
-err_debugfs:
 	mutex_destroy(&subsys->track.lock);
 	ida_simple_remove(&subsys_ida, subsys->id);
 err_ida:
@@ -1941,7 +1935,6 @@ void subsys_unregister(struct subsys_device *subsys)
 		WARN_ON(subsys->count);
 		device_unregister(&subsys->dev);
 		mutex_unlock(&subsys->track.lock);
-		subsys_debugfs_remove(subsys);
 		subsys_char_device_remove(subsys);
 		sysmon_notifier_unregister(subsys->desc);
 		put_device(&subsys->dev);
@@ -1979,9 +1972,6 @@ static int __init subsys_restart_init(void)
 	ret = bus_register(&subsys_bus_type);
 	if (ret)
 		goto err_bus;
-	ret = subsys_debugfs_init();
-	if (ret)
-		goto err_debugfs;
 
 	char_class = class_create(THIS_MODULE, "subsys");
 	if (IS_ERR(char_class)) {
@@ -2009,8 +1999,6 @@ static int __init subsys_restart_init(void)
 err_soc:
 	class_destroy(char_class);
 err_class:
-	subsys_debugfs_exit();
-err_debugfs:
 	bus_unregister(&subsys_bus_type);
 err_bus:
 	destroy_workqueue(ssr_wq);
