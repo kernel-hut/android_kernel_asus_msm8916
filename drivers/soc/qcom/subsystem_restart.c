@@ -325,16 +325,6 @@ module_param(ssr_panic, charp, 0644);
 #define MAX_SSR_REASON_LEN (128)
 static char *ssr_reason = NULL;
 
-#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
-#define REASON_EXCEPTION_A "0: task Exception detected"
-#define REASON_EXCEPTION_B "##3424*9"
-#define DEFAULT_TURBO_TARGET_COUNT 2
-#define DEFAULT_TURBO_REQUIRE_RESET_TIME 14*24*60*60 //14 days
-static uint32_t modem_exception0_flag = 0;
-static unsigned long first_exception0_time = 0;
-static int get_current_time(unsigned long *now_tm_sec);
-#endif
-
 module_param(ssr_reason, charp, 0444);
 
 void subsys_save_reason(char *name, char *reason)
@@ -939,71 +929,6 @@ static void device_restart_work_hdlr(struct work_struct *work)
 {
 	struct subsys_device *dev = container_of(work, struct subsys_device,
 							device_restart_work);
-
-#if defined(CONFIG_ASUS_ZC550KL8916_PROJECT)
-	uint32_t turbo_require_count;
-	uint32_t turbo_require_reset_time;
-	uint32_t turbo_target_count;
-	unsigned long now_time;
-
-	if(modem_exception0_flag)
-	{
-		turbo_require_count = get_rpm_turbo_require_count();
-		turbo_require_reset_time = get_rpm_turbo_require_reset_time();
-		turbo_target_count = get_rpm_turbo_target_count();
-
-		if(first_exception0_time==0 || turbo_require_count==0)
-		{
-			get_current_time(&first_exception0_time);
-		}
-
-		if(turbo_require_reset_time < 5*60)
-		{
-			set_rpm_turbo_require_reset_time(DEFAULT_TURBO_REQUIRE_RESET_TIME);
-			turbo_require_reset_time = DEFAULT_TURBO_REQUIRE_RESET_TIME;
-		}
-
-		if(turbo_target_count==0)
-		{
-			set_rpm_turbo_target_count(DEFAULT_TURBO_TARGET_COUNT);
-			turbo_target_count = DEFAULT_TURBO_TARGET_COUNT;
-		}
-
-		turbo_require_count++;
-		get_current_time(&now_time);
-
-		pr_err("======[SSR]catch Exception 0======\n");
-		pr_err("turbo_require_count = %u\n", turbo_require_count);
-		pr_err("turbo_target_count = %u\n", turbo_target_count);
-		pr_err("turbo_require_reset_time = %u\n", turbo_require_reset_time);
-		pr_err("now_time = %lu\n", now_time);
-		pr_err("first_exception0_time = %lu\n", first_exception0_time);
-
-		if(now_time - first_exception0_time > turbo_require_reset_time)
-		{
-			pr_err("Too long time from first exception0, reset turbo_require_count\n");
-			turbo_require_count = 1;
-			first_exception0_time = now_time;
-		}
-		set_rpm_turbo_require_count(turbo_require_count);
-
-		modem_exception0_flag = 0;
-
-		if(turbo_require_count < turbo_target_count)
-		{
-			pr_err("turbo_require_count < turbo_target count,trigger SSR\n");
-			__subsystem_restart_dev(dev);
-			module_put(dev->owner);
-			put_device(&dev->dev);
-			return;
-		}
-
-		set_modem_debug_value(8);
-		msleep(5000);
-		machine_restart(NULL);
-		return;
-	}
-#endif
 
 	notify_each_subsys_device(&dev, 1, SUBSYS_SOC_RESET, NULL);
 	panic("subsys-restart: Resetting the SoC - %s crashed.",
