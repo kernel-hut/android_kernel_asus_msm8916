@@ -68,17 +68,6 @@
 
 #include "fib_lookup.h"
 
-//ASUS_BSP+++ turn off firewall when tethering on and turn on firewall when tethering off
-extern struct completion listen_event;
-int if_ip_forward_on;
-int if_ip_forward_off;
-//ASUS_BSP ---
-
-//ASUS_BSP +++ Johnny "avoid stop SYN when booting"
-static int syn_ip_forward;
-module_param(syn_ip_forward, int, S_IRUGO | S_IWUSR);
-//ASUS_BSP ---
-
 static struct ipv4_devconf ipv4_devconf = {
 	.data = {
 		[IPV4_DEVCONF_ACCEPT_REDIRECTS - 1] = 1,
@@ -480,7 +469,7 @@ static int __inet_insert_ifa(struct in_ifaddr *ifa, struct nlmsghdr *nlh,
 	inet_hash_insert(dev_net(in_dev->dev), ifa);
 
 	cancel_delayed_work(&check_lifetime_work);
-	queue_delayed_work(system_power_efficient_wq, &check_lifetime_work, 0);
+	schedule_delayed_work(&check_lifetime_work, 0);
 
 	/* Send message first, then call notifier.
 	   Notifier will trigger FIB update, so that
@@ -689,8 +678,7 @@ static void check_lifetime(struct work_struct *work)
 	if (time_before(next_sched, now + ADDRCONF_TIMER_FUZZ_MAX))
 		next_sched = now + ADDRCONF_TIMER_FUZZ_MAX;
 
-	queue_delayed_work(system_power_efficient_wq, &check_lifetime_work,
-			next_sched - now);
+	schedule_delayed_work(&check_lifetime_work, next_sched - now);
 }
 
 static void set_ifa_lifetime(struct in_ifaddr *ifa, __u32 valid_lft,
@@ -846,8 +834,7 @@ static int inet_rtm_newaddr(struct sk_buff *skb, struct nlmsghdr *nlh)
 		ifa = ifa_existing;
 		set_ifa_lifetime(ifa, valid_lft, prefered_lft);
 		cancel_delayed_work(&check_lifetime_work);
-		queue_delayed_work(system_power_efficient_wq,
-				&check_lifetime_work, 0);
+		schedule_delayed_work(&check_lifetime_work, 0);
 		rtmsg_ifa(RTM_NEWADDR, ifa, nlh, NETLINK_CB(skb).portid);
 		blocking_notifier_call_chain(&inetaddr_chain, NETDEV_UP, ifa);
 	}
@@ -2046,19 +2033,6 @@ static int devinet_sysctl_forward(ctl_table *ctl, int write,
 						    net->ipv4.devconf_dflt);
 	}
 
-        //ASUS_BSP+++ turn off firewall when tethering on and turn on firewall when tethering off
-        if(write==1&&*(char *)buffer=='1'&&syn_ip_forward==1)
-                {
-                if_ip_forward_on=1;
-                complete(&listen_event);
-                }
-        if(write==1&&*(char *)buffer=='0'&&syn_ip_forward==0)
-                {
-                if_ip_forward_off=1;
-                complete(&listen_event);
-                }
-        //ASUS_BSP ---
-
 	return ret;
 }
 
@@ -2325,7 +2299,7 @@ void __init devinet_init(void)
 	register_gifconf(PF_INET, inet_gifconf);
 	register_netdevice_notifier(&ip_netdev_notifier);
 
-	queue_delayed_work(system_power_efficient_wq, &check_lifetime_work, 0);
+	schedule_delayed_work(&check_lifetime_work, 0);
 
 	rtnl_af_register(&inet_af_ops);
 

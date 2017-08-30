@@ -1665,9 +1665,6 @@ restart_locked:
 		 */
 		unix_state_unlock(other);
 		sock_put(other);
- 
-		if (!sk_locked)
-			unix_state_lock(sk);
 
 		if (!sk_locked)
 			unix_state_lock(sk);
