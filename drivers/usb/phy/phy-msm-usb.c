@@ -220,7 +220,6 @@ extern int g_CHG_mode;
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
 #ifdef CONFIG_ASUS_ZC550KL_PROJECT
 static int g_otg_poweron = 0;
-static int g_otg_state_in=0;
 static struct delayed_work asus_check_disable_5V_work;
 //ASUS_BSP+++ ShowWang "support charging for Iphone when otg poweron"
 static int g_keep_apple_power_on = 0;
@@ -5357,7 +5356,7 @@ static void msm_otg_sm_work(struct work_struct *w)
 			else{
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
 #ifdef CONFIG_ASUS_ZC550KL_PROJECT
-				if(!g_otg_poweron || (g_otg_poweron && g_otg_state_in)) {
+				if(!g_otg_poweron) {
 					msm_hsusb_vbus_power(motg, 0);
 				}
 #else
@@ -5981,9 +5980,6 @@ static void msm_id_status_w(struct work_struct *w)
 //ASUS_BSP+++ Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
 	if (id_state) {
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef CONFIG_ASUS_ZC550KL_PROJECT
-		g_otg_state_in = 1;
-#endif
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
 		set_bit(ID, &motg->inputs);
 		printk("[usb_otg] %s - ID set\n", __func__);
@@ -6004,9 +6000,6 @@ static void msm_id_status_w(struct work_struct *w)
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
 	} else {
 //ASUS_BSP+++ ShowWang "Enable otg poweron switching"
-#ifdef CONFIG_ASUS_ZC550KL_PROJECT
-		g_otg_state_in = 0;
-#endif
 //ASUS_BSP---ShowWang "Enable otg poweron switching"
 		clear_bit(ID, &motg->inputs);
 		printk("[usb_otg] %s - ID clear\n", __func__);

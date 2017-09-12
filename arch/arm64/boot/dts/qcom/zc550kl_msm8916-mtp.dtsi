@@ -133,7 +133,7 @@
 	};
 	i2c@78b6000 { /* BLSP1 QUP2 */
 /* ++++  ASUS_BSP alian_shen "add for akm0991" */
-       ak09911@0c {  
+       ak09911@0c {
             compatible = "akm, ak09911-zc550kl";
             reg = <0x0c>;
             pinctrl-names = "default";
@@ -144,9 +144,9 @@
             akm,rstn-gpio = <&msm_gpio 36 0x0>;
             akm,auto-report = <0x1>;
             akm,use-hrtimer = <0x1>;
-        };    
-        /* -----  ASUS_BSP alian_shen "add for akm0991" */        
-        
+        };
+        /* -----  ASUS_BSP alian_shen "add for akm0991" */
+
 		/* ++++  ASUS_BSP alian_shen "add for kxtj2-1009" */
 		    kionix@0e {
 		        compatible = "kionix,kxtj9_zc550KL";
@@ -162,7 +162,7 @@
 		        kionix,axis-map-x = <0>;
 		        kionix,axis-map-y = <1>;
 		        kionix,axis-map-z = <2>;
-		        kionix,g-range = <4>;           
+		        kionix,g-range = <4>;
 		        kionix,res-12bit;
 		    };
 		    /* -----  ASUS_BSP alian_shen "add for kxtj2-1009" */
@@ -180,7 +180,7 @@
 			bosch,init-interval = <200>;
 			bosch,place = <1>;
 			bosch,gpio-int1 = <&msm_gpio 114 0x2002>;
-			//bosch,gpio-int2 = <&msm_gpio 114 0x2002>; 
+			//bosch,gpio-int2 = <&msm_gpio 114 0x2002>;
  		};
 		/* ----  ASUS_BSP alian_shen "add for bma253" */
 
@@ -202,24 +202,27 @@
 		aw2013@45 {
 			compatible = "awinic,aw2013";
 			reg = <0x45>;
-			asus,leds@0 {
-				status = "okay";
-				idx = <0>;
-				linux,name = "green";
-				//linux,default-trigger = "battery-full";
-				asus,use-blink;
+            asus,leds@0 {
+                status = "okay";
+                idx = <0>;
+                linux,name = "green";
+                //linux,default-trigger = "battery-full";
+                asus,use-blink;
+
 			};
-			asus,leds@1 {
-				status = "okay";
-				idx = <1>;
-				linux,name = "red";
-				//linux,default-trigger = "charging";
-				asus,use-blink;
-				};
+
+            asus,leds@1 {
+                status = "okay";
+                idx = <1>;
+                linux,name = "red";
+                //linux,default-trigger = "charging";
+                asus,use-blink;
+
+			};
 		};
 
 	};
-	
+
 	 /*+++  SZ_BSP gauss_li for hall_sersor porting*/
 	  hall_sensor {
 	    compatible = "hall-sensor";
@@ -235,7 +238,7 @@
 	           linux,code = <0>;
 	           debounce-interval = <50>;
 	           vdd-supply = <&pm8916_l6>;
-	        };  
+	        };
 	};
 	/*---      SZ_BSP gauss_li for hall_sersor porting*/
 
@@ -313,7 +316,7 @@
 				"msm-dai-q6-dev.32770";
 		asoc-codec = <&stub_codec>, <&pm8916_tombak_dig>;
 		asoc-codec-names = "msm-stub-codec.1", "tombak_codec";
-		spk_amp = <&msm_gpio 112 0x0>;//mei_huang config speaker amp gpio 
+		spk_amp = <&msm_gpio 112 0x0>;//mei_huang config speaker amp gpio
 	};
 };
 

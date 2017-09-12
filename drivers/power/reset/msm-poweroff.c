@@ -217,7 +217,7 @@ static void halt_spmi_pmic_arbiter(void)
 static void msm_restart_prepare(const char *cmd)
 {
 	ulong *printk_buffer_slot2_addr;
-//	bool need_warm_reset = false;
+	bool need_warm_reset = false;
 
 #ifdef CONFIG_MSM_DLOAD_MODE
 
@@ -230,20 +230,20 @@ static void msm_restart_prepare(const char *cmd)
 			(in_panic || restart_mode == RESTART_DLOAD));
 #endif
 
-//	if (qpnp_pon_check_hard_reset_stored()) {
-//		/* Set warm reset as true when device is in dload mode
-//		 *  or device doesn't boot up into recovery, bootloader or rtc.
-//		 */
-//		if (get_dload_mode() ||
-//			((cmd != NULL && cmd[0] != '\0') &&
-//			strcmp(cmd, "recovery") &&
-//			strcmp(cmd, "bootloader") &&
-//			strcmp(cmd, "rtc")))
-//			need_warm_reset = true;
-//	} else {
-//		need_warm_reset = (get_dload_mode() ||
-//				(cmd != NULL && cmd[0] != '\0') || in_panic);
-//	}
+	if (qpnp_pon_check_hard_reset_stored()) {
+		/* Set warm reset as true when device is in dload mode
+		 *  or device doesn't boot up into recovery, bootloader or rtc.
+		 */
+		if (get_dload_mode() ||
+			((cmd != NULL && cmd[0] != '\0') &&
+			strcmp(cmd, "recovery") &&
+			strcmp(cmd, "bootloader") &&
+			strcmp(cmd, "rtc")))
+			need_warm_reset = true;
+	} else {
+		need_warm_reset = (get_dload_mode() ||
+				(cmd != NULL && cmd[0] != '\0') || in_panic);
+	}
 
 //	/* Hard reset the PMIC unless memory contents must be maintained. */
 //	if (need_warm_reset) {
@@ -257,7 +257,7 @@ static void msm_restart_prepare(const char *cmd)
 #endif
 
 	/* Hard reset the PMIC unless memory contents must be maintained. */
-	if (get_dload_mode() || (cmd != NULL && cmd[0] != '\0') || in_panic)
+	if (get_dload_mode() || (cmd != NULL && cmd[0] != '\0') || need_warm_reset)
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_WARM_RESET);
 	else
 		qpnp_pon_system_pwr_off(PON_POWER_OFF_HARD_RESET);
