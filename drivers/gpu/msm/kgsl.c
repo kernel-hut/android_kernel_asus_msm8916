@@ -304,10 +304,10 @@ EXPORT_SYMBOL(kgsl_mem_entry_destroy);
  * @process: the process that owns the memory
  * @entry: the memory entry
  *
- * @returns - 0 on succcess else error code
+ * @returns - 0 on success else error code
  *
  * This function should be called with processes memory spinlock held
- */
+*/
 static int
 kgsl_mem_entry_track_gpuaddr(struct kgsl_process_private *process,
 				struct kgsl_mem_entry *entry)
@@ -336,11 +336,13 @@ kgsl_mem_entry_track_gpuaddr(struct kgsl_process_private *process,
 		pagetable = pagetable->mmu->securepagetable;
 
 	ret = kgsl_mmu_get_gpuaddr(pagetable, &entry->memdesc);
+
 done:
 	return ret;
 }
+
 static void kgsl_mem_entry_commit_mem_list(struct kgsl_process_private *process,
-						struct kgsl_mem_entry *entry)
+				struct kgsl_mem_entry *entry)
 {
 	struct rb_node **node;
 	struct rb_node *parent = NULL;
@@ -350,7 +352,6 @@ static void kgsl_mem_entry_commit_mem_list(struct kgsl_process_private *process,
 
 	/* Insert mem entry in mem_rb tree */
 	node = &process->mem_rb.rb_node;
-
 	while (*node) {
 		struct kgsl_mem_entry *cur;
 
@@ -365,11 +366,10 @@ static void kgsl_mem_entry_commit_mem_list(struct kgsl_process_private *process,
 
 	rb_link_node(&entry->node, parent, node);
 	rb_insert_color(&entry->node, &process->mem_rb);
-
 }
 
 static void kgsl_mem_entry_commit_process(struct kgsl_process_private *process,
-						struct kgsl_mem_entry *entry)
+				struct kgsl_mem_entry *entry)
 {
 	if (!entry)
 		return;
@@ -380,7 +380,7 @@ static void kgsl_mem_entry_commit_process(struct kgsl_process_private *process,
 	/* Replace mem entry in mem_idr using id */
 	idr_replace(&entry->priv->mem_idr, entry, entry->id);
 	spin_unlock(&entry->priv->mem_lock);
- }
+}
 
 /**
  * kgsl_mem_entry_untrack_gpuaddr() - Untrack memory that is previously tracked
@@ -2811,7 +2811,6 @@ static int check_vma_flags(struct vm_area_struct *vma,
 	return -EFAULT;
 }
 
-
 static int check_vma(struct vm_area_struct *vma, struct file *vmfile,
 		struct kgsl_memdesc *memdesc)
 {
@@ -2920,6 +2919,7 @@ static int kgsl_setup_useraddr(struct kgsl_mem_entry *entry,
 	struct kgsl_map_user_mem *param = data;
 	struct dma_buf *dmabuf = NULL;
 	struct vm_area_struct *vma = NULL;
+	int ret;
 
 	if (param->len == 0 || param->offset != 0
 		|| param->hostptr == 0
@@ -2935,7 +2935,7 @@ static int kgsl_setup_useraddr(struct kgsl_mem_entry *entry,
 	vma = find_vma(current->mm, param->hostptr);
 
 	if (vma && vma->vm_file) {
-		int fd, ret;
+		int fd;
 
 		ret = check_vma_flags(vma, entry->memdesc.flags);
 		if (ret) {
@@ -2960,7 +2960,7 @@ static int kgsl_setup_useraddr(struct kgsl_mem_entry *entry,
 	}
 
 	if (!IS_ERR_OR_NULL(dmabuf)) {
-		int ret = kgsl_setup_dma_buf(entry, pagetable, device, dmabuf);
+		ret = kgsl_setup_dma_buf(entry, pagetable, device, dmabuf);
 		if (ret) {
 			dma_buf_put(dmabuf);
 			up_read(&current->mm->mmap_sem);
@@ -3620,6 +3620,7 @@ long kgsl_ioctl_gpumem_alloc(struct kgsl_device_private *dev_priv,
 	param->gpuaddr = entry->memdesc.gpuaddr;
 	param->size = entry->memdesc.size;
 	param->flags = entry->memdesc.flags;
+
 	kgsl_mem_entry_commit_process(private, entry);
 
 	/* put the extra refcount for kgsl_mem_entry_create() */
@@ -3664,6 +3665,7 @@ long kgsl_ioctl_gpumem_alloc_id(struct kgsl_device_private *dev_priv,
 	param->size = entry->memdesc.size;
 	param->mmapsize = kgsl_memdesc_mmapsize(&entry->memdesc);
 	param->gpuaddr = entry->memdesc.gpuaddr;
+
 	kgsl_mem_entry_commit_process(private, entry);
 
 	/* put the extra refcount for kgsl_mem_entry_create() */
