@@ -3742,10 +3742,8 @@ static void throttle_cfs_rq(struct cfs_rq *cfs_rq)
 			dequeue = 0;
 	}
 
-	if (!se) {
-		sched_update_nr_prod(cpu_of(rq), task_delta, false);
+	if (!se)
 		rq->nr_running -= task_delta;
-	}
 
 	cfs_rq->throttled = 1;
 	cfs_rq->throttled_clock = rq->clock;
@@ -3793,10 +3791,8 @@ void unthrottle_cfs_rq(struct cfs_rq *cfs_rq)
 			break;
 	}
 
-	if (!se) {
-		sched_update_nr_prod(cpu_of(rq), task_delta, true);
+	if (!se)
 		rq->nr_running += task_delta;
-	}
 
 	/* determine whether we need to wake up potentially idle cpu */
 	if (rq->curr == rq->idle && rq->cfs.nr_running)
@@ -4228,30 +4224,6 @@ static inline void destroy_cfs_bandwidth(struct cfs_bandwidth *cfs_b) {}
 static inline void unthrottle_offline_cfs_rqs(struct rq *rq) {}
 
 #endif /* CONFIG_CFS_BANDWIDTH */
-
-/*
- * Return total number of tasks "eligible" to run on highest capacity cpu
- *
- * This is simply nr_big_tasks for cpus which are not of max_capacity and
- * (nr_running - nr_small_tasks) for cpus of max_capacity
- */
-unsigned int nr_eligible_big_tasks(int cpu)
-{
-	struct rq *rq = cpu_rq(cpu);
-	int nr_big = rq->nr_big_tasks;
-	int nr = rq->nr_running;
-	int nr_small = rq->nr_small_tasks;
-
-	if (rq->capacity != max_capacity)
-		return nr_big;
-
-	/* Consider all (except small) tasks on max_capacity cpu as big tasks */
-	nr_big = nr - nr_small;
-	if (nr_big < 0)
-		nr_big = 0;
-
-	return nr_big;
-}
 
 /**************************************************
  * CFS operations on tasks:
@@ -6988,6 +6960,7 @@ void idle_balance(int this_cpu, struct rq *this_rq)
 			continue;
 
 		if (sd->flags & SD_BALANCE_NEWIDLE) {
+			/* If we've pulled tasks over stop searching: */
 			pulled_task = load_balance(balance_cpu, balance_rq,
 					sd, CPU_NEWLY_IDLE, &balance);
 		}
@@ -6995,11 +6968,7 @@ void idle_balance(int this_cpu, struct rq *this_rq)
 		interval = msecs_to_jiffies(sd->balance_interval);
 		if (time_after(next_balance, sd->last_balance + interval))
 			next_balance = sd->last_balance + interval;
-			/*
-			* Stop searching for tasks to pull if there are
-			* now runnable tasks on this rq.
-			*/
- 			if (pulled_task || this_rq->nr_running > 0) {
+		if (pulled_task) {
 			balance_rq->idle_stamp = 0;
 			break;
 		}

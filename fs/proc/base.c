@@ -87,8 +87,7 @@
 #include <linux/slab.h>
 #include <linux/flex_array.h>
 #include <linux/posix-timers.h>
-#include <linux/seemp_api.h>
-#include <linux/seemp_instrumentation.h>
+#include <linux/qmp_sphinx_instrumentation.h>
 #ifdef CONFIG_HARDWALL
 #include <asm/hardwall.h>
 #endif
@@ -352,23 +351,7 @@ static int proc_pid_schedstat(struct task_struct *task, char *buffer)
 			task->sched_info.pcount);
 }
 #endif
-static int proc_pid_binder_sender_pid(struct task_struct *task, char *buffer)
-{
-	printk("proc_pid_binder_sender, task->comm=%s, binder_sender_pid=%d\r\n", task->comm, (int)task->binder_sender_pid);
-	if (strncmp("Binder", task->comm, 6) == 0) {
-		return sprintf(buffer, "calling binder:%d\n", (int)task->binder_sender_pid);
-	} else
-		return sprintf(buffer, "Not a Binder Thread\n");
 
-}
-static int proc_pid_binder_sender_tid(struct task_struct *task, char *buffer)
-{
-	printk("proc_pid_binder_sender, task->comm=%s, binder_sender_tid=%d\r\n", task->comm, (int)task->binder_sender_tid);
-	if (strncmp("Binder", task->comm, 6) == 0) {
-		return sprintf(buffer, "calling binder:%d\n", (int)task->binder_sender_tid);
-	} else
-		return sprintf(buffer, "Not a Binder Thread\n");
-}
 #ifdef CONFIG_LATENCYTOP
 static int lstats_show_proc(struct seq_file *m, void *v)
 {
@@ -985,7 +968,7 @@ static ssize_t oom_adj_write(struct file *file, const char __user *buf,
 		goto out;
 	}
 
-	seemp_logk_oom_adjust_write(task->pid,
+	qmp_sphinx_logk_oom_adjust_write(task->pid,
 			task->cred->uid, oom_adj);
 
 	task_lock(task);
@@ -1120,7 +1103,7 @@ static ssize_t oom_score_adj_write(struct file *file, const char __user *buf,
 		goto out;
 	}
 
-	seemp_logk_oom_adjust_write(task->pid,
+	qmp_sphinx_logk_oom_adjust_write(task->pid,
 			task->cred->uid, oom_score_adj);
 
 	task_lock(task);
@@ -2792,8 +2775,6 @@ static const struct pid_entry tgid_base_stuff[] = {
 #ifdef CONFIG_CHECKPOINT_RESTORE
 	REG("timers",	  S_IRUGO, proc_timers_operations),
 #endif
-	INF("binder_sender_pid",     S_IRUGO, proc_pid_binder_sender_pid),
-	INF("binder_sender_tid",     S_IRUGO, proc_pid_binder_sender_tid),
 };
 
 static int proc_tgid_base_readdir(struct file * filp,

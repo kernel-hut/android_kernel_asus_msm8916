@@ -30,14 +30,7 @@
 
 #include "power.h"
 
-//[+++]Debug for active wakelock before entering suspend
-#include <linux/wakelock.h>
-int pmsp_flag = 0;
-bool g_resume_status;
-int pm_stay_unattended_period = 0;
-//[---]Debug for active wakelock before entering suspend
 const char *const pm_states[PM_SUSPEND_MAX] = {
-	[PM_SUSPEND_ON] = "on",
 	[PM_SUSPEND_FREEZE]	= "freeze",
 	[PM_SUSPEND_STANDBY]	= "standby",
 	[PM_SUSPEND_MEM]	= "mem",
@@ -131,8 +124,6 @@ static int suspend_test(int level)
 	return 0;
 }
 
-extern int g_keycheck_abort;	//ASUS BSP Austin_T
-
 /**
  * suspend_prepare - Prepare for entering system sleep state.
  *
@@ -152,8 +143,6 @@ static int suspend_prepare(suspend_state_t state)
 	error = pm_notifier_call_chain(PM_SUSPEND_PREPARE);
 	if (error)
 		goto Finish;
-
-	g_keycheck_abort = 0;	//ASUS BSP Austin_T
 
 	error = suspend_freeze_processes();
 	if (!error)
@@ -198,7 +187,7 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 
 	error = dpm_suspend_end(PMSG_SUSPEND);
 	if (error) {
-		printk(KERN_ERR "[PM] Some devices failed to power down\n");
+		printk(KERN_ERR "PM: Some devices failed to power down\n");
 		goto Platform_finish;
 	}
 
@@ -258,22 +247,6 @@ static int suspend_enter(suspend_state_t state, bool *wakeup)
 	return error;
 }
 
-//[+++]Debug for active wakelock before entering suspend
-extern void print_active_locks(void);
-void unattended_timer_expired(unsigned long data);
-DEFINE_TIMER(unattended_timer, unattended_timer_expired, 0, 0);
-
-void unattended_timer_expired(unsigned long data)
-{
-	pr_info("[PM]unattended_timer_expired\n");
-    ASUSEvtlog("[PM]unattended_timer_expired\n");
-    pmsp_flag=1;
-	//for dump cpuinfo purpose, it needs 30mins to timeout
-	pm_stay_unattended_period += PM_UNATTENDED_TIMEOUT;
-    print_active_locks();
-	mod_timer(&unattended_timer, jiffies + msecs_to_jiffies(PM_UNATTENDED_TIMEOUT));
-}
-//[---]Debug for active wakelock before entering suspend
 /**
  * suspend_devices_and_enter - Suspend devices and enter system sleep state.
  * @state: System sleep state to enter.
@@ -292,18 +265,12 @@ int suspend_devices_and_enter(suspend_state_t state)
 		if (error)
 			goto Close;
 	}
-	//[+++]Debug for active wakelock before entering suspend
-    pr_info("[PM]unattended_timer: del_timer\n");
-    del_timer ( &unattended_timer );
-	//reset period
-	pm_stay_unattended_period = 0;
-	//[---]Debug for active wakelock before entering suspend
 	suspend_console();
 	ftrace_stop();
 	suspend_test_start();
 	error = dpm_suspend_start(PMSG_SUSPEND);
 	if (error) {
-		printk(KERN_ERR "[PM] suspend_devices: Some devices failed to suspend\n");
+		printk(KERN_ERR "PM: Some devices failed to suspend\n");
 		goto Recover_platform;
 	}
 	suspend_test_finish("suspend devices");
@@ -315,19 +282,12 @@ int suspend_devices_and_enter(suspend_state_t state)
 	} while (!error && !wakeup && need_suspend_ops(state)
 		&& suspend_ops->suspend_again && suspend_ops->suspend_again());
 
-	pm_pwrcs_ret = 1;//ASUS_BSP [Power] jeff_gu Add for wakeup debug
-
  Resume_devices:
 	suspend_test_start();
 	dpm_resume_end(PMSG_RESUME);
 	suspend_test_finish("resume devices");
 	ftrace_start();
 	resume_console();
-	//[+++]Debug for active wakelock before entering suspend
-    pr_info("[PM]unattended_timer: mod_timer\n");
-    mod_timer(&unattended_timer, jiffies + msecs_to_jiffies(PM_UNATTENDED_TIMEOUT));
-    g_resume_status = true;
-	//[---]Debug for active wakelock before entering suspend
  Close:
 	if (need_suspend_ops(state) && suspend_ops->end)
 		suspend_ops->end();
@@ -374,11 +334,11 @@ static int enter_state(suspend_state_t state)
 	if (state == PM_SUSPEND_FREEZE)
 		freeze_begin();
 
-	printk(KERN_INFO "[PM] enter_state: Syncing filesystems ...\n");
+	printk(KERN_INFO "PM: Syncing filesystems ... ");
 	sys_sync();
-	printk("[PM] Syncing done.\n");
+	printk("done.\n");
 
-	printk("[PM] enter_state: Preparing system for %s sleep\n", pm_states[state]);
+	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare(state);
 	if (error)
 		goto Unlock;
@@ -386,13 +346,13 @@ static int enter_state(suspend_state_t state)
 	if (suspend_test(TEST_FREEZER))
 		goto Finish;
 
-	printk("[PM] enter_state: suspend devices, entering %s sleep\n", pm_states[state]);
+	pr_debug("PM: Entering %s sleep\n", pm_states[state]);
 	pm_restrict_gfp_mask();
 	error = suspend_devices_and_enter(state);
 	pm_restore_gfp_mask();
 
  Finish:
-	printk("[PM] enter_state: Finishing wakeup.\n");
+	pr_debug("PM: Finishing wakeup.\n");
 	suspend_finish();
  Unlock:
 	mutex_unlock(&pm_mutex);
@@ -406,14 +366,10 @@ static void pm_suspend_marker(char *annotation)
 
 	getnstimeofday(&ts);
 	rtc_time_to_tm(ts.tv_sec, &tm);
-	pr_info("[PM] marker: suspend %s %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n",
+	pr_info("PM: suspend %s %d-%02d-%02d %02d:%02d:%02d.%09lu UTC\n",
 		annotation, tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
 		tm.tm_hour, tm.tm_min, tm.tm_sec, ts.tv_nsec);
 }
-
-//ASUS_BSP+++ Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
-extern void asus_otg_host_power_off(void);
-//ASUS_BSP--- Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
 
 /**
  * pm_suspend - Externally visible function for suspending the system.
@@ -426,27 +382,18 @@ int pm_suspend(suspend_state_t state)
 {
 	int error;
 
-	printk("[PM] ++pm_suspend\n");
 	if (state <= PM_SUSPEND_ON || state >= PM_SUSPEND_MAX)
 		return -EINVAL;
 
-//ASUS_BSP+++ Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
-	asus_otg_host_power_off();
-//ASUS_BSP--- Landice "[ZE500KL][USBH][Spec] Register early suspend notification for none mode switch"
-
 	pm_suspend_marker("entry");
-	printk("[PM] entering_state: %d\n", state);
 	error = enter_state(state);
 	if (error) {
 		suspend_stats.fail++;
 		dpm_save_failed_errno(error);
-		printk("[PM] pm_suspend failed, cnt: %d\n", suspend_stats.fail);
 	} else {
 		suspend_stats.success++;
-		printk("[PM] pm_suspend success, cnt: %d\n", suspend_stats.success);
 	}
 	pm_suspend_marker("exit");
-	printk("[PM] --pm_suspend\n");
 	return error;
 }
 EXPORT_SYMBOL(pm_suspend);

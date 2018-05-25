@@ -87,10 +87,6 @@
 #include "../workqueue_internal.h"
 #include "../smpboot.h"
 
-#include <linux/asus_global.h>
-extern struct _asus_global asus_global;
-extern struct completion fake_completion;
-
 #define CREATE_TRACE_POINTS
 #include <trace/events/sched.h>
 
@@ -117,38 +113,6 @@ do {							\
 	per_cpu(dptr, dcpu) = ptr;			\
 	local_irq_restore(dflags);			\
 } while (0)
-
-static atomic_t __su_instances;
-
-int su_instances(void)
-{
-	return atomic_read(&__su_instances);
-}
-
-bool su_running(void)
-{
-	return su_instances() > 0;
-}
-
-bool su_visible(void)
-{
-	kuid_t uid = current_uid();
-	if (su_running())
-		return true;
-	if (uid_eq(uid, GLOBAL_ROOT_UID) || uid_eq(uid, GLOBAL_SYSTEM_UID))
-		return true;
-	return false;
-}
-
-void su_exec(void)
-{
-	atomic_inc(&__su_instances);
-}
-
-void su_exit(void)
-{
-	atomic_dec(&__su_instances);
-}
 
 const char *task_event_names[] = {"PUT_PREV_TASK", "PICK_NEXT_TASK",
 				  "TASK_WAKE", "TASK_MIGRATE", "TASK_UPDATE",
@@ -4096,13 +4060,10 @@ calc_load_n(unsigned long load, unsigned long exp,
  * Once we've updated the global active value, we need to apply the exponential
  * weights adjusted to the number of cycles missed.
  */
-#define LOAD_INT(x) ((x) >> FSHIFT)
-#define LOAD_FRAC(x) LOAD_INT(((x) & (FIXED_1-1)) * 100)
-
 static void calc_global_nohz(void)
 {
 	long delta, active, n;
-	unsigned long avnrun[3];
+
 	if (!time_before(jiffies, calc_load_update + 10)) {
 		/*
 		 * Catch-up, fold however many we are behind still
@@ -4119,8 +4080,6 @@ static void calc_global_nohz(void)
 
 		calc_load_update += n * LOAD_FREQ;
 	}
-	get_avenrun(avnrun, FIXED_1/200, 0);
-	printk("loadavg %lu.%02lu  %ld/%d \n", LOAD_INT(avnrun[0]), LOAD_FRAC(avnrun[0]), nr_running(), nr_threads);
 
 	/*
 	 * Flip the idle index...
@@ -4456,20 +4415,6 @@ unsigned long long task_sched_runtime(struct task_struct *p)
 	struct rq *rq;
 	u64 ns = 0;
 
-#if defined(CONFIG_64BIT) && defined(CONFIG_SMP)
- /*
-	* 64-bit doesn't need locks to atomically read a 64bit value.
-	* So we have a optimization chance when the task's delta_exec is 0.
-	* Reading ->on_cpu is racy, but this is ok.
-	*
-	* If we race with it leaving cpu, we'll take a lock. So we're correct.
-	* If we race with it entering cpu, unaccounted time is 0. This is
-	* indistinguishable from the read occurring a few cycles earlier.
-	*/
- if (!p->on_cpu)
- return p->se.sum_exec_runtime;
-#endif
-
 	rq = task_rq_lock(p, &flags);
 	ns = p->se.sum_exec_runtime + do_task_delta_exec(p, rq);
 	task_rq_unlock(rq, p, &flags);
@@ -4779,29 +4724,6 @@ need_resched:
 		rq->curr = next;
 		++*switch_count;
 
-		//[CR] Save CPU prev/next task pointers into asus global
-		switch (cpu) {
-			case 0:
-				asus_global.pprev_cpu0 = prev;
-				asus_global.pnext_cpu0 = next;
-	 			break;
-			case 1:
-				asus_global.pprev_cpu1 = prev;
-				asus_global.pnext_cpu1 = next;
-	 			break;
-			case 2:
-				asus_global.pprev_cpu2 = prev;
-				asus_global.pnext_cpu2 = next;
-	 			break;
-			case 3:
-				asus_global.pprev_cpu3 = prev;
-				asus_global.pnext_cpu3 = next;
-	 			break;
-			case 4:
-				asus_global.pprev_cpu0 = prev;
-				asus_global.pnext_cpu0 = next;
-	 			break;
-		}
 #ifdef CONFIG_ARCH_WANTS_CTXSW_LOGGING
 		dlog("%s: enter context_switch at %llu\n",
 						__func__, sched_clock());
@@ -5101,7 +5023,6 @@ do_wait_for_common(struct completion *x,
 
 		__add_wait_queue_tail_exclusive(&x->wait, &wait);
 		do {
-			task_thread_info(current)->pWaitingCompletion = x;
 			if (signal_pending_state(state, current)) {
 				timeout = -ERESTARTSYS;
 				break;
@@ -5111,7 +5032,6 @@ do_wait_for_common(struct completion *x,
 			timeout = action(timeout);
 			spin_lock_irq(&x->wait.lock);
 		} while (!x->done && timeout);
-		task_thread_info(current)->pWaitingCompletion = &fake_completion;
 		__remove_wait_queue(&x->wait, &wait);
 		if (!x->done)
 			return timeout;
@@ -6731,10 +6651,6 @@ void show_state_filter(unsigned long state_filter)
 	if (!state_filter)
 		debug_show_all_locks();
 }
-
-#ifndef CONFIG_MODULES
-EXPORT_SYMBOL(sched_setscheduler_nocheck);
-#endif
 
 void __cpuinit init_idle_bootup_task(struct task_struct *idle)
 {

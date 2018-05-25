@@ -37,7 +37,6 @@
 #include <linux/fs.h>
 #include <linux/math64.h>
 #include <linux/ptrace.h>
-#include <linux/rtc.h>	/* ASUS_BSP --- Shawn_Huang Add Event log when set time zone */
 
 #include <asm/uaccess.h>
 #include <asm/unistd.h>
@@ -162,16 +161,8 @@ static inline void warp_clock(void)
 
 int do_sys_settimeofday(const struct timespec *tv, const struct timezone *tz)
 {
-	struct timespec tmp_time;			/* ASUS_BSP --- Shawn_Huang Add Event log when set time zone */
-	struct rtc_time ori_tm, new_tm;	/* ASUS_BSP --- Shawn_Huang Add Event log when set time zone */
 	static int firsttime = 1;
 	int error = 0;
-
-	/* ASUS_BSP +++ Shawn_Huang Add Event log when set time zone */
-	getnstimeofday(&tmp_time);
-	tmp_time.tv_sec -= sys_tz.tz_minuteswest * 60;
-	rtc_time_to_tm(tmp_time.tv_sec, &ori_tm);
-	/* ASUS_BSP --- Shawn_Huang Add Event log when set time zone */
 
 	if (tv && !timespec_valid(tv))
 		return -EINVAL;
@@ -188,25 +179,6 @@ int do_sys_settimeofday(const struct timespec *tv, const struct timezone *tz)
 			if (!tv)
 				warp_clock();
 		}
-
-		/* ASUS_BSP +++ Shawn_Huang Add Event log when set time zone */
-		getnstimeofday(&tmp_time);
-		tmp_time.tv_sec -= sys_tz.tz_minuteswest * 60;
-		rtc_time_to_tm(tmp_time.tv_sec, &new_tm);
-		ASUSEvtlog("[UTS] RTC update: Current Datetime: %04d-%02d-%02d %02d:%02d:%02d,Update Datetime: %04d-%02d-%02d %02d:%02d:%02d\r\n",
-			ori_tm.tm_year + 1900,
-			ori_tm.tm_mon + 1,
-			ori_tm.tm_mday,
-			ori_tm.tm_hour,
-			ori_tm.tm_min,
-			ori_tm.tm_sec,
-			new_tm.tm_year + 1900,
-			new_tm.tm_mon + 1,
-			new_tm.tm_mday,
-			new_tm.tm_hour,
-			new_tm.tm_min,
-			new_tm.tm_sec);
-		/* ASUS_BSP --- Shawn_Huang Add Event log when set time zone */
 	}
 	if (tv)
 		return do_settimeofday(tv);

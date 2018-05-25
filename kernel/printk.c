@@ -47,9 +47,6 @@
 #include <linux/utsname.h>
 
 #include <asm/uaccess.h>
-//thomas_chu +++
-#include <linux/asus_global.h>
-//thomas_chu ---
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/printk.h>
@@ -226,53 +223,6 @@ struct log {
  */
 static DEFINE_RAW_SPINLOCK(logbuf_lock);
 
-static char *asus_log_buf = NULL;
-static bool is_logging_to_asus_buffer = false;
-
-void *memset_nc(void *s, int c, size_t count);
-
-/* this memcpy_nc() is for non cached memory */
-static void *memcpy_nc(void *dest, const void *src, size_t n)
-{
-	int i = 0;
-	u8 *d = (u8 *)dest, *s = (u8 *)src;
-	for (i = 0; i < n; i++)
-		d[i] = s[i];
-
-	return dest;
-}
-
-static int write_to_asus_log_buffer(const char *text, size_t text_len,
-				enum log_flags lflags) {
-	static ulong log_write_index = 0; /* the index to write the log in asus log buffer */
-
-	if (!asus_log_buf) {
-		return -1;
-	}
-
-	if (log_write_index >= PRINTK_BUFFER_SLOT_SIZE) {
-		return -2;
-	}
-
-	if (log_write_index + text_len >= PRINTK_BUFFER_SLOT_SIZE) {
-		ulong part1 = PRINTK_BUFFER_SLOT_SIZE - log_write_index;
-		ulong part2 = text_len -part1;
-		memcpy_nc(asus_log_buf+log_write_index, text, part1);
-		memcpy_nc(asus_log_buf, text + part1, part2);
-		log_write_index = part2;
-	} else {
-		memcpy_nc(asus_log_buf+log_write_index, text, text_len);
-		log_write_index += text_len;
-	}
-
-	if (lflags & LOG_NEWLINE) {
-		asus_log_buf[log_write_index++] = '\n';
-		log_write_index = log_write_index % PRINTK_BUFFER_SLOT_SIZE;
-	}
-
-	return text_len;
-}
-
 #ifdef CONFIG_PRINTK
 DECLARE_WAIT_QUEUE_HEAD(log_wait);
 /* the next printk record to read by syslog(READ) or /proc/kmsg */
@@ -311,8 +261,6 @@ static u32 clear_idx;
 static char __log_buf[__LOG_BUF_LEN] __aligned(LOG_ALIGN);
 static char *log_buf = __log_buf;
 static u32 log_buf_len = __LOG_BUF_LEN;
-
-int nSuspendInProgress;
 
 #if defined(CONFIG_OOPS_LOG_BUFFER)
 #define __OOPS_LOG_BUF_LEN (1 << CONFIG_OOPS_LOG_BUF_SHIFT)
@@ -941,17 +889,6 @@ void log_buf_kexec_setup(void)
 /* requested log_buf_len from kernel cmdline */
 static unsigned long __initdata new_log_buf_len;
 
-//thomas_chu +++
-struct _asus_global asus_global =
-{
-	.asus_global_magic = ASUS_GLOBAL_MAGIC,
-	.ramdump_enable_magic = ASUS_GLOBAL_RUMDUMP_MAGIC,
-	.kernel_log_addr = __log_buf,
-	.kernel_log_size = __LOG_BUF_LEN,
-//	.kernel_version = ASUS_SW_VER,
-};
-//thomas_chu ---
-
 /* save requested log_buf_len since it's too early to process it */
 static int __init log_buf_len_setup(char *str)
 {
@@ -1081,25 +1018,10 @@ static bool printk_time = 1;
 static bool printk_time;
 #endif
 module_param_named(time, printk_time, bool, S_IRUGO | S_IWUSR);
-#include <linux/rtc.h>
-extern struct timezone sys_tz;
-static void myrtc_time_to_tm(unsigned long time, struct rtc_time *tm)
-{
-	tm->tm_hour = time / 3600;
-	time -= tm->tm_hour * 3600;
-	tm->tm_hour %= 24;
-	tm->tm_min = time / 60;
-	tm->tm_sec = time - tm->tm_min * 60;
-}
-extern int rtc_ready;
-int boot_after_60sec = 0;
+
 static size_t print_time(u64 ts, char *buf)
 {
 	unsigned long rem_nsec;
-	struct timespec timespec;
-	struct rtc_time tm;
-	int this_cpu;
-	this_cpu = smp_processor_id();
 
 	if (!printk_time)
 		return 0;
@@ -1109,38 +1031,8 @@ static size_t print_time(u64 ts, char *buf)
 	if (!buf)
 		return snprintf(NULL, 0, "[%5lu.000000] ", (unsigned long)ts);
 
-	if (boot_after_60sec == 0 && ts >= 60)
-		boot_after_60sec = 1;
-
-	if (rtc_ready && !nSuspendInProgress) {
-
-		getnstimeofday(&timespec);
-
-		timespec.tv_sec -= sys_tz.tz_minuteswest * 60;
-
-		myrtc_time_to_tm(timespec.tv_sec, &tm);
-
-		if (!buf)
-			return snprintf(NULL, 0, "[%5lu.000000] ", (unsigned long)ts);
-		return sprintf(buf, "[%5lu.%06lu] (CPU:%d-pid:%d:%s) [%02d:%02d:%02d.%09lu] ",
-			(unsigned long)ts,
-			rem_nsec / 1000,
-			this_cpu,
-			current->pid,
-			current->comm,
-			tm.tm_hour, tm.tm_min, tm.tm_sec, timespec.tv_nsec);
-	} else {
-		if (current) {
-			return sprintf(buf, "[%5lu.%06lu] (CPU:%d-pid:%d:%s)",
-				(unsigned long)ts, rem_nsec / 1000,
-				this_cpu,
-				current->pid,
-				current->comm);
-		}
-		return sprintf(buf, "[%5lu.%06lu] ",
+	return sprintf(buf, "[%5lu.%06lu] ",
 		       (unsigned long)ts, rem_nsec / 1000);
-
-	}
 }
 
 static size_t print_prefix(const struct log *msg, bool syslog, char *buf)
@@ -1162,7 +1054,7 @@ static size_t print_prefix(const struct log *msg, bool syslog, char *buf)
 		}
 	}
 
-	/*len += print_time(msg->ts_nsec, buf ? buf + len : NULL);*/
+	len += print_time(msg->ts_nsec, buf ? buf + len : NULL);
 	return len;
 }
 
@@ -1666,17 +1558,14 @@ static void call_console_drivers(int level, const char *text, size_t len)
 
 	trace_console(text, len);
 
-
+	if (level >= console_loglevel && !ignore_loglevel)
+		return;
 	if (!console_drivers)
 		return;
 
 	for_each_console(con) {
-		if(strncmp(con->name,"logk",4) != 0){
-			if (level >= console_loglevel && !ignore_loglevel)
-				continue;
-			if (exclusive_console && con != exclusive_console)
-				continue;
-	}
+		if (exclusive_console && con != exclusive_console)
+			continue;
 		if (!(con->flags & CON_ENABLED))
 			continue;
 		if (!con->write)
@@ -1868,7 +1757,7 @@ static size_t cont_print_text(char *text, size_t size)
 	size_t len;
 
 	if (cont.cons == 0 && (console_prev & LOG_NEWLINE)) {
-		/*textlen += print_time(cont.ts_nsec, text);*/
+		textlen += print_time(cont.ts_nsec, text);
 		size -= textlen;
 	}
 
@@ -1896,17 +1785,12 @@ asmlinkage int vprintk_emit(int facility, int level,
 {
 	static int recursion_bug;
 	static char textbuf[LOG_LINE_MAX];
-	static char textbuf1[LOG_LINE_MAX];
 	char *text = textbuf;
-	char *text1 = textbuf1;
 	size_t text_len;
 	enum log_flags lflags = 0;
 	unsigned long flags;
 	int this_cpu;
 	int printed_len = 0;
-	u64 ts = 0;
-	char time_buf[512];
-	size_t time_size = 0;
 
 	boot_delay_msec(level);
 	printk_delay();
@@ -1952,20 +1836,20 @@ asmlinkage int vprintk_emit(int facility, int level,
 	 * The printf needs to come first; we need the syslog
 	 * prefix which might be passed-in as a parameter.
 	 */
-	text_len = vscnprintf(text1, sizeof(textbuf1), fmt, args);
+	text_len = vscnprintf(text, sizeof(textbuf), fmt, args);
 
 	/* mark and strip a trailing newline */
-	if (text_len && text1[text_len-1] == '\n') {
+	if (text_len && text[text_len-1] == '\n') {
 		text_len--;
 		lflags |= LOG_NEWLINE;
 	}
 
 	/* strip kernel syslog prefix and extract log level or control flags */
 	if (facility == 0) {
-		int kern_level = printk_get_level(text1);
+		int kern_level = printk_get_level(text);
 
 		if (kern_level) {
-			const char *end_of_header = printk_skip_level(text1);
+			const char *end_of_header = printk_skip_level(text);
 			switch (kern_level) {
 			case '0' ... '7':
 				if (level == -1)
@@ -1975,30 +1859,20 @@ asmlinkage int vprintk_emit(int facility, int level,
 			case 'c':	/* KERN_CONT */
 				break;
 			}
-			text_len -= end_of_header - text1;
-			text1 = (char *)end_of_header;
+			text_len -= end_of_header - text;
+			text = (char *)end_of_header;
 		}
 	}
 
 #ifdef CONFIG_EARLY_PRINTK_DIRECT
-	printascii(text1);
+	printascii(text);
 #endif
-
-	ts = local_clock();
-	time_size = print_time(ts, time_buf);
-	strncpy(text, time_buf, time_size);
-	strncpy(text+time_size, text1, text_len);
-	text_len += time_size;
 
 	if (level == -1)
 		level = default_message_loglevel;
 
 	if (dict)
 		lflags |= LOG_PREFIX|LOG_NEWLINE;
-
-	if (is_logging_to_asus_buffer) {
-		write_to_asus_log_buffer(text, text_len, lflags);
-	}
 
 	if (!(lflags & LOG_NEWLINE)) {
 		/*
@@ -2010,7 +1884,7 @@ asmlinkage int vprintk_emit(int facility, int level,
 
 		/* buffer line if possible, otherwise store it right away */
 		if (!cont_add(facility, level, text, text_len))
-			log_store(facility, level, lflags | LOG_CONT, ts,
+			log_store(facility, level, lflags | LOG_CONT, 0,
 				  dict, dictlen, text, text_len);
 	} else {
 		bool stored = false;
@@ -2028,7 +1902,7 @@ asmlinkage int vprintk_emit(int facility, int level,
 		}
 
 		if (!stored)
-			log_store(facility, level, lflags, ts,
+			log_store(facility, level, lflags, 0,
 				  dict, dictlen, text, text_len);
 	}
 	printed_len += text_len;
@@ -2073,10 +1947,6 @@ asmlinkage int printk_emit(int facility, int level,
 }
 EXPORT_SYMBOL(printk_emit);
 
-#ifndef CONFIG_ASUS_ZC550KL_PROJECT
-extern int g_user_dbg_mode;
-#endif
-extern unsigned int asusdebug_enable;
 /**
  * printk - print a kernel message
  * @fmt: format string
@@ -2103,15 +1973,6 @@ asmlinkage int printk(const char *fmt, ...)
 	va_list args;
 	int r;
 
-	if (asusdebug_enable==0x11223344)
-		return 0;
-#ifdef CONFIG_ASUS_ZC550KL_PROJECT
-	if ( g_user_klog_mode==0 )
-		return 0;
-#else
-	if (g_user_dbg_mode==0)
-		return 0;
-#endif
 #ifdef CONFIG_KGDB_KDB
 	if (unlikely(kdb_trap_printk)) {
 		va_start(args, fmt);
@@ -2322,8 +2183,6 @@ MODULE_PARM_DESC(console_suspend, "suspend console during suspend"
  */
 void suspend_console(void)
 {
-	ASUSEvtlog("[UTS] System Suspend\n");
-	nSuspendInProgress = 1;
 	if (!console_suspend_enabled)
 		return;
 	printk("Suspending console(s) (use no_console_suspend to debug)\n");
@@ -2334,29 +2193,6 @@ void suspend_console(void)
 
 void resume_console(void)
 {
-	int i;
-	nSuspendInProgress = 0;
-	ASUSEvtlog("[UTS] System Resume\n");
-
-//ASUS_BSP [+++] jeff_gu Add GPIO wakeup information
-	if (pm_pwrcs_ret) {
-
-		ASUSEvtlog("[PM] Suspended for %d.%02d secs \n", pwrcs_time/100,pwrcs_time%100);
-
-		if (gpio_irq_cnt>0) {
-			for (i=0;i<gpio_irq_cnt;i++)
-				ASUSEvtlog("[PM] GPIO triggered: %d\n", gpio_resume_irq[i]);
-			gpio_irq_cnt=0; //clear log count
-		}
-		if (gic_irq_cnt>0) {
-			for (i=0;i<gic_irq_cnt;i++)
-				ASUSEvtlog("[PM] IRQs triggered: %d\n", gic_resume_irq[i]);
-			gic_irq_cnt=0;  //clear log count
-		}
-		pm_pwrcs_ret=0;
-	}
-//ASUS_BSP [---] jeff_gu Add GPIO wakeup information
-
 	if (!console_suspend_enabled)
 		return;
 	down(&console_sem);
@@ -3394,70 +3230,3 @@ void show_regs_print_info(const char *log_lvl)
 }
 
 #endif
-
-void printk_buffer_rebase(void)
-{
-/*
- * This will NOT do real printk buffer rebase.
- * We just set a flag to let vprintk_emit() also write
- * kernel log to our remapped buffer.
- * Then we can save the content of our remapped buffer while rebooting
- * after the device crash.
- */
-	asus_log_buf = (char *) PRINTK_BUFFER_VA;
-	if (!asus_log_buf) {
-		printk("%s: asus_log_buf is NULL\n", __func__);
-		return;
-	}
-	memset_nc(asus_log_buf, 0, PRINTK_BUFFER_SLOT_SIZE);
-	is_logging_to_asus_buffer = true;
-
-/*
- * Following code does not work.
- * We have to fix it.
- */
-#if 0
-	char *new_log_buf;
-	unsigned long flags;
-
-	new_log_buf = g_printk_log_buf = (char *) PRINTK_BUFFER_VA;
-	printk("printk_buffer_rebase new_log_buf=%p\n", new_log_buf);
-	if (!new_log_buf) {
-		printk( "%s: allocation failed\n", __func__);
-		goto out;
-	}
-
-	if (log_buf_len > PRINTK_BUFFER_SLOT_SIZE) {
-		/* Becasue we memcpy original log_buf to new_log_buf,
-		 * we assume that original log_buf length is less than
-		 * the new log_buf length to prevent from overwritting.
-		 */
-		printk("%s: BUG:old log_buf_len=%d > new log_buf_len=%d\n",
-				__func__, log_buf_len, PRINTK_BUFFER_SLOT_SIZE);
-		return;
-	}
-
-	printk("printk_buffer_rebase original log_buf=%p, log_buf_len=%d\n",
-			log_buf, log_buf_len);
-	//~ memset(g_printk_log_buf, 0, PRINTK_BUFFER_SLOT_SIZE);
-
-	raw_spin_lock_irqsave(&logbuf_lock, flags);
-
-	//~ memcpy(new_log_buf, log_buf, log_buf_len);
-	log_buf_len = PRINTK_BUFFER_SLOT_SIZE;
-	log_buf = new_log_buf;
-
-	asus_global.kernel_log_addr = log_buf;
-	asus_global.kernel_log_size = log_buf_len;
-	memset(asus_global.kernel_version,0,sizeof(asus_global.kernel_version));
-	strncpy(asus_global.kernel_version,ASUS_SW_VER,sizeof(asus_global.kernel_version));
-
-	raw_spin_unlock_irqrestore(&logbuf_lock, flags);
-
-	printk("%s: log_buf_len=%d\n", __func__, log_buf_len);
-
-out:
-	return;
-#endif
-}
-EXPORT_SYMBOL(printk_buffer_rebase);
