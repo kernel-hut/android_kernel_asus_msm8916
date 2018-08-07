@@ -45,6 +45,12 @@
 #include "msm8916-wcd-irq.h"
 #include "msm8x16_wcd_registers.h"
 
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+//mei_huang +++ enable speaker not need to enable mic
+extern int speaker_run;
+//mei_huang ---
+#endif
+
 #define MSM8X16_WCD_RATES (SNDRV_PCM_RATE_8000 | SNDRV_PCM_RATE_16000 |\
 			SNDRV_PCM_RATE_32000 | SNDRV_PCM_RATE_48000)
 #define MSM8X16_WCD_FORMATS (SNDRV_PCM_FMTBIT_S16_LE |\
@@ -4123,9 +4129,16 @@ static int msm8x16_wcd_hph_pa_event(struct snd_soc_dapm_widget *w,
 		if (w->shift == 5)
 			msm8x16_notifier_call(codec,
 					WCD_EVENT_PRE_HPHL_PA_ON);
+#ifndef CONFIG_ASUS_ZC550KL_PROJECT
+		else if (w->shift == 4) {
+#endif
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		else if (w->shift == 4)
+			if (speaker_run == 0) {
+#endif
 			msm8x16_notifier_call(codec,
 					WCD_EVENT_PRE_HPHR_PA_ON);
+			}
 		snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_NCP_FBCTRL, 0x20, 0x20);
 		break;
@@ -4156,8 +4169,14 @@ static int msm8x16_wcd_hph_pa_event(struct snd_soc_dapm_widget *w,
 			snd_soc_update_bits(codec,
 				MSM8X16_WCD_A_ANALOG_RX_HPH_L_TEST, 0x04, 0x00);
 			msm8x16_wcd->mute_mask |= HPHL_PA_DISABLE;
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+			if (speaker_run == 0) {
+#endif
 			msm8x16_notifier_call(codec,
 					WCD_EVENT_PRE_HPHL_PA_OFF);
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+			}
+#endif
 		} else if (w->shift == 4) {
 #ifdef CONFIG_MACH_JALEBI
 			enable_ext_spk(w, false);
@@ -4186,8 +4205,14 @@ static int msm8x16_wcd_hph_pa_event(struct snd_soc_dapm_widget *w,
 		} else if (w->shift == 4) {
 			clear_bit(WCD_MBHC_HPHR_PA_OFF_ACK,
 				&msm8x16_wcd->mbhc.hph_pa_dac_state);
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+			if (speaker_run == 0) {
+#endif
 			msm8x16_notifier_call(codec,
 					WCD_EVENT_POST_HPHR_PA_OFF);
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+			}
+#endif
 		}
 		usleep_range(4000, 4100);
 

@@ -217,6 +217,9 @@ struct msm8916_asoc_mach_data {
 #ifdef CONFIG_MACH_JALEBI
 	int ext_spk_amp_gpio;
 #endif
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+	int spk_amp_gpio;//mei_huang +++ for speaker config
+#endif
 	int spk_ext_pa_gpio;
 	int mclk_freq;
 	int lb_mode;
