@@ -9,9 +9,8 @@ menuconfig SOUNDWIRE
 
 if SOUNDWIRE
 config SOUNDWIRE_WCD_CTRL
-	depends on WCD9335_CODEC
 	tristate "QTI WCD CODEC Soundwire controller"
-	default n
+	default y
 	help
 	  Select driver for QTI's Soundwire Master Component.
 endif

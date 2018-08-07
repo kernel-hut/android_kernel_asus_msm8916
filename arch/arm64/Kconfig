@@ -232,6 +232,26 @@ config ARCH_MSM8916
 	  This enables support for the MSM8916 chipset. If you dont
 	  know what do here, say N
 
+config ASUS_ZC550KL_PROJECT
+	bool "Enable Support for zc550kl project"
+	help
+	  This enables support for the Asus MSM project. If you dont
+	  know what do here, say N
+
+config ASUS_ZC550KL8916_PROJECT
+	bool "Enable Support for zc550kl-msm8916 project"
+	depends on ASUS_ZC550KL_PROJECT
+	help
+	  This enables support for the Asus MSM8916 project. If you dont
+	  know what do here, say N
+
+config ASUS_ZC550KL8939_PROJECT
+	bool "Enable Support for zc550kl-msm8936 project"
+	depends on ASUS_ZC550KL_PROJECT
+	help
+	  This enables support for the Asus MSM8939 project. If you dont
+	  know what do here, say N
+
 config ARCH_MSM8994
 	bool "Enable Support for Qualcomm MSM8994"
 	depends on ARCH_MSM
