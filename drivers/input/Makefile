@@ -29,3 +29,7 @@ obj-$(CONFIG_INPUT_KEYRESET)	+= keyreset.o
 obj-$(CONFIG_INPUT_KEYCOMBO)	+= keycombo.o
 obj-$(CONFIG_SENSORS_HALL)	+= hall_sensor.o
 
+ifeq ($(CONFIG_ASUS__PROJECT),y)
+obj-y  += sensors/
+endif
+

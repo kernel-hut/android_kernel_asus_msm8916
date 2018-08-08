@@ -90,6 +90,14 @@ obj-$(CONFIG_SENSORS_BMA2X2)	+= bma2x2.o
 obj-$(CONFIG_SENSORS_LTR553)	+= ltr553.o
 obj-$(CONFIG_SENSORS_LTR559)	+= ltr559-lc.o
 
+#+++ ASUS_BSP alian_Shen "Add GSensor for ZC550KL"
+ifeq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
+#obj-$(CONFIG_KXTJ2_ZC550K) +=  kxtj9_zc550kl.o
+obj-y +=  kxtj9_zc550kl.o
+obj-y +=  bma2x2_zc550kl.o
+endif
+#--- ASUS_BSP alian_Shen "Add GSensor for ZC550KL"
+
 ifeq ($(CONFIG_SENSORS_BMA2X2_ENABLE_INT1),y)
 	EXTRA_CFLAGS += -DBMA2X2_ENABLE_INT1
 endif
