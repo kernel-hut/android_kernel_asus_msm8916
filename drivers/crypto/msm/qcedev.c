@@ -1761,6 +1761,7 @@ long qcedev_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
+
 		qcedev_areq.sha_op_req.diglen = handle->sha_ctxt.diglen;
 		memcpy(&qcedev_areq.sha_op_req.digest[0],
 				&handle->sha_ctxt.digest[0],
@@ -1804,6 +1805,7 @@ long qcedev_ioctl(struct file *file, unsigned cmd, unsigned long arg)
 			mutex_unlock(&hash_access_lock);
 			return -EINVAL;
 		}
+
 		qcedev_areq.sha_op_req.diglen =	handle->sha_ctxt.diglen;
 		memcpy(&qcedev_areq.sha_op_req.digest[0],
 				&handle->sha_ctxt.digest[0],
