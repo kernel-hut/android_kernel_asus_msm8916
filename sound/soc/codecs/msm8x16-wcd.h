@@ -36,6 +36,9 @@
 #define MSM8X16_TOMBAK_LPASS_DIGCODEC_CBCR			0x0181C0B0
 #define MSM8X16_TOMBAK_LPASS_DIGCODEC_AHB_CBCR			0x0181C0B4
 
+#define EXT_SPK_AMP_GPIO	(902+121)
+#define EXT_SPK_AMP_HEADSET_GPIO	(902+8)
+
 #define MSM8X16_CODEC_NAME "msm8x16_wcd_codec"
 
 #define MSM8X16_WCD_IS_DIGITAL_REG(reg) \
@@ -214,13 +217,10 @@ struct msm8916_asoc_mach_data {
 	int codec_type;
 	int ext_pa;
 	int us_euro_gpio;
-#ifdef CONFIG_MACH_JALEBI
-	int ext_spk_amp_gpio;
-#endif
-#ifdef CONFIG_ASUS_ZC550KL_PROJECT
-	int spk_amp_gpio;//mei_huang +++ for speaker config
-#endif
 	int spk_ext_pa_gpio;
+	#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+	int spk_amp_gpio;//mei_huang +++ for speaker config
+	#endif
 	int mclk_freq;
 	int lb_mode;
 	u8 micbias1_cap_mode;
@@ -292,9 +292,6 @@ struct msm8x16_wcd_priv {
 	bool clock_active;
 	bool config_mode_active;
 	u16 boost_option;
-#ifdef CONFIG_MACH_JALEBI
-	u16 ext_spk_mode;
-#endif
 	bool spk_boost_set;
 	bool ear_pa_boost_set;
 	bool ext_spk_boost_set;
@@ -319,6 +316,8 @@ extern int msm8x16_wcd_hs_detect(struct snd_soc_codec *codec,
 		    struct wcd_mbhc_config *mbhc_cfg);
 
 extern void msm8x16_wcd_hs_detect_exit(struct snd_soc_codec *codec);
+
+extern int msm8x16_wcd_restart_mbhc(struct snd_soc_codec *codec);
 
 extern void msm8x16_wcd_spk_ext_pa_cb(
 		int (*codec_spk_ext_pa)(struct snd_soc_codec *codec,
