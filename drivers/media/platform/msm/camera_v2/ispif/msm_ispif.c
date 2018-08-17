@@ -269,6 +269,11 @@ static int msm_ispif_clk_ahb_enable(struct ispif_device *ispif, int enable)
 {
 	int rc = 0;
 
+	if (ispif->csid_version < CSID_VERSION_V30) {
+		/* Older ISPIF versiond don't need ahb clokc */
+		return 0;
+	}
+
 	rc = msm_ispif_get_ahb_clk_info(ispif, ispif->pdev,
 		ispif_8974_ahb_clk_info);
 	if (rc < 0) {
@@ -364,23 +369,23 @@ static void msm_ispif_sel_csid_core(struct ispif_device *ispif,
 	switch (intftype) {
 	case PIX0:
 		data &= ~(BIT(1) | BIT(0));
-		data |= (uint32_t)csid;
+		data |= csid;
 		break;
 	case RDI0:
 		data &= ~(BIT(5) | BIT(4));
-		data |= (uint32_t)(csid << 4);
+		data |= (csid << 4);
 		break;
 	case PIX1:
 		data &= ~(BIT(9) | BIT(8));
-		data |= (uint32_t)(csid << 8);
+		data |= (csid << 8);
 		break;
 	case RDI1:
 		data &= ~(BIT(13) | BIT(12));
-		data |= (uint32_t)(csid << 12);
+		data |= (csid << 12);
 		break;
 	case RDI2:
 		data &= ~(BIT(21) | BIT(20));
-		data |= (uint32_t)(csid << 20);
+		data |= (csid << 20);
 		break;
 	}
 
@@ -456,9 +461,9 @@ static void msm_ispif_enable_intf_cids(struct ispif_device *ispif,
 
 	data = msm_camera_io_r(ispif->base + intf_addr);
 	if (enable)
-		data |= (uint32_t)cid_mask;
+		data |= cid_mask;
 	else
-		data &= ~((uint32_t)cid_mask);
+		data &= ~cid_mask;
 	msm_camera_io_w_mb(data, ispif->base + intf_addr);
 }
 
@@ -1371,6 +1376,13 @@ static long msm_ispif_subdev_ioctl(struct v4l2_subdev *sd,
 		return 0;
 	}
 	case MSM_SD_SHUTDOWN: {
+		struct ispif_device *ispif =
+			(struct ispif_device *)v4l2_get_subdevdata(sd);
+		if (ispif && ispif->base) {
+			mutex_lock(&ispif->mutex);
+			msm_ispif_release(ispif);
+			mutex_unlock(&ispif->mutex);
+		}
 		return 0;
 	}
 	default:

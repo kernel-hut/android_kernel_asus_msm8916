@@ -168,6 +168,12 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 			csiphybase +
 			csiphy_dev->ctrl_reg->csiphy_reg.
 			mipi_csiphy_glbl_reset_addr);
+		#ifdef CONFIG_8939_CSIPHY
+		msm_camera_io_w(0x01,
+			csiphybase + csiphy_dev->ctrl_reg->csiphy_reg.
+			mipi_csiphy_glbl_pwg_cfg0_addr);
+			CDBG("CONFIG_8939_CSIPHY 180 \n");
+		#endif
 	}
 
 	lane_mask &= 0x1f;
@@ -191,6 +197,16 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 			mipi_csiphy_interrupt_mask_val, csiphybase +
 			csiphy_dev->ctrl_reg->csiphy_reg.
 			mipi_csiphy_interrupt_clear_addr + 0x4*j);
+		#ifdef CONFIG_8939_CSIPHY
+		CDBG("CONFIG_8939_CSIPHY 201 \n");
+		msm_camera_io_w(0x17, csiphybase +
+				csiphy_dev->ctrl_reg->csiphy_reg.
+				mipi_csiphy_lnn_test_imp + 0x40*j);
+		if ((j == 1) || ((j == 3) && (csiphy_params->combo_mode == 1)))
+				msm_camera_io_w(0xFF,
+				csiphybase + csiphy_dev->ctrl_reg->csiphy_reg.
+				mipi_csiphy_lnn_cfg4_addr + 0x40*j);
+		#endif
 		if (csiphy_dev->is_3_1_20nm_hw == 1) {
 			if (j > CLK_LANE_OFFSET) {
 				lane_right = 0x8;
@@ -220,9 +236,15 @@ static int msm_csiphy_lane_config(struct csiphy_device *csiphy_dev,
 			msm_camera_io_w(lane_val, csiphybase +
 				csiphy_dev->ctrl_reg->csiphy_reg.
 				mipi_csiphy_lnn_misc1_addr + 0x40*j);
-			msm_camera_io_w(0x17, csiphybase +
+			#ifdef CONFIG_8939_CSIPHY
+			CDBG("CONFIG_8939_CSIPHY 240 \n");
+			#else
+			CDBG("CONFIG_8939_CSIPHY 242 \n");
+            msm_camera_io_w(0x17, csiphybase +
 				csiphy_dev->ctrl_reg->csiphy_reg.
 				mipi_csiphy_lnn_test_imp + 0x40*j);
+			#endif
+
 			curr_lane++;
 		}
 		j++;

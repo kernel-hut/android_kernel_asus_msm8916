@@ -27,7 +27,11 @@ struct csiphy_reg_parms_t csiphy_v3_1 = {
 	0x100,
 	0x104,
 	0x108,
+#ifdef CONFIG_8939_CSIPHY
+	0x1FC,
+#else
 	0x10C,
+#endif
 	0x1C,
 	0x28,
 	0x140,

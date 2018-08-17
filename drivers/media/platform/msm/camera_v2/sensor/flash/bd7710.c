@@ -16,7 +16,7 @@
 
 #define FLASH_NAME "qcom,led-flash1"
 
-/*#define CONFIG_MSMB_CAMERA_DEBUG*/
+#define CONFIG_MSMB_CAMERA_DEBUG
 #undef CDBG
 #ifdef CONFIG_MSMB_CAMERA_DEBUG
 #define CDBG(fmt, args...) pr_err(fmt, ##args)
@@ -28,27 +28,45 @@ static struct msm_led_flash_ctrl_t fctrl;
 static struct i2c_driver bd7710_i2c_driver;
 
 static struct msm_camera_i2c_reg_array bd7710_init_array[] = {
-	{0x00, 0x10},
+	{0x04, 0x00},
+//	{0x05, 0x07},
+	{0x06, 0x65},
+//	{0x00, 0x0A},
+//	{0x01, 0x0A},
+	{0x02, 0xFF},
+//	{0x03, 0x11},
 };
 
 static struct msm_camera_i2c_reg_array bd7710_off_array[] = {
-	{0x05, 0x00},
-	{0x02, 0x00},
+	{0x04, 0x00},
 };
 
 static struct msm_camera_i2c_reg_array bd7710_release_array[] = {
-	{0x00, 0x00},
+	{0x04, 0x00},
 };
 
 static struct msm_camera_i2c_reg_array bd7710_low_array[] = {
-	{0x05, 0x25},
-	{0x00, 0x38},
-	{0x02, 0x40},
+  	{0x04, 0x11},
+};
+
+static struct msm_camera_i2c_reg_array bd7710_low_first_array[] = {
+  	{0x04, 0x01},
+};
+
+static struct msm_camera_i2c_reg_array bd7710_low_second_array[] = {
+  	{0x04, 0x10},
 };
 
 static struct msm_camera_i2c_reg_array bd7710_high_array[] = {
-	{0x05, 0x25},
-	{0x02, 0xBF},
+  	{0x04, 0x22},
+};
+
+static struct msm_camera_i2c_reg_array bd7710_high_first_array[] = {
+  	{0x04, 0x02},
+};
+
+static struct msm_camera_i2c_reg_array bd7710_high_second_array[] = {
+  	{0x04, 0x20},
 };
 
 static void __exit msm_flash_bd7710_i2c_remove(void)
@@ -77,6 +95,7 @@ static const struct i2c_device_id bd7710_i2c_id[] = {
 static int msm_flash_bd7710_i2c_probe(struct i2c_client *client,
 		const struct i2c_device_id *id)
 {
+	pr_info("%s entry\n", __func__);
 	if (!id) {
 		pr_err("msm_flash_bd7710_i2c_probe: id is NULL");
 		id = bd7710_i2c_id;
@@ -100,6 +119,7 @@ static int msm_flash_bd7710_platform_probe(struct platform_device *pdev)
 {
 	const struct of_device_id *match;
 
+	pr_info("%s entry\n", __func__);
 	match = of_match_device(bd7710_trigger_dt_match, &pdev->dev);
 	if (!match)
 		return -EFAULT;
@@ -118,11 +138,13 @@ static struct platform_driver bd7710_platform_driver = {
 static int __init msm_flash_bd7710_init_module(void)
 {
 	int32_t rc = 0;
+	pr_info("%s entry\n", __func__);
 
 	rc = platform_driver_register(&bd7710_platform_driver);
 	if (!rc)
 		return rc;
-	pr_debug("%s:%d rc %d\n", __func__, __LINE__, rc);
+	pr_info("%s:%d rc %d\n", __func__, __LINE__, rc);
+
 	return i2c_add_driver(&bd7710_i2c_driver);
 }
 
@@ -170,9 +192,41 @@ static struct msm_camera_i2c_reg_setting bd7710_low_setting = {
 	.delay = 0,
 };
 
+static struct msm_camera_i2c_reg_setting bd7710_low_first_setting = {
+	.reg_setting = bd7710_low_first_array,
+	.size = ARRAY_SIZE(bd7710_low_first_array),
+	.addr_type = MSM_CAMERA_I2C_BYTE_ADDR,
+	.data_type = MSM_CAMERA_I2C_BYTE_DATA,
+	.delay = 0,
+};
+
+static struct msm_camera_i2c_reg_setting bd7710_low_second_setting = {
+	.reg_setting = bd7710_low_second_array,
+	.size = ARRAY_SIZE(bd7710_low_second_array),
+	.addr_type = MSM_CAMERA_I2C_BYTE_ADDR,
+	.data_type = MSM_CAMERA_I2C_BYTE_DATA,
+	.delay = 0,
+};
+
 static struct msm_camera_i2c_reg_setting bd7710_high_setting = {
 	.reg_setting = bd7710_high_array,
 	.size = ARRAY_SIZE(bd7710_high_array),
+	.addr_type = MSM_CAMERA_I2C_BYTE_ADDR,
+	.data_type = MSM_CAMERA_I2C_BYTE_DATA,
+	.delay = 0,
+};
+
+static struct msm_camera_i2c_reg_setting bd7710_high_first_setting = {
+	.reg_setting = bd7710_high_first_array,
+	.size = ARRAY_SIZE(bd7710_high_first_array),
+	.addr_type = MSM_CAMERA_I2C_BYTE_ADDR,
+	.data_type = MSM_CAMERA_I2C_BYTE_DATA,
+	.delay = 0,
+};
+
+static struct msm_camera_i2c_reg_setting bd7710_high_second_setting = {
+	.reg_setting = bd7710_high_second_array,
+	.size = ARRAY_SIZE(bd7710_high_second_array),
 	.addr_type = MSM_CAMERA_I2C_BYTE_ADDR,
 	.data_type = MSM_CAMERA_I2C_BYTE_DATA,
 	.delay = 0,
@@ -182,7 +236,11 @@ static struct msm_led_flash_reg_t bd7710_regs = {
 	.init_setting = &bd7710_init_setting,
 	.off_setting = &bd7710_off_setting,
 	.low_setting = &bd7710_low_setting,
+	.low_first_setting = &bd7710_low_first_setting,
+	.low_second_setting = &bd7710_low_second_setting,
 	.high_setting = &bd7710_high_setting,
+	.high_first_setting = &bd7710_high_first_setting,
+	.high_second_setting = &bd7710_high_second_setting,
 	.release_setting = &bd7710_release_setting,
 };
 
@@ -193,7 +251,11 @@ static struct msm_flash_fn_t bd7710_func_tbl = {
 	.flash_led_release = msm_flash_led_release,
 	.flash_led_off = msm_flash_led_off,
 	.flash_led_low = msm_flash_led_low,
+	.flash_led_low_first = msm_flash_led_low_first,
+	.flash_led_low_second = msm_flash_led_low_second,
 	.flash_led_high = msm_flash_led_high,
+	.flash_led_high_first = msm_flash_led_high_first,
+	.flash_led_high_second = msm_flash_led_high_second,
 };
 
 static struct msm_led_flash_ctrl_t fctrl = {

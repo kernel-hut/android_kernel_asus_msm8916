@@ -701,18 +701,21 @@ static int32_t msm_cci_init(struct v4l2_subdev *sd,
 		rc = -ENOMEM;
 		return rc;
 	}
+	if (c_ctrl->cci_info->cci_i2c_master > MASTER_MAX
+			|| c_ctrl->cci_info->cci_i2c_master < 0) {
+		pr_err("%s:%d Invalid I2C master addr\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+	master = c_ctrl->cci_info->cci_i2c_master;
+	CDBG("%s:%d master %d\n", __func__, __LINE__, master);
+	mutex_lock(&cci_dev->cci_master_info[master].mutex);
 	if (cci_dev->ref_count++) {
 		CDBG("%s ref_count %d\n", __func__, cci_dev->ref_count);
-		master = c_ctrl->cci_info->cci_i2c_master;
-		CDBG("%s:%d master %d\n", __func__, __LINE__, master);
-		rc = msm_cci_set_clk_param(cci_dev, c_ctrl);
-		if (rc < 0) {
-			pr_err("%s:%d msm_cci_set_clk_parm failed rc = %d\n",
-				__func__, __LINE__, rc);
-			return rc;
-		}
-		if (master < MASTER_MAX && master >= 0) {
-			mutex_lock(&cci_dev->cci_master_info[master].mutex);
+		//master = c_ctrl->cci_info->cci_i2c_master;
+		//CDBG("%s:%d master %d\n", __func__, __LINE__, master);
+		msm_cci_set_clk_param(cci_dev, c_ctrl);
+		//if (master < MASTER_MAX && master >= 0) {
+			//mutex_lock(&cci_dev->cci_master_info[master].mutex);
 			/* Set reset pending flag to TRUE */
 			cci_dev->cci_master_info[master].reset_pending = TRUE;
 			/* Set proper mask to RESET CMD address */
@@ -731,7 +734,7 @@ static int32_t msm_cci_init(struct v4l2_subdev *sd,
 				pr_err("%s:%d wait failed %d\n", __func__,
 					__LINE__, rc);
 			mutex_unlock(&cci_dev->cci_master_info[master].mutex);
-		}
+		//}
 		return 0;
 	}
 	ret = msm_cci_pinctrl_init(cci_dev);
@@ -808,7 +811,7 @@ static int32_t msm_cci_init(struct v4l2_subdev *sd,
 		cci_dev->base + CCI_IRQ_CLEAR_0_ADDR);
 	msm_camera_io_w_mb(0x1, cci_dev->base + CCI_IRQ_GLOBAL_CLEAR_CMD_ADDR);
 	cci_dev->cci_state = CCI_STATE_ENABLED;
-
+	mutex_unlock(&cci_dev->cci_master_info[master].mutex);
 	return 0;
 
 reset_complete_failed:
@@ -833,13 +836,16 @@ clk_enable_failed:
 	}
 request_gpio_failed:
 	cci_dev->ref_count--;
+	mutex_unlock(&cci_dev->cci_master_info[master].mutex);
 	return rc;
 }
 
-static int32_t msm_cci_release(struct v4l2_subdev *sd)
+static int32_t msm_cci_release(struct v4l2_subdev *sd,
+	struct msm_camera_cci_ctrl *c_ctrl)
 {
 	uint8_t i = 0, rc = 0;
 	struct cci_device *cci_dev;
+	enum cci_i2c_master_t master;
 
 	cci_dev = v4l2_get_subdevdata(sd);
 	if (!cci_dev->ref_count || cci_dev->cci_state != CCI_STATE_ENABLED) {
@@ -847,8 +853,17 @@ static int32_t msm_cci_release(struct v4l2_subdev *sd)
 			__func__, cci_dev->ref_count, cci_dev->cci_state);
 		return -EINVAL;
 	}
+	if (c_ctrl->cci_info->cci_i2c_master > MASTER_MAX
+			|| c_ctrl->cci_info->cci_i2c_master < 0) {
+		pr_err("%s:%d Invalid I2C master addr\n", __func__, __LINE__);
+		return -EINVAL;
+	}
+	master = c_ctrl->cci_info->cci_i2c_master;
+	CDBG("%s:%d master %d\n", __func__, __LINE__, master);
+	mutex_lock(&cci_dev->cci_master_info[master].mutex);
 	if (--cci_dev->ref_count) {
 		CDBG("%s ref_count Exit %d\n", __func__, cci_dev->ref_count);
+		mutex_unlock(&cci_dev->cci_master_info[master].mutex);
 		return 0;
 	}
 	disable_irq(cci_dev->irq->start);
@@ -872,7 +887,7 @@ static int32_t msm_cci_release(struct v4l2_subdev *sd)
 	for (i = 0; i < MASTER_MAX; i++)
 		cci_dev->master_clk_init[i] = 0;
 	cci_dev->cci_state = CCI_STATE_DISABLED;
-
+	mutex_unlock(&cci_dev->cci_master_info[master].mutex);
 	return 0;
 }
 
@@ -887,7 +902,7 @@ static int32_t msm_cci_config(struct v4l2_subdev *sd,
 		rc = msm_cci_init(sd, cci_ctrl);
 		break;
 	case MSM_CCI_RELEASE:
-		rc = msm_cci_release(sd);
+		rc = msm_cci_release(sd, cci_ctrl);
 		break;
 	case MSM_CCI_I2C_READ:
 		rc = msm_cci_i2c_read_bytes(sd, cci_ctrl);

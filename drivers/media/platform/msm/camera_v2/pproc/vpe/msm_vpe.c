@@ -410,7 +410,7 @@ void vpe_release_ion_client(struct kref *ref)
 static int vpe_init_mem(struct vpe_device *vpe_dev)
 {
 	kref_init(&vpe_dev->refcount);
-	kref_get(&vpe_dev->refcount);
+	//kref_get(&vpe_dev->refcount); //LiJen: Fix cpp ion client doesn't close when close camera
 	vpe_dev->client = msm_ion_client_create("vpe");
 
 	if (!vpe_dev->client) {
