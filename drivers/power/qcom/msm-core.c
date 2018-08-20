@@ -399,9 +399,10 @@ static long msm_core_ioctl(struct file *file, unsigned int cmd,
 	struct cpu_activity_info *node = NULL;
 	struct sched_params __user *argp = (struct sched_params __user *)arg;
 	int i, cpu = num_possible_cpus();
-	int mpidr = (argp->cluster << (MAX_CORES_PER_CLUSTER *
+	int mpidr = (cluster << (MAX_CORES_PER_CLUSTER *
 			MAX_NUM_OF_CLUSTERS));
 	int cpumask = argp->cpumask;
+	get_user(cpumask, &argp->cpumask);
 
 	if (!argp)
 		return -EINVAL;

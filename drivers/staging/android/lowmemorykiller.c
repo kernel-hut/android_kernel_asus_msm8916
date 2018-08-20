@@ -512,6 +512,33 @@ static int lowmem_shrink(struct shrinker *s, struct shrink_control *sc)
 		if(meminfo_str_index >= ASUS_MEMORY_DEBUG_MAXCOUNT )
 			meminfo_str_index = ASUS_MEMORY_DEBUG_MAXCOUNT - 1;
 		snprintf(meminfo_str[meminfo_str_index++], ASUS_MEMORY_DEBUG_MAXLEN, "%6d  %8ldkB %8d %s\n", p->pid, tasksize * (long)(PAGE_SIZE / 1024),oom_score_adj, p->comm);
+
+		//do not kill launcher, acore, gapps, media until the min_score is under 117
+		if(strstr(p->comm,"launcher") != NULL  && min_score_adj > 117){
+			task_unlock(p);
+			//printk("lowmemorykiller: Don't kill launcher when min_socre_adj > 117\n");
+			continue;
+		}
+		if(strstr(p->comm,"auncher3:commo") != NULL  && min_score_adj > 117){
+			task_unlock(p);
+			//printk("lowmemorykiller: Don't kill launcher when min_socre_adj > 117\n");
+			continue;
+		}
+		if(strstr(p->comm,"process.acore") != NULL && min_score_adj > 117){
+			task_unlock(p);
+			//printk("lowmemorykiller: Don't kill acore when min_socre_adj > 117\n");
+			continue;
+		}
+		if(strstr(p->comm,"process.gapps") != NULL && min_score_adj > 117){
+			task_unlock(p);
+			//printk("lowmemorykiller: Don't kill gapps when min_socre_adj > 117\n");
+			continue;
+		}
+		if(strstr(p->comm,"process.media") != NULL && min_score_adj > 117){
+			task_unlock(p);
+			//printk("lowmemorykiller: Don't kill media when min_socre_adj > 117\n");
+			continue;
+		}
 		if (oom_score_adj < min_score_adj) {
 			task_unlock(p);
 			continue;
