@@ -11,7 +11,6 @@
  */
 
 #include "msm8916-ion.dtsi"
-#include "cyanogenmod-pstore.dtsi"
 
 / {
 	memory {
@@ -74,13 +73,35 @@
 			label = "cont_splash_mem";
 		};
 
-        asus_debug_mem: asus_debug_region@0 {
-            linux,reserve-contiguous-region;
-            linux,reserve-region;
-            linux,remove-completely;
-            reg = <0x0 0x8fe00000 0x0 0x00200000>;
-            label = "asus_debug_mem";
+		asus_debug_mem: asus_debug_region@0 {
+			linux,reserve-contiguous-region;
+			linux,reserve-region;
+			linux,remove-completely;
+			reg = <0x0 0x8fe00000 0x0 0x00200000>;
+			label = "asus_debug_mem";
         };
 
+		pstore_reserve_mem: pstore_reserve_region@0 {
+			linux,reserve-contiguous-region;
+			linux,reserve-region;
+			linux,remove-completely;
+			reg = <0x0 0x8fe00000 0x0 0x00200000>;
+			label = "pstore_reserve_mem";
+		};
+
+	};
+};
+
+&soc {
+	ramoops {
+		compatible = "ramoops";
+		status = "ok";
+
+		android,ramoops-buffer-start = <0x8fe00000>;
+		android,ramoops-buffer-size = <0x00200000>;
+		android,ramoops-console-size = <0x400000>;
+		android,ramoops-pmsg-size = <0x400000>;
+		android,ramoops-record-size = <0x200000>;
+		android,ramoops-dump-oops = <0x1>;
 	};
 };
