@@ -49,38 +49,6 @@ static char *policycap_names[] = {
 
 unsigned int selinux_checkreqprot = CONFIG_SECURITY_SELINUX_CHECKREQPROT_VALUE;
 
-#define DProcRDFile "/proc/rd"
-#define DAsusSetEnforce "asussetenforce"
-static int ckeck_rd(void)
-{
-	int bRet = false;
-	char buf[20] = "";
-	struct file *pFile = NULL;
-	int nLen = -1;
-	mm_segment_t old_fs;
-
-	pFile = filp_open(DProcRDFile, O_RDONLY, 0);
-
-	if (!IS_ERR(pFile)) {
-		old_fs = get_fs();
-		set_fs(get_ds());
-		pFile->f_op->read(pFile, buf, sizeof(buf), &pFile->f_pos);
-		nLen = strlen(buf);
-		if (nLen) {
-			if (buf[nLen-1] == '\n' || buf[nLen-1] == '\0')
-				nLen -= 1;
-			if (nLen == strlen(DAsusSetEnforce) && !strncmp(buf, DAsusSetEnforce, nLen)) {
-				printk("[SELinux] Setenforce allowed\n");
-				bRet = true;
-			} else
-				printk("[SELinux] Setenforce rejected\n");
-		}
-		set_fs(old_fs);
-		filp_close(pFile, NULL);
-	}
-	return bRet;
-}
-
 static int __init checkreqprot_setup(char *str)
 {
 	unsigned long checkreqprot;
@@ -145,7 +113,6 @@ enum sel_inos {
 	SEL_DENY_UNKNOWN, /* export unknown deny handling to userspace */
 	SEL_STATUS,	/* export current status using mmap() */
 	SEL_POLICY,	/* allow userspace to read the in kernel policy */
-	SEL_APS,
 	SEL_INO_NEXT,	/* The next inode number to use */
 };
 
@@ -201,7 +168,7 @@ static ssize_t sel_write_enforce(struct file *file, const char __user *buf,
 
 	if (new_value != selinux_enforcing) {
 		length = task_has_security(current, SECURITY__SETENFORCE);
-		if (length && !ckeck_rd())
+		if (length)
 			goto out;
 		audit_log(current->audit_context, GFP_KERNEL, AUDIT_MAC_STATUS,
 			"enforcing=%d old_enforcing=%d auid=%u ses=%u",
@@ -228,62 +195,6 @@ static const struct file_operations sel_enforce_ops = {
 	.write		= sel_write_enforce,
 	.llseek		= generic_file_llseek,
 };
-
-static ssize_t sel_write_aps(struct file *file, const char __user *buf,
-					size_t count, loff_t *ppos)
-{
-	char *page = NULL;
-	ssize_t length;
-	int new_value;
-
-	length = -ENOMEM;
-	if (count >= PAGE_SIZE)
-		goto out;
-
-	/* No partial writes. */
-	length = EINVAL;
-	if (*ppos != 0)
-		goto out;
-
-	length = -ENOMEM;
-	page = (char *)get_zeroed_page(GFP_KERNEL);
-	if (!page)
-		goto out;
-
-	length = -EFAULT;
-	if (copy_from_user(page, buf, count))
-		goto out;
-
-	length = -EINVAL;
-	if (sscanf(page, "%d", &new_value) != 1)
-		goto out;
-
-	if (new_value != security_get_aps()) {
-		security_set_aps(new_value);
-	}
-	length = count;
-out:
-	free_page((unsigned long) page);
-	return length;
-}
-
-
-static ssize_t sel_read_aps(struct file *filp, char __user *buf,
-					size_t count, loff_t *ppos)
-{
-	char tmpbuf[TMPBUFLEN];
-	ssize_t length;
-
-	length = scnprintf(tmpbuf, TMPBUFLEN, "%d", security_get_aps());
-	return simple_read_from_buffer(buf, count, ppos, tmpbuf, length);
-}
-
-static const struct file_operations sel_aps_ops = {
-	.read		= sel_read_aps,
-	.write		= sel_write_aps,
-	.llseek		= generic_file_llseek,
-};
-
 
 static ssize_t sel_read_handle_unknown(struct file *filp, char __user *buf,
 					size_t count, loff_t *ppos)
@@ -1891,7 +1802,6 @@ static int sel_fill_super(struct super_block *sb, void *data, int silent)
 		[SEL_DENY_UNKNOWN] = {"deny_unknown", &sel_handle_unknown_ops, S_IRUGO},
 		[SEL_STATUS] = {"status", &sel_handle_status_ops, S_IRUGO},
 		[SEL_POLICY] = {"policy", &sel_policy_ops, S_IRUGO},
-		[SEL_APS] = {"aps", &sel_aps_ops, S_IRUGO|S_IWUSR},
 		/* last one */ {""}
 	};
 	ret = simple_fill_super(sb, SELINUX_MAGIC, selinux_files);
