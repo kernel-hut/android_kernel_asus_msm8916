@@ -3514,122 +3514,6 @@ void kswapd_stop(int nid)
 	}
 }
 
-static DECLARE_WAIT_QUEUE_HEAD(RoutineWaitQueue);
-
-#define DSelinuxEnforceFile "/sys/fs/selinux/enforce"
-static bool g_bSetEnforceChanged;
-static bool g_bSetEnforce;
-static void asussetenforce(void)
-{
-	struct file *pFile = NULL;
-	char buf[8] = "";
-	mm_segment_t old_fs;
-
-	if (pFile == NULL)
-		pFile = filp_open(DSelinuxEnforceFile, O_RDWR, 0);
-
-	if (IS_ERR(pFile)) {
-		printk("[SELinux] Failed to open enforce file\n");
-	} else {
-		printk("[SELinux] Succeed in opening enforce file\n");
-		old_fs = get_fs();
-		set_fs(get_ds());
-		snprintf(buf, sizeof buf, "%d", g_bSetEnforce);
-		pFile->f_op->write(pFile, (char *)buf, sizeof(buf), &pFile->f_pos);
-		set_fs(old_fs);
-
-		filp_close(pFile, NULL);
-	}
-}
-
-#include <linux/proc_fs.h>
-#define DRDCmdMaxLength 100
-#define DAsusSetEnforce "asussetenforce"
-#define DAsusSetEnforceLength strlen(DAsusSetEnforce)
-char g_szRD[DRDCmdMaxLength] = "";
-
-static ssize_t proc_rd_read(struct file *filp, char __user *buff, size_t len, loff_t *off)
-{
-	static unsigned int nFlag;
-	unsigned int ret = 0;
-	unsigned int iret = 0;
-
-	nFlag = !nFlag;
-	if (!nFlag)
-		return 0;
-
-	ret = strlen(g_szRD);
-	iret = copy_to_user(buff, g_szRD, ret);
-	return ret;
-}
-
-extern int unlocked_judgement;
-extern int SB_judgement;
-static ssize_t proc_rd_write(struct file *filp, const char __user *buff, size_t len, loff_t *off)
-{
-	char *pPos = NULL ;
-
-	printk("[SELinux] SB_judgement = %d\n", SB_judgement);
-	printk("[SELinux] unlocked_judgement = %d\n", unlocked_judgement);
-	if (1 == SB_judgement && 1 != unlocked_judgement){//fuse and locked
-		printk("[SELinux] Setting enforce failed  on the fuse and locked device!\n");
-		return -1;
-	}
-	
-	if (len > DRDCmdMaxLength - 1)
-		len = DRDCmdMaxLength - 1;
-	if (copy_from_user(g_szRD, buff, len))
-		return -EFAULT;
-	g_szRD[len] = '\0';
-	pPos = strchr (g_szRD, ':');
-	if (pPos) {
-		if (!strncmp(g_szRD, DAsusSetEnforce, pPos - g_szRD)) {
-			if (*pPos == ':') {
-				if (*(pPos+2) == '\n' || *(pPos+2) == '\0') {
-					int nValue = *(pPos+1) - '0';
-					if (nValue == 0 || nValue == 1) {
-						printk("[SELinux] Setting enforce to %d\n", nValue);
-						sprintf(g_szRD, "%s", DAsusSetEnforce);
-						g_bSetEnforce = nValue;
-						g_bSetEnforceChanged = 1;
-						wake_up_interruptible(&RoutineWaitQueue);
-					}
-				}
-
-			}
-		}
-	}
-	return len;
-}
-
-static struct file_operations proc_rd_ops = {
-    .read = proc_rd_read,
-    .write = proc_rd_write,
-};
-
-static int routine(void *pData)
-{
-	while (1) {
-		wait_event_interruptible(RoutineWaitQueue, g_bSetEnforceChanged != 0);
-		asussetenforce();
-		g_bSetEnforceChanged = 0;
-
-		if (kthread_should_stop())
-			break;
-	}
-	return 0;
-}
-
-struct task_struct *g_pRoutine;
-static void routine_init(void)
-{
-	if (g_pRoutine)
-		return;
-
-	g_pRoutine = kthread_run(routine, NULL, "kroutined");
-}
-
-
 static int __init kswapd_init(void)
 {
 	int nid;
@@ -3638,8 +3522,6 @@ static int __init kswapd_init(void)
 	for_each_node_state(nid, N_MEMORY)
  		kswapd_run(nid);
 	hotcpu_notifier(cpu_callback, 0);
-	proc_create("rd", S_IRWXUGO, NULL, &proc_rd_ops);
-	routine_init();
 	return 0;
 }
 

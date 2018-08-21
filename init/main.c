@@ -486,48 +486,6 @@ __setup("dbg=", set_user_dbg_mode);
 //--- ASUS_BSP : miniporting : Add for audio dbg mode
 #endif
 
-//add for UNLOCKED judgement ++++
-int unlocked_judgement = -1;
-EXPORT_SYMBOL(unlocked_judgement);
-
-static int set_unlocked_judgement(char *str)
-{
-    if ( strcmp("Y", str) == 0 )
-    {
-        unlocked_judgement = 1;
-    }
-    else
-    {
-        unlocked_judgement = 0;
-    }
-
-    printk("Kernel unlocked_judgement = %d\n", unlocked_judgement);
-    return 0;
-}
-__setup("UNLOCKED=", set_unlocked_judgement);
-//add for UNLOCKED judgement ----
-
-//add for SB judgement ++++
-int SB_judgement = -1;
-EXPORT_SYMBOL(SB_judgement);
-
-static int set_SB_judgement(char *str)
-{
-    if ( strcmp("Y", str) == 0 )
-    {
-        SB_judgement = 1;
-    }
-    else
-    {
-        SB_judgement = 0;
-    }
-
-    printk("Kernel SB_judgement = %d\n", SB_judgement);
-    return 0;
-}
-__setup("SB=", set_SB_judgement);
-//add for SB judgement ----
-
 //ASUS_BSP Austin_T : add for kernel charger mode. +++
 bool g_Charger_mode = false;
 int g_CHG_mode = 0;
