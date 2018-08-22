@@ -1051,7 +1051,7 @@ int32_t qpnp_adc_scale_batt_therm(struct qpnp_vadc_chip *chip,
 			adc_properties, chan_properties);
 
 	adc_chan_result->measurement = bat_voltage;
-#ifdef ASUS_ZC550KL_PROJECT
+#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		return qpnp_adc_map_temp_voltage(
 				adcmap_btm_threshold,
 				ARRAY_SIZE(adcmap_btm_threshold),
