@@ -1,0 +1,26 @@
+#
+# Touchscreen driver configuration
+#
+#menuconfig INPUT_TOUCHSCREEN
+#	bool "Touchscreens"
+#	help
+#	  Say Y here, and a list of supported touchscreens will be displayed.
+#	  This option doesn't affect the kernel.
+
+#	  If unsure, say Y.
+
+if INPUT_TOUCHSCREEN
+
+config TOUCHSCREEN_FT5X46_ZC550KL
+       tristate "FocalTech touchscreens"
+       depends on I2C
+       help
+         Say Y here if you have a ft5X06 touchscreen.
+	 Ft5x06 controllers are multi touch controllers which can
+	 report 5 touches at a time.
+
+         If unsure, say N.
+
+         To compile this driver as a module, choose M here: the
+         module will be called ft5x06_ts.
+endif
