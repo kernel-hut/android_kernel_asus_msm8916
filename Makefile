@@ -686,11 +686,7 @@ ifeq ($(shell $(CONFIG_SHELL) $(srctree)/scripts/gcc-goto.sh $(CC)), y)
 	KBUILD_CFLAGS += -DCC_HAVE_ASM_GOTO
 endif
 
-ifneq ($(BUILD_NUMBER),)
-        KBUILD_CPPFLAGS += -DASUS_SW_VER=\"$(BUILD_NUMBER)\"
-else
-        KBUILD_CPPFLAGS += -DASUS_SW_VER=\"$(ASUS_BUILD_PROJECT)_ENG\"
-endif
+KBUILD_CPPFLAGS += -DASUS_SW_VER=\"$(PRIVATE_BUILD_DESC)\"
 
 #ASUS_BSP Ander: ZC550KL support mutliple project build +++
 ifeq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
