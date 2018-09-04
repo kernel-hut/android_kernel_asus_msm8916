@@ -6025,13 +6025,13 @@ static ssize_t runin_switch_off_store(struct kobject *kobj, struct kobj_attribut
 static struct kobj_attribute runin_switch_on_attribute = __ATTR(runin_switch_on, 0666, runin_switch_on_show, runin_switch_on_store);
 static struct kobj_attribute runin_switch_off_attribute = __ATTR(runin_switch_off, 0666, runin_switch_off_show, runin_switch_off_store);
 //asus bsp frank add smb1360_charging_toggle and runin_switch ---
-int is_usb_chg_plugged_in(void)
-{
-	int rc;
-	rc = smb1360_dev->usb_present;
-	return rc;
-}
-EXPORT_SYMBOL_GPL(is_usb_chg_plugged_in);
+//int is_usb_chg_plugged_in(void)
+//{
+//	int rc;
+//	rc = smb1360_dev->usb_present;
+//	return rc;
+//}
+//EXPORT_SYMBOL_GPL(is_usb_chg_plugged_in);
 
 int check_CSIR_function(void)
 {

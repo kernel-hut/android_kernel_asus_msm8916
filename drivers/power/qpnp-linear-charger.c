@@ -1573,14 +1573,14 @@ static int qpnp_batt_property_is_writeable(struct power_supply *psy,
  *    (may be from a previous soc resume)
  * b. disable charging
  */
- #ifdef CONFIG_ASUS_ZC550KL_PROJECT
+// #ifdef CONFIG_ASUS_ZC550KL_PROJECT
 void smb358_update_aicl_work(int time)
  {
 
  }
- #else
-extern void smb358_update_aicl_work(int time);
- #endif
+// #else
+//extern void smb358_update_aicl_work(int time);
+// #endif
 static int qpnp_batt_power_set_property(struct power_supply *psy,
 				enum power_supply_property psp,
 				const union power_supply_propval *val)
@@ -1631,7 +1631,7 @@ static int qpnp_batt_power_set_property(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_TEMP:
 		g_fake_battery_temperature = val->intval;
-		smb358_update_aicl_work(0);
+//		smb358_update_aicl_work(0);
 		printk("%s: set fake battery temperature: %d\n", __FUNCTION__, val->intval);
 		break;
 	case POWER_SUPPLY_PROP_CAPACITY:
@@ -1660,13 +1660,13 @@ static int qpnp_batt_power_set_property(struct power_supply *psy,
 	return rc;
 }
 
- #ifdef CONFIG_ASUS_ZC550KL_PROJECT
+// #ifdef CONFIG_ASUS_ZC550KL_PROJECT
 int g_charge_full=0;
 int g_charge_now=0;
- #else
-extern int g_charge_full;
-extern int g_charge_now;
-#endif
+// #else
+//extern int g_charge_full;
+//extern int g_charge_now;
+//#endif
 
 extern int asus_battery_update_status(void);
 static int qpnp_batt_power_get_property(struct power_supply *psy,

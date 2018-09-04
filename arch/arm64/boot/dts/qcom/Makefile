@@ -73,22 +73,22 @@ dtb-$(CONFIG_ARCH_MSM8909) += msm8909-sim.dtb \
 	apq8009-mtp-wcd9326.dtb \
 	msm8909-mtp-wcd9326.dtb \
 	msm8909-mtp-wcd9326-refboard.dtb
-ifeq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
+#ifeq ($(CONFIG_ASUS_ZC550KL_PROJECT),y)
 dtb-$(CONFIG_ARCH_MSM8916) += zc550kl_msm8916-mtp.dtb \
 	zc550kl_msm8939-SR-v3.0-cdp.dtb \
 	zc550kl_msm8939-ER-v3.0-cdp.dtb
-else
-dtb-$(CONFIG_ARCH_MSM8916) += msm8916-cdp.dtb \
-	msm8916-mtp.dtb \
-	ze500kg-sr1_msm8916-mtp.dtb \
-	ze500kg-er1_msm8916-mtp.dtb \
-	ze500kg-er2_msm8916-mtp.dtb \
-	ze500kg-pr_msm8916-mtp.dtb \
-	ze500kl-sr1_msm8916-mtp.dtb \
-	ze500kl-er1_msm8916-mtp.dtb \
-	ze500kl-er2_msm8916-mtp.dtb \
-	ze500kl-pr_msm8916-mtp.dtb
-endif
+#else
+#dtb-$(CONFIG_ARCH_MSM8916) += msm8916-cdp.dtb \
+#	msm8916-mtp.dtb \
+#	ze500kg-sr1_msm8916-mtp.dtb \
+#	ze500kg-er1_msm8916-mtp.dtb \
+#	ze500kg-er2_msm8916-mtp.dtb \
+#	ze500kg-pr_msm8916-mtp.dtb \
+#	ze500kl-sr1_msm8916-mtp.dtb \
+#	ze500kl-er1_msm8916-mtp.dtb \
+#	ze500kl-er2_msm8916-mtp.dtb \
+#	ze500kl-pr_msm8916-mtp.dtb
+#endif
 dtb-$(CONFIG_ARCH_MSM8226) += msm8226-sim.dtb \
 	msm8226-fluid.dtb \
 	msm8226-v1-cdp.dtb \

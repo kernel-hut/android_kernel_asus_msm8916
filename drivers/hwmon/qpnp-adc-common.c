@@ -1051,27 +1051,27 @@ int32_t qpnp_adc_scale_batt_therm(struct qpnp_vadc_chip *chip,
 			adc_properties, chan_properties);
 
 	adc_chan_result->measurement = bat_voltage;
-#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+//#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 		return qpnp_adc_map_temp_voltage(
 				adcmap_btm_threshold,
 				ARRAY_SIZE(adcmap_btm_threshold),
 				bat_voltage,
 				&adc_chan_result->physical);
-#else			
-	if (g_ASUS_hwID_M <= 2) {
-		return qpnp_adc_map_temp_voltage(
-				adcmap_btm_threshold_ze500kl_sr,
-				ARRAY_SIZE(adcmap_btm_threshold_ze500kl_sr),
-				bat_voltage,
-				&adc_chan_result->physical);
-	} else{
-		return qpnp_adc_map_temp_voltage(
-				adcmap_btm_threshold,
-				ARRAY_SIZE(adcmap_btm_threshold),
-				bat_voltage,
-				&adc_chan_result->physical);
-	}
-#endif
+//#else			
+//	if (g_ASUS_hwID_M <= 2) {
+//		return qpnp_adc_map_temp_voltage(
+//				adcmap_btm_threshold_ze500kl_sr,
+//				ARRAY_SIZE(adcmap_btm_threshold_ze500kl_sr),
+//				bat_voltage,
+//				&adc_chan_result->physical);
+//	} else{
+//		return qpnp_adc_map_temp_voltage(
+//				adcmap_btm_threshold,
+//				ARRAY_SIZE(adcmap_btm_threshold),
+//				bat_voltage,
+//				&adc_chan_result->physical);
+//	}
+//#endif
 }
 EXPORT_SYMBOL(qpnp_adc_scale_batt_therm);
 

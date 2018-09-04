@@ -62,7 +62,7 @@
 #include "focaltech_ctl.h"
 #endif
 
-#define PROC_AsusTouchDisable_name	"asus_touch_proximity_status"
+//#define PROC_AsusTouchDisable_name	"asus_touch_proximity_status"
 
 #ifdef FTS_GESTRUE
 /*zax 20140922*/
@@ -189,7 +189,7 @@ static int IICErrorCountor = 0;
 /*#define FTXXXX_INT_PIN	62//EXYNOS4_GPJ0(3) //S5PV210_GPB(2)*/
 #define FTXXXX_INT_PIN_NAME	"ft5x46-int"
 
-extern bool proximity_status(void);
+//extern bool proximity_status(void);
 
 /*
 *ftxxxx_i2c_Read-read data and write data by i2c
@@ -404,8 +404,8 @@ static void check_gesture(struct ftxxxx_ts_data *data, int gesture_id)
 
 	printk("[FT5X46][Touch] %s :  gesture_id = 0x%x\n ", __func__, gesture_id);
 
-	if (EnableProximityCheck && !ftxxxx_ts->cover_mode_eable)
-		Ps_status = proximity_status();
+//	if (EnableProximityCheck && !ftxxxx_ts->cover_mode_eable)
+//		Ps_status = proximity_status();
 
 	if (!Ps_status) {
 		switch (gesture_id) {

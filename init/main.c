@@ -387,7 +387,7 @@ __setup("LASER_ID=", set_laser_id);
 EXPORT_SYMBOL(g_ASUS_laserID);
 //--- ASUS_BSP : Add for LASER ID
 
-#ifdef CONFIG_ASUS_ZC550KL_PROJECT
+//#ifdef CONFIG_ASUS_ZC550KL_PROJECT
 uint32_t zc550kl_pcb_rev_val = ZC550KL_8916_MP;
 static int set_zc550kl_pcb_rev(char *str)
 {
@@ -447,36 +447,36 @@ early_param("klog", set_user_klog_mode);
 int g_uart_dbg_mode = 0;
 EXPORT_SYMBOL(g_uart_dbg_mode);
 
-static int set_uart_dbg_mode(char *str)
-{
-    if ( strcmp("y", str) == 0 )
-    {
-        g_uart_dbg_mode = 1;
-    }
-    else
-    {
-        g_uart_dbg_mode = 0;
-    }
-
+//static int set_uart_dbg_mode(char *str)
+//{
+//    if ( strcmp("y", str) == 0 )
+//    {
+//        g_uart_dbg_mode = 1;
+//    }
+//    else
+//    {
+//        g_uart_dbg_mode = 0;
+//    }
+//
     //printk("Kernel uart dbg mode = %d\n", g_uart_dbg_mode);
-    return 0;
-}
-early_param("dbg", set_uart_dbg_mode);
+//    return 0;
+//}
+//early_param("dbg", set_uart_dbg_mode);
 //--- ASUS_BSP : miniporting : Add for uart / kernel log
-#else
+//#else
 //+++ ASUS_BSP : miniporting : Add for audio dbg mode
 int g_user_dbg_mode = 1;
 EXPORT_SYMBOL(g_user_dbg_mode);
 
 static int set_user_dbg_mode(char *str)
 {
-    if ( strcmp("y", str) == 0 )
+   if ( strcmp("y", str) == 0 )
     {
         g_user_dbg_mode = 1;
     }
     else
     {
-        g_user_dbg_mode = 0;
+       g_user_dbg_mode = 0;
     }
     g_user_dbg_mode = 1;
     printk("Kernel dbg mode = %d\n", g_user_dbg_mode);
@@ -484,7 +484,7 @@ static int set_user_dbg_mode(char *str)
 }
 __setup("dbg=", set_user_dbg_mode);
 //--- ASUS_BSP : miniporting : Add for audio dbg mode
-#endif
+//#endif
 
 //ASUS_BSP Austin_T : add for kernel charger mode. +++
 bool g_Charger_mode = false;
